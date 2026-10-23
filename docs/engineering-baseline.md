@@ -1,8 +1,8 @@
 # 步骤 0：工程与数据基线
 
-日期：2026-10-22 · 状态：步骤 0 已通过用户 review，设计分支已合并；本文保留设计约定，实际实现进度见 PLAN 与各步骤验收记录（步骤 2、3 已通过 review）。
+日期：2026-10-22 · 状态：步骤 0 已通过用户 review，设计分支已合并；本文保留设计约定，实际实现进度见 PLAN 与各步骤验收记录。
 
-本文落实 [PLAN.md](../PLAN.md) 步骤 0。范围以 PLAN 的首版调整为准；[产品设计](../product_design.md) 保留长期愿景。本文定义实现约定，表格不是现有数据库，接口不是已运行 API。环境实测、限制与验收索引见 [步骤 0 记录](dev-evidence/step-00.md)。
+本文落实 [PLAN.md](../PLAN.md) 步骤 0。范围以 PLAN 的首版调整为准；[产品设计](../product_design.md) 保留长期愿景。本文定义实现约定，下表兼有已落地项与后续规划；实际数据库/API 范围以各步骤记录为准。环境实测、限制与验收索引见 [步骤 0 记录](dev-evidence/step-00.md)。
 
 ## 1. 范围与设计决定
 
@@ -67,8 +67,9 @@ Yorw/
 | suggestions | id、topic_id FK、base_revision_id FK、body_md、sources_json、materials_json、provider_snapshot_json、prompt_version、status、created_at；不充当正式正文 | 11 |
 | tasks | id、kind、target_id?、status、stage、progress?、input_json、result_json?、error_json?、created_at、updated_at；输入不含密钥 | 5 |
 | provider_configs | kind PK(chat/embedding)、base_url、model、options_json、version、updated_at；无明文或密文 key，仅 main 管理 key | 4 |
-| embeddings | chunk_id FK、generation_id、config_fingerprint、dimension、vector BLOB；PK(chunk_id, generation_id)；float32 little-endian，长度=dimension×4 | 8 |
-| chunks_fts | FTS5 虚拟表：chunk_id UNINDEXED、document_id UNINDEXED、text；非权威数据，可从当前 chunks 重建 | 8 |
+| search_documents / search_segments | 派生索引版本；原 chunk_id FK、文献/页码、原文偏移与子串、分块版本、预分词文本；不改变按页原文 ID | 8 |
+| index_generations / embeddings | generation 保存文献/抽取/分块/配置版本、指纹、实际维度与完成状态；向量以 segment_id FK、generation_id FK 为复合键，little-endian float32，长度=dimension×4 | 8 |
+| chunks_fts | FTS5 虚拟表：segment_id UNINDEXED、document_id UNINDEXED、tokens；非权威数据，通过派生块触发器维护，可从当前 chunks 重建 | 8 |
 
 不为简单来源关系额外创建多种 join 表，首版以有类型的 JSON 快照保存；JSON 内 ID 的存在性、归属与状态由服务层在事务内校验。可查询的主要关系仍用外键；以后有复杂查询需求再迁移，不能依赖未校验 JSON 实现权限或证据过滤。
 
@@ -85,9 +86,11 @@ Yorw/
 
 1. 导入先写临时副本、计算摘要、原子移动到受管路径，再记录文献/任务；失败清理临时文件。启动对账只处理已知临时/孤立导入文件，不扫描删除用户任意路径。重复摘要返回既有文献；已删除文献重新导入可复用其 ID，但旧证据仍按抽取版本显示历史状态。
 2. 文献删除采用 tombstone，事务内设置 deleted_at、移除 chunks/embedding/FTS 并停用相关任务；事务提交后删除受管 PDF，失败显示“文件清理待重试”。笔记、消息、修订中的证据快照保留且标为来源失效；这是移除文献，不是擦除所有历史文本。删除确认必须说明这一点。
-3. 重建索引先生成独立 generation；全部完成后事务切换 active_index_generation，随后清理旧向量。检索限定当前文献、当前抽取版本和匹配的 embedding 配置；配置改变时旧向量不参与新配置检索，重建失败可回退关键词检索。
+3. 语义重建索引先生成独立 generation；全部完成后事务切换 active_index_generation，随后清理旧向量。本地关键词重建会明确清除该文献的派生向量。检索限定当前文献、当前抽取版本和匹配的 embedding 配置；配置改变时旧向量不参与新配置检索，重建失败可回退关键词检索。
 4. Wiki 保存/采纳/回退用单事务比较 base_revision_id，创建不可变修订并更新当前指针；同一事务校验该修订属于该主题。首次建页创建空正文的第 1 个修订；防止“空基线”歧义。冲突返回 409 与当前版本，前端保留用户草稿。
 5. 普通笔记/元数据保存同样检查 version。目录改父级在事务内检查祖先链；首版不提供主题递归删除，避免无必要的数据删除策略扩张。
+
+步骤 8 查询使用规范化向量点积作为余弦相似度，语义候选先按自定义最低相似度过滤（0–1 任意小数，初始 0.50，未经模型校准），再与关键词候选 RRF 合并。关键词命中与达到阈值的语义候选取并集，关键词不受语义阈值约束，不回填弱候选；响应保留每条余弦值、本次阈值与文献最高值供复验，不将其当作相关概率。
 
 ## 4. API 与桌面桥接约定
 
@@ -103,7 +106,7 @@ Python API 前缀 `/v1`，JSON 字段 snake_case。返回普通对象或 `{items
 | notes.list/save | GET/POST /v1/notes；PATCH /v1/notes/{id} | 步骤 7：GET 按 document_id；桥接 save 的 version=0 对应 POST（稳定 id、document_id、body_md），已有笔记 PATCH（body_md、version）；sources 由服务端保留，不接受手工伪造 |
 | providers.get/save/test | GET /v1/providers；PUT /v1/providers/{kind}；POST /v1/providers/{kind}/test | 配置、测试种类 → 脱敏配置/测试结果；key 由 main 另行保存并注入 |
 | tasks.get/cancel/retry | GET /v1/tasks/{id}；POST /v1/tasks/{id}/cancel、/retry | id → task 或新 task_id |
-| documents.reindex/search | POST /v1/documents/{id}/index、/search | 查询/索引请求 → task 或 evidence candidates（ID、分数、文本、页码） |
+| search.status/index/query/cancel | GET/POST /v1/documents/{id}/index；POST /v1/documents/{id}/search；POST /v1/search/tasks/{id}/cancel | 语义开关与所确认配置版本；main 注入 key；返回任务或原文候选、召回方式与降级原因；tasks.get 可读索引任务，通用抽取 cancel/retry 不处理索引 |
 | chat.history/ask | GET/POST /v1/documents/{id}/messages | question、request_id → 历史或 message_id+task_id；上下文由后端受控选择 |
 | topics.list/create/update | GET/POST /v1/topics；PATCH /v1/topics/{id} | title、parent_id、version → topic |
 | topics.get/saveBody | GET /v1/topics/{id}；POST /v1/topics/{id}/revisions | body_md、sources、base_revision_id → revision、topic |
@@ -127,7 +130,7 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 
 ### 数据迁移
 
-- 迁移按首次落地步骤添加，而非在步骤 3 一次创建全部功能表：工作区/迁移 → provider → 文献/片段/任务 → 笔记 → 检索 → 对话 → 专题/修订 → AI 建议。每个 SQL 文件有递增编号，schema_migrations 保存内容 SHA-256。
+- 迁移按首次落地步骤添加，而非在步骤 3 一次创建全部功能表：工作区/迁移 → provider → 文献/片段/任务 → 笔记 → 检索 → 对话 → 专题/修订 → AI 建议。每个 SQL 文件有递增编号，schema_migrations 保存内容 SHA-256。步骤 8 起以 LF 标准化换行计算新校验和，兼容同一 SQL 精确 LF/CRLF 历史哈希；其他内容变化仍拒绝，不改写旧记录。
 - 启动先检查迁移版本和 checksum；数据库版本高于程序支持版本时拒绝打开写模式，提示使用匹配版本。已应用文件 checksum 不一致时停止，不自动修补用户库。
 - 升级已有库前使用 SQLite backup API 创建内部迁移备份；不是面向用户的完整备份功能。备份失败不执行升级。
 - 每次迁移用显式事务执行，成功后记录版本，再提交；失败回滚且不更新版本。启用外键在事务外执行；迁移后执行 foreign_key_check 与 integrity_check。不要用隐式提交破坏迁移原子性。
@@ -151,12 +154,12 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 
 | 事项 | 当前结论 | 处理步骤与通过证据 |
 | --- | --- | --- |
-| 视觉方向 | 用户已选方案三，保留 Storage/Garden/House 名称；设计 review 已通过，运行验证待实现 | 1：统一设计说明与名称修订稿 |
-| 工具链 | Python 3.12.10 可直接运行；用户确认普通终端 uv 枚举通过，沙箱缓存权限待处理，未确认阻塞项目开发；未安装应用依赖 | 2：环境检查记录、锁文件及最小构建 |
-| 密钥/进程/分发 | 仅定义方案 | 2、4、14：安全保存与恢复、子进程启停、干净 Windows 实测 |
-| 真实模型与预算 | 用户自带 API；服务商/型号尚未实测 | 4：用户安全配置与短文本连接测试，分别验证 chat/embedding |
-| PDF 与跨语言检索 | 尚无固定样例实测 | 5、8：合法样例清单、摘要、证据页码与 PLAN 的 12 问记录 |
+| 视觉方向 | 用户已选方案三，保留 Storage/Garden/House 名称；步骤 1 设计及步骤 2–8 对应界面已 review，通过范围见各步记录 | 1：统一设计说明与名称修订稿 |
+| 工具链 | Python 3.12.10、依赖锁定、开发构建与本机分发已验证；不再沿用设计阶段的未安装状态 | 2：环境检查记录、锁文件及最小构建 |
+| 密钥/进程/分发 | 步骤 2、4 已验证启停与本地安全存储；干净机器验收仍待步骤 14 | 2、4、14：安全保存与恢复、子进程启停、干净 Windows 实测 |
+| 真实模型与预算 | 用户已确认 DeepSeek 聊天接入及智谱 embedding-3 检索 review；预算、普遍语义质量未作保证 | 4：用户安全配置与短文本连接测试，分别验证 chat/embedding |
+| PDF 与跨语言检索 | 步骤 5、8 固定夹具与用户样例通过；代表性长文与逐题质量统计待后续集成验收 | 5、8：合法样例清单、摘要、证据页码与 PLAN 的 12 问记录 |
 | 修订与来源 | 数据和接口约定已定义，尚无运行代码 | 9–12：真实引用流转、删除失效、冲突/回退测试 |
 | 干净 Windows | 尚未落实 | 14 前落实测试机/VM；无验证则不宣称发布通过 |
 
-本步交付边界是“范围、目录、数据与接口可评审，迁移/锁定方案明确，待验证项有归属”。用户通过本步后才能进入步骤 1；设计步骤整体确认后才合并设计分支。本文不授权安装依赖、自动进入下一步或自动合并。
+步骤 0 的设计交付与设计分支合并已完成；当前进度以 PLAN 为准。后续仍按功能分支逐步实现、等待用户 review，不自动进入下一步或合并。

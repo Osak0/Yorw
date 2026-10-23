@@ -20,11 +20,14 @@ from fastapi.responses import JSONResponse
 def create_app(token: str, database: Database) -> FastAPI:
     from .library import Library, router as library_router
     library = Library(database)
+    from .search import Search, router as search_router
+    search = Search(library)
     @asynccontextmanager
     async def lifespan(app):
         try:
             yield
         finally:
+            search.close()
             library.close()
             database.close()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -56,6 +59,7 @@ def create_app(token: str, database: Database) -> FastAPI:
     app.include_router(library_router(library))
     from .notes import router as notes_router
     app.include_router(notes_router(database))
+    app.include_router(search_router(search))
     return app
 
 

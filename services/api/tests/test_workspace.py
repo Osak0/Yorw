@@ -9,6 +9,8 @@ from yorw_api.storage.workspace import Workspace
 from yorw_api.storage.database import Database, MigrationError
 
 MIGRATIONS = Path(__file__).parents[1] / "src/yorw_api/migrations"
+CURRENT = len(list(MIGRATIONS.glob("*.sql")))
+PROBE_FILE = f"{CURRENT + 1:03}_probe.sql"
 
 
 def test_restart_preserves_identity_files_and_transactions(tmp_path):
@@ -32,14 +34,14 @@ def test_restart_preserves_identity_files_and_transactions(tmp_path):
     assert db.connection.execute("SELECT * FROM probe").fetchall() == [("persisted",)]
     assert workspace.document_path(document_id).read_bytes().startswith(b"test fixture")
     assert (workspace.root / "tmp/unknown.part").exists()
-    assert db.connection.execute("SELECT count(*) FROM schema_migrations").fetchone() == (4,)
+    assert db.connection.execute("SELECT count(*) FROM schema_migrations").fetchone() == (CURRENT,)
     db.close()
 
 
 def migration_copy(tmp_path, second_sql):
     target = tmp_path / "migrations"
     shutil.copytree(MIGRATIONS, target)
-    (target / "005_probe.sql").write_text(second_sql, encoding="utf-8")
+    (target / PROBE_FILE).write_text(second_sql, encoding="utf-8")
     return target
 
 
@@ -52,15 +54,15 @@ def test_upgrade_backup_and_failure_rollback(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         Database(workspace, target)
     with sqlite3.connect(workspace.database_path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone() == (4,)
+        assert conn.execute("PRAGMA user_version").fetchone() == (CURRENT,)
         assert conn.execute("SELECT name FROM sqlite_master WHERE name='probe'").fetchone() is None
     backups = list((workspace.root / "backups").glob("*.sqlite3"))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as conn:
         assert conn.execute("SELECT workspace_id FROM workspace_meta").fetchone() == (identity,)
-    (target / "005_probe.sql").write_text("CREATE TABLE probe (value TEXT);\n", encoding="utf-8")
+    (target / PROBE_FILE).write_text("CREATE TABLE probe (value TEXT);\n", encoding="utf-8")
     db = Database(workspace, target)
-    assert db.version == 5
+    assert db.version == CURRENT + 1
     db.close()
     before = workspace.database_path.read_bytes()
     with pytest.raises(MigrationError, match="DATABASE_TOO_NEW"):
@@ -79,7 +81,7 @@ def test_step6_database_upgrade_keeps_documents_and_backs_up(tmp_path):
         conn.execute("INSERT INTO documents(id,sha256,original_name,title,extraction_status,created_at,updated_at) VALUES('fixture','digest','fixture.pdf','Retained','ready','time','time')")
     old.close()
     upgraded = Database(workspace)
-    assert upgraded.version == 4
+    assert upgraded.version == CURRENT
     assert upgraded.connection.execute('SELECT title FROM documents').fetchone() == ('Retained',)
     assert upgraded.connection.execute('SELECT count(*) FROM notes').fetchone() == (0,)
     backups = list((workspace.root / 'backups').glob('*.sqlite3'))
@@ -103,6 +105,35 @@ def test_changed_migration_is_rejected_without_writing(tmp_path):
     assert workspace.database_path.read_bytes() == before
 
 
+@pytest.mark.parametrize('legacy_crlf', [False, True])
+def test_checkout_line_endings_preserve_legacy_history_and_data(tmp_path, legacy_crlf):
+    from hashlib import sha256
+    target = tmp_path / 'migrations'
+    shutil.copytree(MIGRATIONS, target)
+    for file in target.glob('*.sql'):
+        raw = file.read_bytes().replace(b'\r\n', b'\n')
+        file.write_bytes(raw.replace(b'\n', b'\r\n') if legacy_crlf else raw)
+    workspace = Workspace(tmp_path / 'workspace')
+    database = Database(workspace, target)
+    with database.write() as conn:
+        conn.execute('CREATE TABLE retained_fixture (body TEXT)')
+        conn.execute("INSERT INTO retained_fixture VALUES ('saved content')")
+        # Simulate a pre-fix installation that hashed the exact on-disk CRLF bytes.
+        if legacy_crlf:
+            for file in target.glob('*.sql'):
+                conn.execute('UPDATE schema_migrations SET checksum=? WHERE version=?',
+                             (sha256(file.read_bytes()).hexdigest(),int(file.name.split('_')[0])))
+    before = database.connection.execute('SELECT version,checksum FROM schema_migrations').fetchall()
+    database.close()
+    for file in target.glob('*.sql'):
+        raw = file.read_bytes().replace(b'\r\n', b'\n')
+        file.write_bytes(raw if legacy_crlf else raw.replace(b'\n', b'\r\n'))
+    reopened = Database(workspace, target)
+    assert reopened.connection.execute('SELECT version,checksum FROM schema_migrations').fetchall() == before
+    assert reopened.connection.execute('SELECT body FROM retained_fixture').fetchone() == ('saved content',)
+    reopened.close()
+
+
 def test_backup_failure_blocks_upgrade(tmp_path, monkeypatch):
     workspace = Workspace(tmp_path / "workspace")
     Database(workspace).close()
@@ -113,7 +144,7 @@ def test_backup_failure_blocks_upgrade(tmp_path, monkeypatch):
     with pytest.raises(MigrationError, match="MIGRATION_BACKUP_FAILED"):
         Database(workspace, target)
     with sqlite3.connect(workspace.database_path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone() == (4,)
+        assert conn.execute("PRAGMA user_version").fetchone() == (CURRENT,)
 
 
 def test_managed_paths_and_interrupted_copy(tmp_path):

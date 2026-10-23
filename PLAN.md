@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-23
 
-状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 已通过用户 review 并合并到 main；步骤 3 本地工作区已通过用户 review，交付见 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准；步骤 4 已通过用户 review，用户确认 DeepSeek 真实接入及平台用量请求；embedding 真实服务验收仍待补，步骤 4 已合并到 main；步骤 5 已通过用户 review 并合并到 main；步骤 6 已通过用户 review 并合并 main（d57df53，PR #6）；步骤 7 在 feature/document-notes 实现与本地验证完成，待用户 review。
+状态：步骤 0–7 已完成并合并 main；步骤 8 在 `feature/document-search` 通过用户 review（2026-10-23），含智谱 embedding-3 真实接入、自定义阈值及关键词/语义并集检索，待用户提交合并。步骤 9–14 未实施；进入下一步需用户另行授权。各步证据与合并标识见执行清单。
 
 ## 1. 文档职责与接手入口
 
@@ -146,11 +146,11 @@
 - [x] 1. 视觉方向 — 2026-10-23 用户 review 通过，已随设计分支合并；采用方案三，正式名称为 Storage / Garden / House；[统一设计说明](docs/design/step-01/design_ui.md) / [验收记录](docs/dev-evidence/step-01.md)
 - [x] 2. 桌面运行与打包骨架 — 2026-10-23 用户 review 通过，env_verify 已合并；环境与启动骨架验证见 [步骤 2 记录](docs/dev-evidence/step-02.md)
 - [x] 3. 本地工作区持久化 — 2026-10-23 用户 review 通过；feature/local-workspace；[PR #3](https://github.com/Osak0/Yorw/pull/3)；[验收记录](docs/dev-evidence/step-03.md)
-- [x] 4. House 模型连接设置 — 2026-10-23 用户 review 通过，确认 DeepSeek 接入及平台用量请求；embedding 真实服务仍待验证；[PR #4](https://github.com/Osak0/Yorw/pull/4)（合并状态以 PR 为准）；[记录](docs/dev-evidence/step-04.md)
+- [x] 4. House 模型连接设置 — 2026-10-23 用户 review 通过，确认 DeepSeek 接入及平台用量请求；embedding 已在步骤 8 通过用户 review；[PR #4](https://github.com/Osak0/Yorw/pull/4)（合并状态以 PR 为准）；[记录](docs/dev-evidence/step-04.md)
 - [x] 5. Storage PDF 导入与文献列表 — 2026-10-23 用户 review 通过，已合并 main（0d7e2ba）；feature/pdf-library；[记录](docs/dev-evidence/step-05.md)
 - [x] 6. Storage PDF 阅读器 — 2026-10-23 用户 review 通过，已合并 main（d57df53，PR #6）；[记录](docs/dev-evidence/step-06.md)
-- [ ] 7. Storage 文献笔记 — feature/document-notes 实现与本地验证完成，待用户 review；[记录](docs/dev-evidence/step-07.md)
-- [ ] 8. 文献检索模块 — 未实施
+- [x] 7. Storage 文献笔记 — 已合并 main（152f04e，PR #7）；[记录](docs/dev-evidence/step-07.md)
+- [x] 8. 文献检索模块 — 2026-10-23 用户 review 通过；feature/document-search；已确认智谱 embedding-3 接入、自定义语义阈值、直接检索入口及“关键词命中 OR 语义达到阈值”的并集规则；待用户提交及合并；[记录](docs/dev-evidence/step-08.md)
 - [ ] 9. Storage 带来源问答 — 未实施
 - [ ] 10. Garden 专题目录与编辑 — 未实施
 - [ ] 11. Garden 选材与 AI 草稿 — 未实施
@@ -189,9 +189,9 @@
 | 工具链与精确依赖 | 已确认 Python 3.12.10 可运行且 SQLite/FTS5 探针通过；用户反馈普通终端 `uv python list --only-installed --offline` 通过。步骤 2 使用项目缓存验证 uv、独立环境、依赖安装、桌面构建与本机打包启动，见步骤 2 记录；干净 Windows 验收仍属步骤 14。 |
 | Electron/Python 分发 | 步骤 2 先验证最小打包启动；失败先定位或提出技术调整，不拖到最终发布。 |
 | 视觉方案 | 方案三及 Storage/Garden/House 正式名称已通过用户 review，见[统一设计说明](docs/design/step-01/design_ui.md)；业务交互与无障碍仍待各功能实现验证。 |
-| LLM/embedding 服务 | 步骤 4 用户确认 DeepSeek 真实接入及平台用量请求；embedding 真实服务在步骤 8 前补验。预算、模型语义效果与未测试厂商兼容性不因连接成功自动通过；不索要聊天中的明文密钥。 |
+| LLM/embedding 服务 | 步骤 4 用户确认 DeepSeek 真实接入及平台用量请求；embedding 已选智谱 embedding-3，用户截图已确认步骤 8 真实语义索引就绪（2048 维），最终检索规则及自定义阈值已获用户 review 通过；默认阈值未作通用模型校准，不能推广为语义质量基准。预算、模型语义效果与未测试厂商兼容性不因连接成功自动通过；不索要聊天中的明文密钥。 |
 | PDF 抽取质量 | 步骤 5 用代表性样例检查；不能将错误抽取当成完整论文。更换解析器前说明许可、效果与交付影响。 |
-| 中文问题检索英文论文 | 步骤 8 做实际召回评估；不能以 FTS5 存在或索引成功代替跨语言效果验证。 |
+| 中文问题检索英文论文 | 步骤 8 已有智谱真实样例与用户 review；0.50 初始阈值可能过滤跨语言候选，支持自定义调整。5–10 篇代表性论文及逐题效果统计仍待后续集成验收，不预填准确率。 |
 | 来源与修订完整性 | 步骤 9、11–12 验证引用传递、失效标记和并发编辑冲突；出现伪来源或覆盖用户编辑时先修复，不进入下一步。 |
 | 干净 Windows 验证环境 | 在最终分发验收前落实虚拟机或其他干净机器；未执行则明确记为未验证，不能宣称无开发环境依赖。 |
 | 时间预算 | review 等待单独计时；时间不足先削减展示复杂度和后置功能，不跳过来源、持久化、确认与关键验证。 |

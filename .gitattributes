@@ -1,0 +1,2 @@
+# SQL migration identity must survive Windows checkouts.
+*.sql text eol=lf
