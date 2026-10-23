@@ -4,7 +4,7 @@
 
 知栖是面向个人研究者与科研学习者的本地优先阅读与知识工作区，希望将文献阅读、AI 讨论、笔记和专题 Wiki 连接起来，让研究中的认识持续积累，并能回到原文核查与修订。
 
-> 项目目前处于产品设计阶段，尚未实现可运行的应用。以下体验与技术栈均为规划内容。
+> 项目已进入开发阶段：桌面与本地服务骨架已接通，文献、问答与 Wiki 等产品能力仍按计划实现。
 
 ## 产品背景
 
@@ -40,4 +40,19 @@
 - [产品设计](product_design.md)：产品理念与设计基线。
 - [开发计划](PLAN.md)：当前首版范围、分步实施与 review 验收规则。
 
-安装、使用说明与功能演示将在对应能力实现并验证后补充。
+## 开发与验证（Windows x64）
+
+需要 Node 24、pnpm 11.25.0、uv 和 Python 3.12。仓库版本文件记录本次验证的补丁版本。
+
+```powershell
+$env:UV_CACHE_DIR = "$PWD/.cache/uv"
+uv sync --project services/api --locked
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+`pnpm typecheck`、`pnpm test` 检查桌面代码；`services/api/.venv/Scripts/python.exe -m pytest services/api/tests -q` 验证后端。打包后端测试需要先执行 `pnpm build:backend`，否则该项明确跳过。
+
+`pnpm package:win` 自动检查类型、构建桌面与 Python 后端，并生成 `release/desktop/` 中的未签名测试安装包；`pnpm package:dir` 生成可直接启动的分发目录。开发模式使用独立的 Yorw-development 数据目录。
+
+当前界面为最小导航壳，可切换 Storage、Garden、House 并显示真实服务状态；具体阅读界面仍待后续实现。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 包含验证范围和已知限制。

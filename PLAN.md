@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-23
 
-状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。应用尚未开始实现，设计分支尚未合并。
+状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 在 env_verify 完成桌面骨架与本机验证，待用户 review，业务功能尚未实现。
 
 ## 1. 文档职责与接手入口
 
@@ -142,9 +142,9 @@
 
 以下“未实施”指步骤尚未完成其交付与 review，不否认已经形成的规划文档。状态建议依次为：未实施 → 进行中 → 待 review → review 通过 → 已合并；设计步骤记录对应评审与设计分支合并结果。
 
-- [x] 0. 设计基线与工程约定 — 2026-10-22 用户 review 通过，尚未合并；[工程基线](docs/engineering-baseline.md) / [验证记录](docs/dev-evidence/step-00.md)
-- [x] 1. 视觉方向 — 2026-10-23 用户 review 通过，尚未合并；采用方案三，正式名称为 Storage / Garden / House；[统一设计说明](docs/design/step-01/design_ui.md) / [验收记录](docs/dev-evidence/step-01.md)
-- [ ] 2. 桌面运行与打包骨架 — 未实施
+- [x] 0. 设计基线与工程约定 — 2026-10-22 用户 review 通过，已随设计分支合并；[工程基线](docs/engineering-baseline.md) / [验证记录](docs/dev-evidence/step-00.md)
+- [x] 1. 视觉方向 — 2026-10-23 用户 review 通过，已随设计分支合并；采用方案三，正式名称为 Storage / Garden / House；[统一设计说明](docs/design/step-01/design_ui.md) / [验收记录](docs/dev-evidence/step-01.md)
+- [ ] 2. 桌面运行与打包骨架 — 实现与本机验证完成，待用户 review，尚未合并；env_verify 分支，环境与启动骨架验证见 [步骤 2 记录](docs/dev-evidence/step-02.md)
 - [ ] 3. 本地工作区持久化 — 未实施
 - [ ] 4. House 模型连接设置 — 未实施
 - [ ] 5. Storage PDF 导入与文献列表 — 未实施
@@ -186,9 +186,9 @@
 
 | 事项 | 处理时点与边界 |
 | --- | --- |
-| 工具链与精确依赖 | 已确认 Python 3.12.10 可运行且 SQLite/FTS5 探针通过；用户反馈普通终端 `uv python list --only-installed --offline` 通过。沙箱内 uv 缓存权限仍待处理，尚不构成项目开发的已确认阻塞；步骤 2 验证独立环境、依赖与构建，不能将枚举成功视为整套环境验收通过。 |
+| 工具链与精确依赖 | 已确认 Python 3.12.10 可运行且 SQLite/FTS5 探针通过；用户反馈普通终端 `uv python list --only-installed --offline` 通过。步骤 2 使用项目缓存验证 uv、独立环境、依赖安装、桌面构建与本机打包启动，见步骤 2 记录；干净 Windows 验收仍属步骤 14。 |
 | Electron/Python 分发 | 步骤 2 先验证最小打包启动；失败先定位或提出技术调整，不拖到最终发布。 |
-| 视觉方案 | 方案三及 Storage/Garden/House 正式名称已通过用户 review，见[统一设计说明](docs/design/step-01/design_ui.md)；运行交互与无障碍仍待实现验证，不自动开始步骤 2。 |
+| 视觉方案 | 方案三及 Storage/Garden/House 正式名称已通过用户 review，见[统一设计说明](docs/design/step-01/design_ui.md)；业务交互与无障碍仍待各功能实现验证。 |
 | LLM/embedding 服务 | 步骤 4 由用户提供可用配置，确认预算与连通性；不索要聊天中的明文密钥，不保证未测试厂商兼容。缺少服务时可完成本地逻辑，但真实 AI 验收保持未通过。 |
 | PDF 抽取质量 | 步骤 5 用代表性样例检查；不能将错误抽取当成完整论文。更换解析器前说明许可、效果与交付影响。 |
 | 中文问题检索英文论文 | 步骤 8 做实际召回评估；不能以 FTS5 存在或索引成功代替跨语言效果验证。 |

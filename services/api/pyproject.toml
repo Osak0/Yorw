@@ -1,0 +1,13 @@
+[project]
+name = "yorw-api"
+version = "0.1.0"
+description = "Yorw local desktop backend"
+requires-python = ">=3.12,<3.13"
+dependencies = ["fastapi", "pydantic", "uvicorn"]
+
+[dependency-groups]
+dev = ["pytest", "pyinstaller"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
