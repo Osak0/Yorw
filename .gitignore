@@ -159,3 +159,6 @@ services/api/build/
 .cache/
 workspace/
 *.sqlite3*
+
+# Generated local PDF.js support resources
+apps/desktop/src/renderer/public/pdf-assets/

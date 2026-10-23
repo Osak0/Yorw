@@ -61,6 +61,7 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
         from pypdf import PdfWriter
         writer = PdfWriter()
         writer.add_blank_page(width=100, height=100)
+        writer.add_blank_page(width=100, height=100)
         pdf = BytesIO()
         writer.write(pdf)
         boundary = 'yorw-fixture-boundary'
@@ -83,6 +84,18 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
         with urllib.request.urlopen(request, timeout=2) as response:
             edited = json.load(response)
         assert edited['title'] == 'Manual fixture'
+        with urllib.request.urlopen(urllib.request.Request(documents_url + '/' + identity + '/file', headers={"Authorization": "Bearer " + token}), timeout=2) as response:
+            assert response.read() == pdf.getvalue()
+        position_request = urllib.request.Request(documents_url + '/' + identity + '/position', data=json.dumps({'page': 2}).encode(), method='PATCH', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        with urllib.request.urlopen(position_request, timeout=2) as response:
+            assert json.load(response)['page'] == 2
+        with urllib.request.urlopen(urllib.request.Request(documents_url + '/' + identity, headers={"Authorization": "Bearer " + token}), timeout=2) as response:
+            positioned = json.load(response)
+        assert positioned['last_page'] == 2 and positioned['version'] == edited['version']
+        invalid_position = urllib.request.Request(documents_url + '/' + identity + '/position', data=json.dumps({'page': 3}).encode(), method='PATCH', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        with pytest.raises(urllib.error.HTTPError) as invalid:
+            urllib.request.urlopen(invalid_position, timeout=2)
+        assert invalid.value.code == 422
         request = urllib.request.Request(documents_url + '/' + identity + '?version=' + str(edited['version']), method='DELETE', headers={"Authorization": "Bearer " + token})
         with urllib.request.urlopen(request, timeout=2) as response:
             assert json.load(response)['removed']

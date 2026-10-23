@@ -181,3 +181,23 @@ def test_encrypted_pdf_missing_cipher_dependency_is_reported_as_unsupported(libr
         document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'encrypted-fixture.pdf'))
     assert document['extraction_status'] == 'unsupported'
     assert document['warning'] == 'ENCRYPTED_PDF'
+
+
+def test_position_bounds_persistence_and_deleted_files(library):
+    document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'fixture.pdf'))
+    identity = document['id']
+    original_version = document['version']
+    assert library.file(identity).read_bytes() == pdf_bytes()
+    assert library.save_position(identity, 1) == {'page': 1}
+    for page in [0, -1, 2, True, 1.5]:
+        with pytest.raises(HTTPException):
+            library.save_position(identity, page)
+    assert library.document(identity)['version'] == original_version
+    connection = Database(Workspace(library.workspace.root))
+    assert connection.connection.execute('SELECT last_page FROM documents WHERE id=?',(identity,)).fetchone() == (1,)
+    connection.close()
+    library.remove(identity, original_version)
+    with pytest.raises(HTTPException):
+        library.file(identity)
+    with pytest.raises(HTTPException):
+        library.save_position(identity, 1)

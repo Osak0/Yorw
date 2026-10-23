@@ -25,3 +25,17 @@ test('native cancellation never uploads; selection uploads only selected bytes, 
     expect((form.get('file') as File).name).toBe('fixture.pdf')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
+
+
+test('PDF bridge accepts IDs and positive integer pages only', async () => {
+  const readPdf = vi.fn(async () => new Uint8Array([37,80,68,70]))
+  const request = vi.fn(async () => ({ page: 2 }))
+  const documents = new Documents({ readPdf, request } as unknown as Backend)
+  expect(() => documents.readPdf('../outside.pdf')).toThrow('INVALID_INPUT')
+  expect(() => documents.savePosition({ id: 'invalid', page: 1 })).toThrow('INVALID_INPUT')
+  expect(() => documents.savePosition({ id: '12345678-1234-1234-1234-123456789abc', page: 0 })).toThrow('INVALID_PAGE')
+  const identity = '12345678-1234-1234-1234-123456789abc'
+  expect(await documents.readPdf(identity)).toEqual(new Uint8Array([37,80,68,70]))
+  await documents.savePosition({ id: identity, page: 2 })
+  expect(request).toHaveBeenCalledWith(`/v1/documents/${identity}/position`, 'PATCH', { page: 2 })
+})

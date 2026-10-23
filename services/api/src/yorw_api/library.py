@@ -10,6 +10,7 @@ from uuid import uuid4, UUID
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError
 from fastapi import APIRouter, UploadFile, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, ConfigDict
 from .storage.database import Database
 
@@ -29,6 +30,11 @@ class Metadata(BaseModel):
     title: str | None = Field(default=None, max_length=1000)
     authors: list[str] = Field(default_factory=list, max_length=100)
     year: int | None = Field(default=None, ge=1000, le=9999)
+
+
+class ReadingPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    page: int = Field(ge=1, strict=True)
 
 
 class Library:
@@ -266,6 +272,27 @@ class Library:
         self.pool.submit(self.extract, identity, identity_task)
         return self.task(identity_task)
 
+    def file(self, identity: str):
+        self.document(identity)
+        try:
+            path = self.workspace.document_path(identity)
+            if not path.is_file():
+                raise HTTPException(404, detail="DOCUMENT_FILE_MISSING")
+            return path
+        except (ValueError, OSError):
+            raise HTTPException(404, detail="DOCUMENT_FILE_MISSING") from None
+
+    def save_position(self, identity: str, page: int):
+        with self.operations, self.db.write() as conn:
+            document = self.document(identity)
+            count = document['page_count']
+            if not count:
+                raise HTTPException(409, detail="PAGE_COUNT_UNAVAILABLE")
+            if type(page) is not int or page < 1 or page > count:
+                raise HTTPException(422, detail="INVALID_PAGE")
+            conn.execute("UPDATE documents SET last_page=?,updated_at=? WHERE id=?", (page,now(),identity))
+        return {"page": page}
+
     def cancel(self, task_id):
         with self.operations, self.db.write() as conn:
             task = self.task(task_id)
@@ -293,6 +320,12 @@ def router(library: Library):
     @routes.get('/v1/documents/{identity}')
     def document(identity: str):
         return library.document(identity)
+    @routes.get('/v1/documents/{identity}/file')
+    def file(identity: str):
+        return FileResponse(library.file(identity), media_type='application/pdf')
+    @routes.patch('/v1/documents/{identity}/position')
+    def position(identity: str, position: ReadingPosition):
+        return library.save_position(identity, position.page)
     @routes.patch('/v1/documents/{identity}')
     def update(identity: str, metadata: Metadata):
         return library.update(identity, metadata)
