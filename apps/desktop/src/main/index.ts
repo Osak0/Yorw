@@ -10,9 +10,10 @@ if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'Yorw-
 if (!app.requestSingleInstanceLock()) app.quit()
 else app.whenReady().then(async () => {
   const root = resolve(__dirname, '../../../..')
+  const workspacePath = join(app.getPath('userData'), 'workspace')
   backend = app.isPackaged
-    ? new Backend(join(process.resourcesPath, 'backend/yorw-api/yorw-api.exe'), [], process.resourcesPath)
-    : new Backend(join(root, 'services/api/.venv/Scripts/python.exe'), ['-m', 'yorw_api'], join(root, 'services/api/src'))
+    ? new Backend(join(process.resourcesPath, 'backend/yorw-api/yorw-api.exe'), [], process.resourcesPath, workspacePath)
+    : new Backend(join(root, 'services/api/.venv/Scripts/python.exe'), ['-m', 'yorw_api'], join(root, 'services/api/src'), workspacePath)
   const window = new BrowserWindow({ show: !process.argv.includes('--yorw-smoke'), width: 1200, height: 800, minWidth: 900, minHeight: 640, title: '知栖 Yorw', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true, nodeIntegration: false } })
   const devUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL
   const allowed = (url: string) => devUrl ? url === devUrl || url === devUrl + '/' : url === pathToFileURL(join(__dirname, '../renderer/index.html')).href

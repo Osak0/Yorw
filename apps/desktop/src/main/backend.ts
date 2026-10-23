@@ -8,7 +8,7 @@ export class Backend {
   private port = 0
   private stopping = false
   status: AppStatus = { state: 'starting', message: '正在启动本地服务' }
-  constructor(private command: string, private args: string[], private cwd: string) {}
+  constructor(private command: string, private args: string[], private cwd: string, private workspacePath?: string) {}
   async start(): Promise<void> {
     if (this.stopping) return
     try {
@@ -28,13 +28,16 @@ export class Backend {
           if (!buffer.includes('\n')) return
           try {
             const event = JSON.parse(buffer.split('\n')[0])
+            if (event.type === 'startup_error' && ['DATABASE_TOO_NEW', 'MIGRATION_FILES_INVALID', 'MIGRATION_HISTORY_INVALID', 'MIGRATION_CHECKSUM_CHANGED', 'UNKNOWN_DATABASE', 'DATABASE_INTEGRITY_FAILED', 'DATABASE_FOREIGN_KEYS_FAILED', 'MIGRATION_BACKUP_FAILED', 'MIGRATION_SQL_INCOMPLETE', 'WORKSPACE_OPEN_FAILED'].includes(event.code)) {
+              clearTimeout(timer); reject(new Error(event.code)); return
+            }
             if (event.type !== 'listening' || !Number.isInteger(event.port) || event.port < 1 || event.port > 65535) return fail()
             this.port = event.port
             clearTimeout(timer)
             resolve()
           } catch { fail() }
         })
-        child.stdin.write(JSON.stringify({ token: this.token }) + '\n')
+        child.stdin.write(JSON.stringify({ token: this.token, workspace_path: this.workspacePath }) + '\n')
       })
       const deadline = Date.now() + 10000
       while (Date.now() < deadline && !this.stopping) {
@@ -50,7 +53,7 @@ export class Backend {
       }
       throw new Error('HEALTH_TIMEOUT')
     } catch (error) {
-      const code = error instanceof Error && ['START_TIMEOUT', 'START_FAILED', 'HEALTH_TIMEOUT'].includes(error.message) ? error.message : 'SPAWN_FAILED'
+      const code = error instanceof Error && /^(START_TIMEOUT|START_FAILED|HEALTH_TIMEOUT|DATABASE_[A-Z_]+|MIGRATION_[A-Z_]+|WORKSPACE_OPEN_FAILED|UNKNOWN_DATABASE)$/.test(error.message) ? error.message : 'SPAWN_FAILED'
       this.status = { state: 'failed', code, message: `本地服务启动失败（${code}），请检查安装完整性后重新打开知栖` }
       await this.stop()
     }
