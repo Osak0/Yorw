@@ -1,6 +1,6 @@
 # 步骤 4：House 模型设置
 
-2026-10-23 · feature/model-settings · 用户 review 通过；用户确认已接入 DeepSeek，并在服务商平台看到用量请求。本记录区分用户实测反馈与 Agent 本地测试，发布/合并记录后补。范围只含模型设置与连接测试，不开始文献导入或问答。
+2026-10-23 · feature/model-settings · 用户 review 通过；用户确认已接入 DeepSeek，并在服务商平台看到用量请求。本记录区分用户实测反馈与 Agent 本地测试，代码提交 `0dd0f62`，交付见 [PR #4](https://github.com/Osak0/Yorw/pull/4)，合并状态以 PR 为准。范围只含模型设置与连接测试，不开始文献导入或问答。
 
 ## 实现
 

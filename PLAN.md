@@ -146,7 +146,7 @@
 - [x] 1. 视觉方向 — 2026-10-23 用户 review 通过，已随设计分支合并；采用方案三，正式名称为 Storage / Garden / House；[统一设计说明](docs/design/step-01/design_ui.md) / [验收记录](docs/dev-evidence/step-01.md)
 - [x] 2. 桌面运行与打包骨架 — 2026-10-23 用户 review 通过，env_verify 已合并；环境与启动骨架验证见 [步骤 2 记录](docs/dev-evidence/step-02.md)
 - [x] 3. 本地工作区持久化 — 2026-10-23 用户 review 通过；feature/local-workspace；[PR #3](https://github.com/Osak0/Yorw/pull/3)；[验收记录](docs/dev-evidence/step-03.md)
-- [x] 4. House 模型连接设置 — 2026-10-23 用户 review 通过，确认 DeepSeek 接入及平台用量请求；embedding 真实服务仍待验证；feature/model-settings；[记录](docs/dev-evidence/step-04.md)
+- [x] 4. House 模型连接设置 — 2026-10-23 用户 review 通过，确认 DeepSeek 接入及平台用量请求；embedding 真实服务仍待验证；[PR #4](https://github.com/Osak0/Yorw/pull/4)（合并状态以 PR 为准）；[记录](docs/dev-evidence/step-04.md)
 - [ ] 5. Storage PDF 导入与文献列表 — 未实施
 - [ ] 6. Storage PDF 阅读器 — 未实施
 - [ ] 7. Storage 文献笔记 — 未实施
