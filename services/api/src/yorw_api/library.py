@@ -63,7 +63,7 @@ class Library:
         for field in ("authors", "metadata_source"):
             result[field] = json.loads(result.pop(field + "_json"))
         result.pop("relative_path")
-        latest = self.rows('SELECT id FROM tasks WHERE target_id=? ORDER BY created_at DESC LIMIT 1', (identity,))
+        latest = self.rows("SELECT id FROM tasks WHERE target_id=? AND kind='extract' ORDER BY created_at DESC LIMIT 1", (identity,))
         result['task'] = self.task(latest[0]['id']) if latest else None
         return result
 
@@ -129,7 +129,7 @@ class Library:
             existing = self.rows("SELECT id,deleted_at,extraction_version,version FROM documents WHERE sha256=?", (digest,))
             if existing and not existing[0]['deleted_at'] and self.workspace.document_path(existing[0]['id']).exists():
                 doc = self.document(existing[0]['id'])
-                tasks = self.rows("SELECT id FROM tasks WHERE target_id=? ORDER BY created_at DESC LIMIT 1", (doc['id'],))
+                tasks = self.rows("SELECT id FROM tasks WHERE target_id=? AND kind='extract' ORDER BY created_at DESC LIMIT 1", (doc['id'],))
                 return {"document": doc, "task": self.task(tasks[0]['id']) if tasks else None, "deduplicated": True}
             identity = existing[0]['id'] if existing else str(uuid4())
             if existing and not self.cleanup_deleted(identity):
@@ -226,6 +226,9 @@ class Library:
                 return
             doc = self.document(identity)
             conn.execute("DELETE FROM chunks WHERE document_id=?", (identity,))
+            conn.execute('DELETE FROM index_generations WHERE document_id=?', (identity,))
+            conn.execute('DELETE FROM search_documents WHERE document_id=?', (identity,))
+            conn.execute('UPDATE documents SET active_index_generation=NULL WHERE id=?', (identity,))
             for ordinal, (page, text) in enumerate(texts):
                 conn.execute("INSERT INTO chunks VALUES(?,?,?,?,?,?)", (str(uuid4()),identity,doc['extraction_version'],ordinal,page,text))
             sources = doc['metadata_source']
@@ -256,12 +259,16 @@ class Library:
                     raise HTTPException(409, detail="DOCUMENT_CONFLICT")
                 conn.execute("UPDATE documents SET deleted_at=?,updated_at=?,version=version+1,active_index_generation=NULL,warning='FILE_CLEANUP_PENDING' WHERE id=?", (now(),now(),identity))
                 conn.execute("DELETE FROM chunks WHERE document_id=?", (identity,))
+                conn.execute('DELETE FROM index_generations WHERE document_id=?', (identity,))
+                conn.execute('DELETE FROM search_documents WHERE document_id=?', (identity,))
                 conn.execute("UPDATE tasks SET status='cancelled',stage='DOCUMENT_REMOVED',updated_at=? WHERE target_id=? AND status IN ('queued','running')", (now(),identity))
             return {"removed": True, "cleanup_pending": not self.cleanup_deleted(identity)}
 
     def retry(self, task_id):
         with self.operations, self.db.write() as conn:
             task = self.task(task_id)
+            if task['kind'] != 'extract':
+                raise HTTPException(409, detail='INVALID_INPUT')
             identity = task['target_id']
             self.document(identity)
             if self.rows("SELECT id FROM tasks WHERE target_id=? AND status IN ('queued','running')", (identity,)):
@@ -296,6 +303,8 @@ class Library:
     def cancel(self, task_id):
         with self.operations, self.db.write() as conn:
             task = self.task(task_id)
+            if task['kind'] != 'extract':
+                raise HTTPException(409, detail='INVALID_INPUT')
             if task['status'] in ('queued', 'running'):
                 conn.execute("UPDATE tasks SET status='cancelled',stage='CANCELLED',updated_at=? WHERE id=?", (now(),task_id))
                 conn.execute("UPDATE documents SET extraction_status='failed',warning='CANCELLED' WHERE id=? AND deleted_at IS NULL", (task['target_id'],))

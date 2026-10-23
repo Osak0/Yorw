@@ -63,6 +63,13 @@ export class Providers {
     this.queue = job
     return job
   }
+  // Main-process only: credentials go directly to the private service, never renderer.
+  async embeddingCredentials() {
+    await this.queue.catch(() => {})
+    const config = (await this.backend.request('/v1/providers')).items.find((item: ProviderConfig) => item.kind === 'embedding') as ProviderConfig | undefined
+    if (!config) return { version: 0, key: '' }
+    return { version: config.version, key: await this.key(config).catch(() => '') }
+  }
   private async testOne(kind: ProviderKind) {
     if (!['chat', 'embedding'].includes(kind)) throw new Error('INVALID_CONFIG')
     const config = (await this.backend.request('/v1/providers')).items.find((item: ProviderConfig) => item.kind === kind)

@@ -23,7 +23,7 @@ Electron 桌面烟测另执行实际异步 safeStorage 加密/解密往返，记
 
 运行 `pnpm dev` → House → 本地输入 DeepSeek Key → 保存 → 测试；重启后确认模型配置和密钥状态保留，再测试。可用“清除已保存密钥”验证清除；更换地址会要求重新输入或清除密钥。不要在聊天中粘贴密钥。
 
-2026-10-23 用户确认步骤 4 review 通过：已在本地接入 DeepSeek，服务商平台成功显示用量请求。这是用户提供的真实服务验收证据；Agent 没有读取密钥、查看账单或再次调用云端服务，不补写未报告的返回内容、费用或性能数据。步骤 4 的至少一组真实服务门槛按该反馈满足。embedding 的协议与本地模拟服务测试已通过，真实服务商/模型连通性仍待验证，步骤 8 开始前补齐；不能将 DeepSeek 聊天接入推断为 embedding 已验证。
+2026-10-23 用户确认步骤 4 review 通过：已在本地接入 DeepSeek，服务商平台成功显示用量请求。这是用户提供的真实服务验收证据；Agent 没有读取密钥、查看账单或再次调用云端服务，不补写未报告的返回内容、费用或性能数据。步骤 4 的至少一组真实服务门槛按该反馈满足。步骤 4 当时仅验证 embedding 协议与本地模拟服务；后续步骤 8 已由用户接入智谱 embedding-3 并通过 review，见[步骤 8 记录](step-08.md)。DeepSeek 聊天接入本身不作为 embedding 验收证据。
 
 复现：`pnpm typecheck`、`pnpm test`、`pnpm build:backend`、`services/api/.venv/Scripts/python.exe -m pytest services/api/tests -q --basetemp=.cache/step4-tests`。本步分发目录使用 `release/step4-review` 独立输出，避免占用旧版分发目录。完整功能问答、流式生成、检索和 provider 扩展不属本步。
 

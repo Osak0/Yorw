@@ -42,6 +42,8 @@ def probe(kind: str, config: dict, key: str, timeout: float = 15) -> dict:
         raise ProbeError("KEY_MISSING")
     payload = {"model": config["model"]}
     payload.update({"messages": [{"role": "user", "content": "Reply OK."}], "stream": False} if kind == "chat" else {"input": ["Yorw connection test"], "encoding_format": "float"})
+    if kind == 'embedding' and urlsplit(config['base_url']).hostname == 'open.bigmodel.cn':
+        payload.pop('encoding_format', None)
     if kind == "chat" and urlsplit(config["base_url"]).hostname == "api.deepseek.com":
         payload.update({"thinking": {"type": "disabled"}, "max_tokens": 32})
     path = "/chat/completions" if kind == "chat" else "/embeddings"

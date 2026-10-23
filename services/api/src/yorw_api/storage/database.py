@@ -27,7 +27,13 @@ class Database:
             if not scripts or [int(p.name.split('_')[0]) for p in scripts] != list(range(1, len(scripts) + 1)):
                 raise MigrationError("MIGRATION_FILES_INVALID")
             contents = [p.read_bytes() for p in scripts]
-            checksums = [sha256(data).hexdigest() for data in contents]
+            # Git may convert LF to CRLF on Windows. Compare only exact EOL variants;
+            # all SQL text, comments and other whitespace remain protected by SHA-256.
+            canonical = [data.replace(b'\r\n', b'\n') for data in contents]
+            checksums = [sha256(data).hexdigest() for data in canonical]
+            compatible = [{sha256(raw).hexdigest(), sha256(lf).hexdigest(),
+                           sha256(lf.replace(b'\n', b'\r\n')).hexdigest()}
+                          for raw, lf in zip(contents, canonical)]
             has_history = self.connection.execute("SELECT 1 FROM sqlite_master WHERE name='schema_migrations'").fetchone()
             history = self.connection.execute("SELECT version, checksum FROM schema_migrations ORDER BY version").fetchall() if has_history else []
             version = self.connection.execute("PRAGMA user_version").fetchone()[0]
@@ -35,7 +41,7 @@ class Database:
                 raise MigrationError("DATABASE_TOO_NEW")
             if [v for v, _ in history] != list(range(1, version + 1)):
                 raise MigrationError("MIGRATION_HISTORY_INVALID")
-            if any(checksum != checksums[v - 1] for v, checksum in history):
+            if any(checksum not in compatible[v - 1] for v, checksum in history):
                 raise MigrationError("MIGRATION_CHECKSUM_CHANGED")
             if not has_history and self.connection.execute("SELECT 1 FROM sqlite_master WHERE type='table'").fetchone():
                 raise MigrationError("UNKNOWN_DATABASE")

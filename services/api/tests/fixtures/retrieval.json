@@ -1,0 +1,28 @@
+{
+  "description": "Self-authored synthetic retrieval fixtures, not research findings or a model benchmark.",
+  "documents": {
+    "A": [
+      "Computed tomography detects lung nodules. The synthetic study evaluates sensitivity on chest scans.",
+      "A synthetic randomized trial compares Drug A with placebo. Treatment lowered blood pressure by 8 mmHg. This sentence is fictional."
+    ],
+    "B": [
+      "Another synthetic document reports survival after computed tomography.",
+      "A synthetic laboratory experiment measures plant growth under blue light."
+    ]
+  },
+  "cases": [
+    {"query":"肺部结节使用什么影像检查", "scope":"A", "expected_page":1, "category":"zh_to_en"},
+    {"query":"胸部扫描检测灵敏度", "scope":"A", "expected_page":1, "category":"zh_to_en"},
+    {"query":"降压试验比较了什么", "scope":"A", "expected_page":2, "category":"zh_to_en"},
+    {"query":"药物对血压的影响", "scope":"A", "expected_page":2, "category":"zh_to_en"},
+    {"query":"lung nodules", "scope":"A", "expected_page":1, "category":"keyword"},
+    {"query":"blood pressure", "scope":"A", "expected_page":2, "category":"keyword"},
+    {"query":"orbital mechanics", "scope":"A", "expected_page":null, "category":"no_text_evidence"},
+    {"query":"量子纠缠", "scope":"A", "expected_page":null, "category":"no_text_evidence"},
+    {"query":"survival", "scope":"A", "expected_page":null, "category":"scope_interference"},
+    {"query":"plant growth", "scope":"A", "expected_page":null, "category":"scope_interference"},
+    {"query":"figure appearance", "scope":"A", "expected_page":null, "category":"visual_evidence_unavailable"},
+    {"query":"图中箭头指向哪里", "scope":"A", "expected_page":null, "category":"visual_evidence_unavailable"}
+  ],
+  "interpretation": "A semantic retriever may return candidates for no-answer or visual questions; candidates alone do not establish an answer. Cross-language quality requires actual provider evaluation."
+}
