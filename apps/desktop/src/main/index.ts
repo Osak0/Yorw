@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { Backend } from './backend'
 import { Providers } from './providers'
+import { Documents } from './documents'
 
 let backend: Backend
 let quitting = false
@@ -27,10 +28,18 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = error instanceof Error && ['INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
       return { ok: false, code }
     }
   }
+  const documents = new Documents(backend)
+  ipcMain.handle('documents:list', providerAction(() => documents.list()))
+  ipcMain.handle('documents:importPdf', providerAction(() => documents.importPdf()))
+  ipcMain.handle('documents:update', providerAction(input => documents.update(input)))
+  ipcMain.handle('documents:remove', providerAction(input => documents.remove(input)))
+  ipcMain.handle('tasks:get', providerAction(input => documents.task(input)))
+  ipcMain.handle('tasks:cancel', providerAction(input => documents.cancel(input)))
+  ipcMain.handle('tasks:retry', providerAction(input => documents.retry(input)))
   ipcMain.handle('providers:list', providerAction(() => providers.list()))
   ipcMain.handle('providers:save', providerAction(input => providers.save(input)))
   ipcMain.handle('providers:test', providerAction(input => providers.test(input)))
@@ -46,7 +55,7 @@ else app.whenReady().then(async () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
-      await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[2].click()` )
+      await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
       await new Promise(resolve => setTimeout(resolve, 400))
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })

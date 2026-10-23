@@ -3,7 +3,13 @@ name = "yorw-api"
 version = "0.1.0"
 description = "Yorw local desktop backend"
 requires-python = ">=3.12,<3.13"
-dependencies = ["fastapi", "pydantic", "uvicorn"]
+dependencies = [
+    "fastapi",
+    "pydantic",
+    "pypdf>=6.21.2",
+    "python-multipart>=0.0.32",
+    "uvicorn",
+]
 
 [dependency-groups]
 dev = ["pytest", "pyinstaller"]

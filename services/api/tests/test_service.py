@@ -33,11 +33,11 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
                 time.sleep(.1)
         else:
             pytest.fail("Backend readiness timed out")
-        assert health["ready"] and health["schema_version"] == 2
+        assert health["ready"] and health["schema_version"] == 3
         assert "token" not in health
         with urllib.request.urlopen(urllib.request.Request(url.replace('/health', '/workspace'), headers={"Authorization": "Bearer " + token}), timeout=2) as response:
             info = json.load(response)
-        assert info["schema_version"] == 2
+        assert info["schema_version"] == 3
         assert "workspace_path" not in info
         assert (tmp_path / "workspace/yorw.sqlite3").exists()
         for headers in [{}, {"Authorization": "Bearer invalid"}]:
@@ -57,6 +57,36 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
             configs = json.load(response)['items']
         assert {item['kind'] for item in configs} == {'chat', 'embedding'}
         assert all('key' not in item for item in configs)
+        from io import BytesIO
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        pdf = BytesIO()
+        writer.write(pdf)
+        boundary = 'yorw-fixture-boundary'
+        upload = ('--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="fixture.pdf"\r\nContent-Type: application/pdf\r\n\r\n').encode() + pdf.getvalue() + ('\r\n--' + boundary + '--\r\n').encode()
+        documents_url = url.replace('/health', '/documents')
+        request = urllib.request.Request(documents_url + '/import', data=upload, headers={"Authorization": "Bearer " + token, "Content-Type": "multipart/form-data; boundary=" + boundary})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            imported = json.load(response)
+        identity = imported['document']['id']
+        for _ in range(100):
+            with urllib.request.urlopen(urllib.request.Request(documents_url + '/' + identity, headers={"Authorization": "Bearer " + token}), timeout=2) as response:
+                document = json.load(response)
+            if document['extraction_status'] not in ('pending', 'running'):
+                break
+            time.sleep(.05)
+        assert document['extraction_status'] == 'unsupported' and document['warning'] == 'NO_TEXT_NO_OCR'
+        with urllib.request.urlopen(request, timeout=5) as response:
+            assert json.load(response)['deduplicated']
+        request = urllib.request.Request(documents_url + '/' + identity, data=json.dumps({'version': document['version'], 'title': 'Manual fixture', 'authors': ['Fixture'], 'year': 2026}).encode(), method='PATCH', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=2) as response:
+            edited = json.load(response)
+        assert edited['title'] == 'Manual fixture'
+        request = urllib.request.Request(documents_url + '/' + identity + '?version=' + str(edited['version']), method='DELETE', headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(request, timeout=2) as response:
+            assert json.load(response)['removed']
+        assert not (tmp_path / 'workspace/documents' / (identity + '.pdf')).exists()
         child.stdin.close()
         assert child.wait(timeout=8) == 0
     finally:
