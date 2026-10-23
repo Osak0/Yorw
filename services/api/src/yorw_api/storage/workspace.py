@@ -18,14 +18,24 @@ class Workspace:
                 raise ValueError("Workspace directory must not redirect outside its location")
             folder.mkdir(exist_ok=True)
         self.database_path = self.root / "yorw.sqlite3"
-        if self.database_path.is_symlink() or self.database_path.resolve() != self.database_path:
+        if self.database_path.is_symlink() or self._redirects(self.database_path):
             raise ValueError("Database path must not redirect")
+
+    @staticmethod
+    def _redirects(path: Path) -> bool:
+        resolved = path.resolve()
+        if resolved == path:
+            return False
+        # Windows MSIX can return a virtualized spelling of the same physical
+        # parent. Only accept OS-confirmed identity, never arbitrary new parents.
+        return not (path.exists() and resolved.name.casefold() == path.name.casefold()
+                    and resolved.parent.samefile(path.parent))
 
     def document_path(self, document_id: str) -> Path:
         if str(UUID(document_id)) != document_id:
             raise ValueError("Expected canonical document UUID")
         path = self.root / "documents" / (document_id + ".pdf")
-        if path.resolve() != path:
+        if self._redirects(path):
             raise ValueError("Managed path must not redirect")
         return path
 

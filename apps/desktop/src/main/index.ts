@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { Backend } from './backend'
+import { Providers } from './providers'
 
 let backend: Backend
 let quitting = false
@@ -21,6 +22,18 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     return backend.status
   })
+  const providers = new Providers(backend, join(app.getPath('userData'), 'secrets'))
+  const providerAction = (action: (input: any) => Promise<unknown>) => async (event: Electron.IpcMainInvokeEvent, input: unknown) => {
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
+    try { return { ok: true, value: await action(input) } }
+    catch (error) {
+      const code = error instanceof Error && ['INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      return { ok: false, code }
+    }
+  }
+  ipcMain.handle('providers:list', providerAction(() => providers.list()))
+  ipcMain.handle('providers:save', providerAction(input => providers.save(input)))
+  ipcMain.handle('providers:test', providerAction(input => providers.test(input)))
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event, url) => { if (!allowed(url)) event.preventDefault() })
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -32,9 +45,12 @@ else app.whenReady().then(async () => {
     if (!reportDir) { app.exit(2); return }
     try {
       await new Promise(resolve => setTimeout(resolve, 1100))
+      const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
+      await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[2].click()` )
+      await new Promise(resolve => setTimeout(resolve, 400))
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
-      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify(probe, null, 2))
+      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
       await backend.stop()
       app.exit(probe.status.state === 'ready' && !probe.nodeExposed ? 0 : 1)

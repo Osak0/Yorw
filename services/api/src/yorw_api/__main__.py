@@ -12,7 +12,8 @@ from .storage.database import Database, MigrationError
 from uuid import uuid4
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 
@@ -24,6 +25,15 @@ def create_app(token: str, database: Database) -> FastAPI:
         finally:
             database.close()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+    @app.exception_handler(HTTPException)
+    async def http_error(request, error):
+        code = "CONFIG_CONFLICT" if error.status_code == 409 else "REQUEST_FAILED"
+        return JSONResponse(status_code=error.status_code, content={"error": {"code": code, "message": code, "retryable": False}, "request_id": str(uuid4())})
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        return JSONResponse(status_code=422, content={"error": {"code": "INVALID_CONFIG", "message": "Invalid request fields", "retryable": False}, "request_id": str(uuid4())})
 
     @app.middleware("http")
     async def authenticate(request: Request, call_next):
@@ -38,6 +48,8 @@ def create_app(token: str, database: Database) -> FastAPI:
     @app.get("/v1/workspace")
     def workspace_info():
         return database.workspace_info()
+    from .providers import router
+    app.include_router(router(database))
     return app
 
 
