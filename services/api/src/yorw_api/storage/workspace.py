@@ -39,9 +39,10 @@ class Workspace:
             raise ValueError("Managed path must not redirect")
         return path
 
-    def store_document(self, source: BinaryIO) -> str:
+    def store_document(self, source: BinaryIO, document_id: str | None = None) -> str:
         """Stage then publish under a fresh ID; never replace an existing file."""
-        document_id = str(uuid4())
+        document_id = document_id or str(uuid4())
+        self.document_path(document_id)
         staging = self.root / "tmp" / (document_id + ".part")
         destination = self.document_path(document_id)
         created = False

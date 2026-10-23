@@ -18,17 +18,20 @@ from fastapi.responses import JSONResponse
 
 
 def create_app(token: str, database: Database) -> FastAPI:
+    from .library import Library, router as library_router
+    library = Library(database)
     @asynccontextmanager
     async def lifespan(app):
         try:
             yield
         finally:
+            library.close()
             database.close()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
     @app.exception_handler(HTTPException)
     async def http_error(request, error):
-        code = "CONFIG_CONFLICT" if error.status_code == 409 else "REQUEST_FAILED"
+        code = error.detail if isinstance(error.detail, str) and error.detail.isupper() else "REQUEST_FAILED"
         return JSONResponse(status_code=error.status_code, content={"error": {"code": code, "message": code, "retryable": False}, "request_id": str(uuid4())})
 
     @app.exception_handler(RequestValidationError)
@@ -50,6 +53,7 @@ def create_app(token: str, database: Database) -> FastAPI:
         return database.workspace_info()
     from .providers import router
     app.include_router(router(database))
+    app.include_router(library_router(library))
     return app
 
 

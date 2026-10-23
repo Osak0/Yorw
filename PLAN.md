@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-23
 
-状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 已通过用户 review 并合并到 main；步骤 3 本地工作区已通过用户 review，交付见 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准；步骤 4 已通过用户 review，用户确认 DeepSeek 真实接入及平台用量请求；embedding 真实服务验收仍待补，步骤 5 未启动。
+状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 已通过用户 review 并合并到 main；步骤 3 本地工作区已通过用户 review，交付见 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准；步骤 4 已通过用户 review，用户确认 DeepSeek 真实接入及平台用量请求；embedding 真实服务验收仍待补，步骤 4 已合并到 main；步骤 5 已通过用户 review，feature/pdf-library 待提交与合并；步骤 6 未启动。
 
 ## 1. 文档职责与接手入口
 
@@ -147,7 +147,7 @@
 - [x] 2. 桌面运行与打包骨架 — 2026-10-23 用户 review 通过，env_verify 已合并；环境与启动骨架验证见 [步骤 2 记录](docs/dev-evidence/step-02.md)
 - [x] 3. 本地工作区持久化 — 2026-10-23 用户 review 通过；feature/local-workspace；[PR #3](https://github.com/Osak0/Yorw/pull/3)；[验收记录](docs/dev-evidence/step-03.md)
 - [x] 4. House 模型连接设置 — 2026-10-23 用户 review 通过，确认 DeepSeek 接入及平台用量请求；embedding 真实服务仍待验证；[PR #4](https://github.com/Osak0/Yorw/pull/4)（合并状态以 PR 为准）；[记录](docs/dev-evidence/step-04.md)
-- [ ] 5. Storage PDF 导入与文献列表 — 未实施
+- [x] 5. Storage PDF 导入与文献列表 — 2026-10-23 用户 review 通过，待提交与合并；feature/pdf-library；[记录](docs/dev-evidence/step-05.md)
 - [ ] 6. Storage PDF 阅读器 — 未实施
 - [ ] 7. Storage 文献笔记 — 未实施
 - [ ] 8. 文献检索模块 — 未实施
