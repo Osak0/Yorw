@@ -5,6 +5,10 @@ import socket
 import sqlite3
 import sys
 import threading
+from pathlib import Path
+from contextlib import asynccontextmanager
+from .storage.workspace import Workspace
+from .storage.database import Database, MigrationError
 from uuid import uuid4
 
 import uvicorn
@@ -12,8 +16,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 
-def create_app(token: str) -> FastAPI:
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+def create_app(token: str, database: Database) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            database.close()
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
     @app.middleware("http")
     async def authenticate(request: Request, call_next):
@@ -23,8 +33,11 @@ def create_app(token: str) -> FastAPI:
 
     @app.get("/v1/health")
     async def health():
-        return {"api_version": "1", "ready": True, "schema_version": 0,
+        return {"api_version": "1", "ready": True, "schema_version": database.version,
                 "providers": {"chat": False, "embedding": False}}
+    @app.get("/v1/workspace")
+    def workspace_info():
+        return database.workspace_info()
     return app
 
 
@@ -36,9 +49,16 @@ def main():
     # Check the bundled runtime as well as the development interpreter.
     with sqlite3.connect(":memory:") as db:
         db.execute("CREATE VIRTUAL TABLE probe USING fts5(text)")
+    try:
+        workspace = Workspace(Path(config["workspace_path"]))
+        database = Database(workspace)
+    except Exception as error:
+        code = str(error) if isinstance(error, MigrationError) else "WORKSPACE_OPEN_FAILED"
+        print(json.dumps({"type": "startup_error", "code": code}), flush=True)
+        return
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(create_app(token), log_level="warning", access_log=False))
+    server = uvicorn.Server(uvicorn.Config(create_app(token, database), log_level="warning", access_log=False))
 
     def watch_parent():
         # EOF also shuts down the service after an unexpected desktop exit.

@@ -53,6 +53,6 @@ pnpm dev
 
 `pnpm typecheck`、`pnpm test` 检查桌面代码；`services/api/.venv/Scripts/python.exe -m pytest services/api/tests -q` 验证后端。打包后端测试需要先执行 `pnpm build:backend`，否则该项明确跳过。
 
-`pnpm package:win` 自动检查类型、构建桌面与 Python 后端，并生成 `release/desktop/` 中的未签名测试安装包；`pnpm package:dir` 生成可直接启动的分发目录。开发模式使用独立的 Yorw-development 数据目录。
+`pnpm package:win` 自动检查类型、构建桌面与 Python 后端，并生成 `release/desktop/` 中的未签名测试安装包；`pnpm package:dir` 生成可直接启动的分发目录。开发模式使用独立的 Yorw-development 数据目录。工作区位于 Electron userData 下的 `workspace/`，包含 SQLite 数据库、受管理文献、临时文件、日志和内部迁移备份；用户资料与安装资源分开保存。
 
-当前界面为最小导航壳，可切换 Storage、Garden、House 并显示真实服务状态；具体阅读界面仍待后续实现。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 包含验证范围和已知限制。
+工作区基础已加入 SQLite 迁移、启动校验和受管理文件存储；具体 PDF 导入仍待实现。当前界面为最小导航壳，可切换 Storage、Garden、House 并显示真实服务状态；具体阅读界面仍待后续实现。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 与[步骤 3 验收记录](docs/dev-evidence/step-03.md) 包含验证范围和已知限制。步骤 3 已通过 review；本步验证分发目录为 `release/step3/`，默认 `release/desktop/` 的旧文件占用问题尚未确认原因，重建方式见步骤 3 记录。

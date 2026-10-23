@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-23
 
-状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 在 env_verify 完成桌面骨架与本机验证，待用户 review，业务功能尚未实现。
+状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 已通过用户 review 并合并到 main；步骤 3 本地工作区已通过用户 review，交付见 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准；步骤 4 尚未启动。
 
 ## 1. 文档职责与接手入口
 
@@ -144,8 +144,8 @@
 
 - [x] 0. 设计基线与工程约定 — 2026-10-22 用户 review 通过，已随设计分支合并；[工程基线](docs/engineering-baseline.md) / [验证记录](docs/dev-evidence/step-00.md)
 - [x] 1. 视觉方向 — 2026-10-23 用户 review 通过，已随设计分支合并；采用方案三，正式名称为 Storage / Garden / House；[统一设计说明](docs/design/step-01/design_ui.md) / [验收记录](docs/dev-evidence/step-01.md)
-- [ ] 2. 桌面运行与打包骨架 — 实现与本机验证完成，待用户 review，尚未合并；env_verify 分支，环境与启动骨架验证见 [步骤 2 记录](docs/dev-evidence/step-02.md)
-- [ ] 3. 本地工作区持久化 — 未实施
+- [x] 2. 桌面运行与打包骨架 — 2026-10-23 用户 review 通过，env_verify 已合并；环境与启动骨架验证见 [步骤 2 记录](docs/dev-evidence/step-02.md)
+- [x] 3. 本地工作区持久化 — 2026-10-23 用户 review 通过；feature/local-workspace；[PR #3](https://github.com/Osak0/Yorw/pull/3)；[验收记录](docs/dev-evidence/step-03.md)
 - [ ] 4. House 模型连接设置 — 未实施
 - [ ] 5. Storage PDF 导入与文献列表 — 未实施
 - [ ] 6. Storage PDF 阅读器 — 未实施

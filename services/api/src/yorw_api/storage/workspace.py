@@ -1,0 +1,53 @@
+"""Workspace paths and managed files. No business-level PDF import yet."""
+from pathlib import Path
+from typing import BinaryIO
+from uuid import UUID, uuid4
+import os
+import shutil
+
+
+class Workspace:
+    def __init__(self, root: Path):
+        if not root.is_absolute():
+            raise ValueError("Workspace path must be absolute")
+        self.root = root.resolve()
+        self.root.mkdir(parents=True, exist_ok=True)
+        for name in ("documents", "tmp", "logs", "backups"):
+            folder = self.root / name
+            if folder.resolve() != folder or folder.is_symlink():
+                raise ValueError("Workspace directory must not redirect outside its location")
+            folder.mkdir(exist_ok=True)
+        self.database_path = self.root / "yorw.sqlite3"
+        if self.database_path.is_symlink() or self.database_path.resolve() != self.database_path:
+            raise ValueError("Database path must not redirect")
+
+    def document_path(self, document_id: str) -> Path:
+        if str(UUID(document_id)) != document_id:
+            raise ValueError("Expected canonical document UUID")
+        path = self.root / "documents" / (document_id + ".pdf")
+        if path.resolve() != path:
+            raise ValueError("Managed path must not redirect")
+        return path
+
+    def store_document(self, source: BinaryIO) -> str:
+        """Stage then publish under a fresh ID; never replace an existing file."""
+        document_id = str(uuid4())
+        staging = self.root / "tmp" / (document_id + ".part")
+        destination = self.document_path(document_id)
+        created = False
+        try:
+            with staging.open("xb") as output:
+                created = True
+                shutil.copyfileobj(source, output)
+                output.flush()
+                os.fsync(output.fileno())
+            # On Windows rename fails if destination exists, preserving old data.
+            # A hard link gives the same no-overwrite guarantee on all platforms.
+            os.link(staging, destination)
+            return document_id
+        finally:
+            if created:
+                staging.unlink(missing_ok=True)
+
+    def remove_document(self, document_id: str) -> None:
+        self.document_path(document_id).unlink(missing_ok=True)
