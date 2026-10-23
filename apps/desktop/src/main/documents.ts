@@ -9,6 +9,11 @@ function id(value: unknown): string {
 }
 export class Documents {
   constructor(private backend: Backend) {}
+  readPdf(identity: unknown) { return this.backend.readPdf(id(identity)) }
+  savePosition(input: any) {
+    if (!input || !Number.isInteger(input.page) || input.page < 1) throw new Error('INVALID_PAGE')
+    return this.backend.request(`/v1/documents/${id(input.id)}/position`, 'PATCH', { page: input.page })
+  }
   list() { return this.backend.request('/v1/documents') }
   async importPdf() {
     const selected = await dialog.showOpenDialog({ title: '导入研究文献', filters: [{ name: 'PDF', extensions: ['pdf'] }], properties: ['openFile'] })

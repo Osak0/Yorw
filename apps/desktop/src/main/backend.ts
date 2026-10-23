@@ -70,6 +70,16 @@ export class Backend {
     }
     return response.json()
   }
+  async readPdf(identity: string): Promise<Uint8Array> {
+    if (this.status.state !== 'ready') throw new Error('BACKEND_NOT_READY')
+    const response = await fetch(`http://127.0.0.1:${this.port}/v1/documents/${identity}/file`, {
+      headers: { Authorization: `Bearer ${this.token}` }, signal: AbortSignal.timeout(20000)
+    })
+    if (!response.ok) throw new Error(response.status === 404 ? 'DOCUMENT_FILE_MISSING' : 'BACKEND_ERROR')
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength > 50 * 1024 * 1024) throw new Error('PDF_TOO_LARGE')
+    return bytes
+  }
   async stop(): Promise<void> {
     this.stopping = true
     const child = this.child
