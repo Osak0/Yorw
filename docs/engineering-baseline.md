@@ -59,7 +59,7 @@ Yorw/
 | schema_migrations | version INTEGER PK、checksum、applied_at；禁止改写已应用迁移 | 3 |
 | documents | id、sha256 UNIQUE、relative_path?、original_name、title?、authors_json、year?、metadata_source_json、page_count?、extraction_status、extraction_version、active_index_generation?、last_page、version、created_at、updated_at、deleted_at? | 5 |
 | chunks | id、document_id FK、extraction_version、ordinal、physical_page、text；UNIQUE(document_id, extraction_version, ordinal)；页码必须为正 | 5；步骤 8 加检索索引 |
-| notes | id、document_id? FK、topic_id? FK、body_md、sources_json、version、created_at、updated_at；两个所属字段恰有一个非空 | 7；步骤 10 增加 topic_id |
+| notes | 步骤 7 已落地 id、document_id FK、body_md、sources_json、version、created_at、updated_at；步骤 10 再扩展 topic_id 与所属约束 | 7；步骤 10 增加 topic_id |
 | conversations | id、document_id FK、created_at；首版每篇文献一个会话，document_id UNIQUE | 9 |
 | messages | id、conversation_id FK、ordinal、role、body_md、status、sources_json、provider_snapshot_json、prompt_version?、request_id?、created_at；UNIQUE(conversation_id, ordinal) | 9 |
 | topics | id、parent_id? 自引用 FK、title、current_revision_id?、version、created_at、updated_at；父子关系不能形成环 | 10 |
@@ -100,7 +100,7 @@ Python API 前缀 `/v1`，JSON 字段 snake_case。返回普通对象或 `{items
 | documents.list/get/update/remove | GET /v1/documents；GET/PATCH/DELETE /v1/documents/{id} | id；PATCH 字段+version；DELETE version → 文献/删除结果 |
 | documents.readPdf | GET /v1/documents/{id}/file | id → PDF 字节；main 转为受限字节响应供 PDF.js，不给 renderer 后端地址或任意路径访问 |
 | documents.savePosition | PATCH /v1/documents/{id}/position | page → 已保存页码；独立于元数据 version，限制在有效页数内 |
-| notes.list/create/update | GET/POST /v1/notes；PATCH /v1/notes/{id} | 所属文献/专题、body_md、sources、version → note |
+| notes.list/save | GET/POST /v1/notes；PATCH /v1/notes/{id} | 步骤 7：GET 按 document_id；桥接 save 的 version=0 对应 POST（稳定 id、document_id、body_md），已有笔记 PATCH（body_md、version）；sources 由服务端保留，不接受手工伪造 |
 | providers.get/save/test | GET /v1/providers；PUT /v1/providers/{kind}；POST /v1/providers/{kind}/test | 配置、测试种类 → 脱敏配置/测试结果；key 由 main 另行保存并注入 |
 | tasks.get/cancel/retry | GET /v1/tasks/{id}；POST /v1/tasks/{id}/cancel、/retry | id → task 或新 task_id |
 | documents.reindex/search | POST /v1/documents/{id}/index、/search | 查询/索引请求 → task 或 evidence candidates（ID、分数、文本、页码） |

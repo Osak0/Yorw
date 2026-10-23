@@ -54,6 +54,8 @@ def create_app(token: str, database: Database) -> FastAPI:
     from .providers import router
     app.include_router(router(database))
     app.include_router(library_router(library))
+    from .notes import router as notes_router
+    app.include_router(notes_router(database))
     return app
 
 
