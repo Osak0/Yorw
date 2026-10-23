@@ -33,11 +33,11 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
                 time.sleep(.1)
         else:
             pytest.fail("Backend readiness timed out")
-        assert health["ready"] and health["schema_version"] == 3
+        assert health["ready"] and health["schema_version"] == 4
         assert "token" not in health
         with urllib.request.urlopen(urllib.request.Request(url.replace('/health', '/workspace'), headers={"Authorization": "Bearer " + token}), timeout=2) as response:
             info = json.load(response)
-        assert info["schema_version"] == 3
+        assert info["schema_version"] == 4
         assert "workspace_path" not in info
         assert (tmp_path / "workspace/yorw.sqlite3").exists()
         for headers in [{}, {"Authorization": "Bearer invalid"}]:
@@ -96,10 +96,43 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
         with pytest.raises(urllib.error.HTTPError) as invalid:
             urllib.request.urlopen(invalid_position, timeout=2)
         assert invalid.value.code == 422
+        from uuid import uuid4
+        note_id = str(uuid4())
+        notes_url = url.replace('/health', '/notes')
+        note_payload = {'id': note_id, 'document_id': identity, 'body_md': '# Restart fixture\n\n中文笔记'}
+        note_request = urllib.request.Request(notes_url, data=json.dumps(note_payload).encode(), headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        with urllib.request.urlopen(note_request, timeout=2) as response:
+            note = json.load(response)
+        assert note['version'] == 1 and note['sources'] == []
+        note_update = urllib.request.Request(notes_url + '/' + note_id, data=json.dumps({'body_md': 'Saved after edit 中文', 'version': 1}).encode(), method='PATCH', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        with urllib.request.urlopen(note_update, timeout=2) as response:
+            assert json.load(response)['version'] == 2
+        with pytest.raises(urllib.error.HTTPError) as conflict:
+            urllib.request.urlopen(note_update, timeout=2)
+        assert conflict.value.code == 409
         request = urllib.request.Request(documents_url + '/' + identity + '?version=' + str(edited['version']), method='DELETE', headers={"Authorization": "Bearer " + token})
         with urllib.request.urlopen(request, timeout=2) as response:
             assert json.load(response)['removed']
         assert not (tmp_path / 'workspace/documents' / (identity + '.pdf')).exists()
+        child.stdin.close()
+        assert child.wait(timeout=8) == 0
+        # A new process reopens the same workspace; removal retains historical notes.
+        child = subprocess.Popen(command, cwd=ROOT / "src", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        child.stdin.write(json.dumps({"token": token, "workspace_path": str(tmp_path / "workspace")}) + "\n")
+        child.stdin.flush()
+        restart = json.loads(child.stdout.readline())
+        restarted_url = f"http://127.0.0.1:{restart['port']}/v1/notes?document_id={identity}"
+        for _ in range(100):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(restarted_url, headers={"Authorization": "Bearer " + token}), timeout=1) as response:
+                    restored = json.load(response)['items']
+                break
+            except (OSError, urllib.error.URLError):
+                time.sleep(.1)
+        else:
+            pytest.fail('Restarted notes endpoint did not become ready')
+        assert len(restored) == 1 and restored[0]['body_md'] == 'Saved after edit 中文'
+        assert restored[0]['version'] == 2 and not restored[0]['document_available']
         child.stdin.close()
         assert child.wait(timeout=8) == 0
     finally:

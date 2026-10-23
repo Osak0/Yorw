@@ -32,14 +32,14 @@ def test_restart_preserves_identity_files_and_transactions(tmp_path):
     assert db.connection.execute("SELECT * FROM probe").fetchall() == [("persisted",)]
     assert workspace.document_path(document_id).read_bytes().startswith(b"test fixture")
     assert (workspace.root / "tmp/unknown.part").exists()
-    assert db.connection.execute("SELECT count(*) FROM schema_migrations").fetchone() == (3,)
+    assert db.connection.execute("SELECT count(*) FROM schema_migrations").fetchone() == (4,)
     db.close()
 
 
 def migration_copy(tmp_path, second_sql):
     target = tmp_path / "migrations"
     shutil.copytree(MIGRATIONS, target)
-    (target / "004_probe.sql").write_text(second_sql, encoding="utf-8")
+    (target / "005_probe.sql").write_text(second_sql, encoding="utf-8")
     return target
 
 
@@ -52,20 +52,42 @@ def test_upgrade_backup_and_failure_rollback(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         Database(workspace, target)
     with sqlite3.connect(workspace.database_path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone() == (3,)
+        assert conn.execute("PRAGMA user_version").fetchone() == (4,)
         assert conn.execute("SELECT name FROM sqlite_master WHERE name='probe'").fetchone() is None
     backups = list((workspace.root / "backups").glob("*.sqlite3"))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as conn:
         assert conn.execute("SELECT workspace_id FROM workspace_meta").fetchone() == (identity,)
-    (target / "004_probe.sql").write_text("CREATE TABLE probe (value TEXT);\n", encoding="utf-8")
+    (target / "005_probe.sql").write_text("CREATE TABLE probe (value TEXT);\n", encoding="utf-8")
     db = Database(workspace, target)
-    assert db.version == 4
+    assert db.version == 5
     db.close()
     before = workspace.database_path.read_bytes()
     with pytest.raises(MigrationError, match="DATABASE_TOO_NEW"):
         Database(workspace)
     assert workspace.database_path.read_bytes() == before
+
+
+def test_step6_database_upgrade_keeps_documents_and_backs_up(tmp_path):
+    old_migrations = tmp_path / 'step6-migrations'
+    old_migrations.mkdir()
+    for source in sorted(MIGRATIONS.glob('*.sql'))[:3]:
+        shutil.copy2(source, old_migrations / source.name)
+    workspace = Workspace(tmp_path / 'workspace')
+    old = Database(workspace, old_migrations)
+    with old.write() as conn:
+        conn.execute("INSERT INTO documents(id,sha256,original_name,title,extraction_status,created_at,updated_at) VALUES('fixture','digest','fixture.pdf','Retained','ready','time','time')")
+    old.close()
+    upgraded = Database(workspace)
+    assert upgraded.version == 4
+    assert upgraded.connection.execute('SELECT title FROM documents').fetchone() == ('Retained',)
+    assert upgraded.connection.execute('SELECT count(*) FROM notes').fetchone() == (0,)
+    backups = list((workspace.root / 'backups').glob('*.sqlite3'))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as backup:
+        assert backup.execute('PRAGMA user_version').fetchone() == (3,)
+        assert backup.execute('SELECT title FROM documents').fetchone() == ('Retained',)
+    upgraded.close()
 
 
 def test_changed_migration_is_rejected_without_writing(tmp_path):
@@ -91,7 +113,7 @@ def test_backup_failure_blocks_upgrade(tmp_path, monkeypatch):
     with pytest.raises(MigrationError, match="MIGRATION_BACKUP_FAILED"):
         Database(workspace, target)
     with sqlite3.connect(workspace.database_path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone() == (3,)
+        assert conn.execute("PRAGMA user_version").fetchone() == (4,)
 
 
 def test_managed_paths_and_interrupted_copy(tmp_path):

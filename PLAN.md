@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-23
 
-状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 已通过用户 review 并合并到 main；步骤 3 本地工作区已通过用户 review，交付见 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准；步骤 4 已通过用户 review，用户确认 DeepSeek 真实接入及平台用量请求；embedding 真实服务验收仍待补，步骤 4 已合并到 main；步骤 5 已通过用户 review 并合并到 main；步骤 6 于 2026-10-23 通过用户 review，feature/pdf-reader 待提交与合并；步骤 7 未开始。
+状态：步骤 0、步骤 1 均已通过用户 review；步骤 1 采用方案三（顶部导航、蓝色主题），方案与视觉规范已合并为统一设计说明。设计分支已合并；步骤 2 已通过用户 review 并合并到 main；步骤 3 本地工作区已通过用户 review，交付见 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准；步骤 4 已通过用户 review，用户确认 DeepSeek 真实接入及平台用量请求；embedding 真实服务验收仍待补，步骤 4 已合并到 main；步骤 5 已通过用户 review 并合并到 main；步骤 6 已通过用户 review 并合并 main（d57df53，PR #6）；步骤 7 在 feature/document-notes 实现与本地验证完成，待用户 review。
 
 ## 1. 文档职责与接手入口
 
@@ -100,7 +100,7 @@
 
 当前设计分支为 `design/product-design`。本次仅整理文档；规划整体完成且用户确认后，才将设计分支合并到 `main`。步骤 0–1 属于设计收口，完成前不得将“已有计划”理解为允许进入应用实现。
 
-设计分支合并后，每个功能从最新 `main` 新建独立分支，默认命名 `codex/<功能名>`。顺序为：
+设计分支合并后，每个功能从最新 `main` 新建独立分支，按用户当前约定命名 `feature/<功能名>`。顺序为：
 
 **确认本步范围 → 新建分支 → 实现一个功能/模块 → 验证 → 交付用户 review → 明确通过后合并 → 再进入下一步。**
 
@@ -148,8 +148,8 @@
 - [x] 3. 本地工作区持久化 — 2026-10-23 用户 review 通过；feature/local-workspace；[PR #3](https://github.com/Osak0/Yorw/pull/3)；[验收记录](docs/dev-evidence/step-03.md)
 - [x] 4. House 模型连接设置 — 2026-10-23 用户 review 通过，确认 DeepSeek 接入及平台用量请求；embedding 真实服务仍待验证；[PR #4](https://github.com/Osak0/Yorw/pull/4)（合并状态以 PR 为准）；[记录](docs/dev-evidence/step-04.md)
 - [x] 5. Storage PDF 导入与文献列表 — 2026-10-23 用户 review 通过，已合并 main（0d7e2ba）；feature/pdf-library；[记录](docs/dev-evidence/step-05.md)
-- [x] 6. Storage PDF 阅读器 — 2026-10-23 用户 review 通过；feature/pdf-reader 待提交与合并；[记录](docs/dev-evidence/step-06.md)
-- [ ] 7. Storage 文献笔记 — 未实施
+- [x] 6. Storage PDF 阅读器 — 2026-10-23 用户 review 通过，已合并 main（d57df53，PR #6）；[记录](docs/dev-evidence/step-06.md)
+- [ ] 7. Storage 文献笔记 — feature/document-notes 实现与本地验证完成，待用户 review；[记录](docs/dev-evidence/step-07.md)
 - [ ] 8. 文献检索模块 — 未实施
 - [ ] 9. Storage 带来源问答 — 未实施
 - [ ] 10. Garden 专题目录与编辑 — 未实施

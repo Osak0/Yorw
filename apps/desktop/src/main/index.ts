@@ -1,10 +1,12 @@
-import { app, BrowserWindow, ipcMain, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, safeStorage, dialog } from 'electron'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { Backend } from './backend'
 import { Providers } from './providers'
 import { Documents } from './documents'
+import { Notes } from './notes'
+import { runNotesSmoke } from './notes-smoke'
 
 let backend: Backend
 let quitting = false
@@ -14,11 +16,14 @@ else app.whenReady().then(async () => {
   const root = resolve(__dirname, '../../../..')
   const smokeReport = process.argv.find(arg => arg.startsWith('--report-dir='))?.slice(13)
   const readerSmoke = process.argv.includes('--yorw-smoke') && process.argv.includes('--reader-smoke') && !!smokeReport
+  const notesSmoke = readerSmoke && process.argv.includes('--notes-smoke')
+  let preventedUnloads = 0
   const workspacePath = readerSmoke ? join(smokeReport!, 'workspace') : join(app.getPath('userData'), 'workspace')
   backend = app.isPackaged
     ? new Backend(join(process.resourcesPath, 'backend/yorw-api/yorw-api.exe'), [], process.resourcesPath, workspacePath)
     : new Backend(join(root, 'services/api/.venv/Scripts/python.exe'), ['-m', 'yorw_api'], join(root, 'services/api/src'), workspacePath)
   const window = new BrowserWindow({ show: !process.argv.includes('--yorw-smoke'), width: 1200, height: 800, minWidth: 900, minHeight: 640, title: '知栖 Yorw', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true, nodeIntegration: false } })
+  if (readerSmoke) window.webContents.on('render-process-gone', (_event, details) => { void writeFile(join(smokeReport!, 'renderer-exit.json'), JSON.stringify(details)) })
   const devUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL
   const allowed = (url: string) => devUrl ? url === devUrl || url === devUrl + '/' : url === pathToFileURL(join(__dirname, '../renderer/index.html')).href
   ipcMain.handle('app:getStatus', event => {
@@ -30,11 +35,14 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = error instanceof Error && ['NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
       return { ok: false, code }
     }
   }
   const documents = new Documents(backend)
+  const notes = new Notes(backend)
+  ipcMain.handle('notes:list', providerAction(input => notes.list(input)))
+  ipcMain.handle('notes:save', providerAction(input => notes.save(input)))
   ipcMain.handle('documents:readPdf', providerAction(input => documents.readPdf(input)))
   ipcMain.handle('documents:savePosition', providerAction(input => documents.savePosition(input)))
   ipcMain.handle('documents:list', providerAction(() => documents.list()))
@@ -48,6 +56,12 @@ else app.whenReady().then(async () => {
   ipcMain.handle('providers:save', providerAction(input => providers.save(input)))
   ipcMain.handle('providers:test', providerAction(input => providers.test(input)))
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.on('will-prevent-unload', event => {
+    // Native smoke automatically chooses "continue editing" in its isolated workspace.
+    if (notesSmoke) { preventedUnloads++; return }
+    const choice = dialog.showMessageBoxSync(window, { type: 'warning', title: '笔记尚未保存', message: '有未保存的笔记或正在保存的内容。', detail: '继续编辑以保存；放弃后关闭或重新加载会丢失本次草稿。', buttons: ['继续编辑', '放弃草稿并继续'], defaultId: 0, cancelId: 0, noLink: true })
+    if (choice === 1) event.preventDefault()
+  })
   window.webContents.on('will-navigate', (event, url) => { if (!allowed(url)) event.preventDefault() })
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
   if (devUrl) await window.loadURL(devUrl)
@@ -60,6 +74,7 @@ else app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
+      let notesProof: unknown = null
       if (readerSmoke) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
@@ -96,10 +111,11 @@ else app.whenReady().then(async () => {
       } else {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
       }
+      if (notesSmoke) notesProof = await runNotesSmoke(window, backend, reportDir, () => preventedUnloads)
       await new Promise(resolve => setTimeout(resolve, 400))
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
-      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof }, null, 2))
+      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, notesProof }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
       if (readerSmoke) {
         const layouts = []
@@ -116,17 +132,18 @@ else app.whenReady().then(async () => {
       await backend.stop()
       app.exit(probe.status.state === 'ready' && !probe.nodeExposed ? 0 : 1)
     } catch (error) {
-      if (readerSmoke) {
+      try { if (readerSmoke) {
         await mkdir(reportDir, { recursive: true })
-        await writeFile(join(reportDir, 'failure.json'), JSON.stringify({ message: error instanceof Error ? error.message : 'SMOKE_FAILED', reader: await window.webContents.executeJavaScript(`({feedback: document.querySelector('.reader-feedback')?.textContent, text: document.querySelector('.textLayer')?.textContent})`) }))
-        await writeFile(join(reportDir, 'failure.png'), (await window.webContents.capturePage()).toPNG())
-      }
-      await backend.stop(); app.exit(1)
+        const reader = window.isDestroyed() ? null : await window.webContents.executeJavaScript(`({feedback: document.querySelector('.reader-feedback')?.textContent, text: document.querySelector('.textLayer')?.textContent, note: document.querySelector('.note-status')?.textContent})`).catch(() => null)
+        await writeFile(join(reportDir, 'failure.json'), JSON.stringify({ message: error instanceof Error ? error.message : 'SMOKE_FAILED', reader }))
+        if (!window.isDestroyed()) await writeFile(join(reportDir, 'failure.png'), (await window.webContents.capturePage()).toPNG())
+      } } finally { await backend.stop(); app.exit(1) }
     }
   }
 })
 app.on('window-all-closed', () => app.quit())
-app.on('before-quit', event => {
+// Wait until windows accept their beforeunload checks before stopping the service.
+app.on('will-quit', event => {
   if (quitting || !backend) return
   event.preventDefault()
   quitting = true
