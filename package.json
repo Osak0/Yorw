@@ -1,0 +1,18 @@
+{
+  "name": "yorw",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @yorw/desktop dev",
+    "build": "pnpm --filter @yorw/desktop build",
+    "typecheck": "pnpm --filter @yorw/desktop typecheck",
+    "test": "pnpm --filter @yorw/desktop test",
+    "package:dir": "pnpm typecheck && pnpm build && pnpm build:backend && pnpm --filter @yorw/desktop package:dir",
+    "package:win": "pnpm typecheck && pnpm build && pnpm build:backend && pnpm --filter @yorw/desktop package:win",
+    "build:backend": "powershell -NoProfile -File scripts/build-backend.ps1"
+  }
+}

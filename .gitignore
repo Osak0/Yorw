@@ -147,3 +147,15 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Yorw Python, packaging, local verification and private data
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.egg-info/
+release/
+services/api/build/
+.cache/
+workspace/
+*.sqlite3*

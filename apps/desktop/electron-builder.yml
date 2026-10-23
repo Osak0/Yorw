@@ -1,0 +1,16 @@
+appId: com.yorw.desktop
+productName: Yorw
+directories:
+  output: ../../release/desktop
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: ../../services/api/dist/yorw-api
+    to: backend/yorw-api
+win:
+  target: nsis
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
