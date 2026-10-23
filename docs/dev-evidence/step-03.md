@@ -1,6 +1,6 @@
 # 步骤 3：本地工作区
 
-2026-10-23 · feature/local-workspace · 2026-10-23 用户 review 通过，待用户提交与合并。起点 main `2b3e5ce` 已合并步骤 2；本步不进入模型设置或文献导入，不自动提交或合并。
+2026-10-23 · feature/local-workspace · 2026-10-23 用户 review 通过，已提交并发布 [PR #3](https://github.com/Osak0/Yorw/pull/3)，合并状态以 PR 为准。起点 main `2b3e5ce` 已合并步骤 2；本步不进入模型设置或文献导入，后续用户明确授权发布与合并，记录见 PR。
 
 ## 实现与设计取舍
 
@@ -32,6 +32,6 @@ SQLite 仅创建 schema_migrations 和 workspace_meta（稳定 UUID 与创建时
 
 ## Review 后收口
 
-用户已明确通过步骤 3 review。PLAN 同步为通过、尚未提交/合并；步骤 4 未启动。清理本步临时测试库、截图、烟测报告、Python 缓存及 PyInstaller 构建中间目录，保留锁文件、迁移 SQL、有效测试和最新可运行分发目录。未删除真实 userData 工作区、内部迁移备份或旧的被占用分发文件。
+用户已明确通过步骤 3 review。PLAN 同步为通过；用户随后授权发布与合并，代码提交为 `28547ee`，交付见 PR #3；步骤 4 未启动。清理本步临时测试库、截图、烟测报告、Python 缓存及 PyInstaller 构建中间目录，保留锁文件、迁移 SQL、有效测试和最新可运行分发目录。未删除真实 userData 工作区、内部迁移备份或旧的被占用分发文件。
 
 本轮收口仅整理文档和生成残留，未修改功能源码；核查本地文档链接、Markdown 表格和 Git diff 空白，不重复运行此前已通过的功能测试。
