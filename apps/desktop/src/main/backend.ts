@@ -58,6 +58,15 @@ export class Backend {
       await this.stop()
     }
   }
+  async request(path: string, method = 'GET', body?: unknown, key?: string): Promise<any> {
+    if (this.status.state !== 'ready') throw new Error('BACKEND_NOT_READY')
+    const response = await fetch(`http://127.0.0.1:${this.port}${path}`, {
+      method, headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json', ...(key ? { 'X-Provider-Key': key } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20000)
+    })
+    if (!response.ok) throw new Error(response.status === 409 ? 'CONFIG_CONFLICT' : response.status === 422 ? 'INVALID_CONFIG' : 'BACKEND_ERROR')
+    return response.json()
+  }
   async stop(): Promise<void> {
     this.stopping = true
     const child = this.child

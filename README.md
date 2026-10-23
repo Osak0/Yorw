@@ -55,4 +55,10 @@ pnpm dev
 
 `pnpm package:win` 自动检查类型、构建桌面与 Python 后端，并生成 `release/desktop/` 中的未签名测试安装包；`pnpm package:dir` 生成可直接启动的分发目录。开发模式使用独立的 Yorw-development 数据目录。工作区位于 Electron userData 下的 `workspace/`，包含 SQLite 数据库、受管理文献、临时文件、日志和内部迁移备份；用户资料与安装资源分开保存。
 
-工作区基础已加入 SQLite 迁移、启动校验和受管理文件存储；具体 PDF 导入仍待实现。当前界面为最小导航壳，可切换 Storage、Garden、House 并显示真实服务状态；具体阅读界面仍待后续实现。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 与[步骤 3 验收记录](docs/dev-evidence/step-03.md) 包含验证范围和已知限制。步骤 3 已通过 review；本步验证分发目录为 `release/step3/`，默认 `release/desktop/` 的旧文件占用问题尚未确认原因，重建方式见步骤 3 记录。
+工作区基础已加入 SQLite 迁移、启动校验和受管理文件存储；具体 PDF 导入仍待实现。Storage/Garden 当前为最小导航壳，House 已实现模型配置与连接测试；具体阅读界面仍待后续实现。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 与[步骤 3 验收记录](docs/dev-evidence/step-03.md) 包含验证范围和已知限制。步骤 3 已通过 review；步骤 3 验证分发目录为 `release/step3/`，默认 `release/desktop/` 的旧文件占用问题尚未确认原因，重建方式见步骤 3 记录。
+
+### House 模型连接
+
+聊天预设 DeepSeek：API Base URL 为 `https://api.deepseek.com`，模型名为 `deepseek-flash`（按 [DeepSeek 官方文档](https://api-docs.deepseek.com/) 于 2026-10-23 核对）。可编辑为其他兼容 Chat Completions 的服务。embedding 使用独立的地址、模型和密钥，需服务支持 `/embeddings`。
+
+运行 `pnpm dev` 后进入 House，在本地输入 API Key，保存后点击“测试已保存配置”；测试可能产生少量 API 费用。密钥由 Electron 系统安全存储加密保存，不回显、不写入 SQLite。首次缺配置、服务鉴权失败、限流、超时均有提示。2026-10-23 用户已完成 DeepSeek 接入验收，并确认服务商平台显示用量请求；embedding 的真实服务连通性仍待验证。详见[步骤 4 验收记录](docs/dev-evidence/step-04.md)。

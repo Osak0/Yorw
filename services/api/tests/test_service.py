@@ -33,17 +33,30 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
                 time.sleep(.1)
         else:
             pytest.fail("Backend readiness timed out")
-        assert health["ready"] and health["schema_version"] == 1
+        assert health["ready"] and health["schema_version"] == 2
         assert "token" not in health
         with urllib.request.urlopen(urllib.request.Request(url.replace('/health', '/workspace'), headers={"Authorization": "Bearer " + token}), timeout=2) as response:
             info = json.load(response)
-        assert info["schema_version"] == 1
+        assert info["schema_version"] == 2
         assert "workspace_path" not in info
         assert (tmp_path / "workspace/yorw.sqlite3").exists()
         for headers in [{}, {"Authorization": "Bearer invalid"}]:
             with pytest.raises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=2)
             assert error.value.code == 401
+        provider_url = url.replace('/health', '/providers')
+        for kind in ('chat', 'embedding'):
+            payload = {"base_url": "https://api.deepseek.com" if kind == 'chat' else "https://example.com/v1", "model": "deepseek-flash" if kind == 'chat' else "fixture-embedding", "version": 0}
+            request = urllib.request.Request(provider_url + '/' + kind, data=json.dumps(payload).encode(), method='PUT', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+            with urllib.request.urlopen(request, timeout=2) as response:
+                assert json.load(response)['version'] == 1
+            with pytest.raises(urllib.error.HTTPError) as conflict:
+                urllib.request.urlopen(request, timeout=2)
+            assert conflict.value.code == 409
+        with urllib.request.urlopen(urllib.request.Request(provider_url, headers={"Authorization": "Bearer " + token}), timeout=2) as response:
+            configs = json.load(response)['items']
+        assert {item['kind'] for item in configs} == {'chat', 'embedding'}
+        assert all('key' not in item for item in configs)
         child.stdin.close()
         assert child.wait(timeout=8) == 0
     finally:
