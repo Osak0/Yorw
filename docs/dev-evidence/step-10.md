@@ -51,3 +51,5 @@ Garden Wiki 正文使用独立 revisions，不为了设计占位而扩展 notes.
 2026-10-24 用户明确确认 Step 10 review 通过。本记录保留自动化测试与原生界面的具体证据，不补写用户未单独提供的逐项结果；AI 草稿、采纳和回退仍属 Steps 11–12。
 
 本轮仅同步 PLAN、README、工程基线和本记录，清理可重新生成的临时 pytest 工作区、Python 缓存和 PyInstaller build；保留源码、迁移、必要测试、锁文件、依赖、冻结后端、release/step10-review 程序及 .cache/step10-desktop/、.cache/step10-packaged/ 阶段报告。文档修改只检查状态、相对链接与 diff，不重复运行无关功能测试。分支仍为 feature/garden-editor，提交合并由用户处理，未启动 Step 11。
+
+后续集成状态（2026-10-24 核对）：步骤 10–11 已随 PR #10 合并 main（fa97a09，步骤 11 提交 d05ceba）。用户已授权在新的 feature/wiki-review-export 分支完成步骤 12、13；上述本步交付时的未提交/未合并与功能边界为历史记录。

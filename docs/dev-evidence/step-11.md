@@ -63,3 +63,5 @@ SourceRef 保存 source_id（本轮 S1…S8）、kind、source_object_id、sourc
 本轮同步 PLAN、README、工程基线与本记录，修正工程基线中 Step 10 尚待提交的旧说法。清理 10 个可重新生成目录，共 52,057,098 字节（约 49.6 MiB）：5 个 Step 11 临时 pytest 工作区、PyInstaller build、pytest 缓存及 3 个 Python 字节码缓存目录。保留源码、迁移、必要测试、锁文件、依赖、冻结后端、release/step11-review 程序，以及 .cache/step11-desktop/、.cache/step11-packaged/、.cache/step11-review-final/ 报告和截图。未触及用户真实工作区或密钥。
 
 本轮未修改应用代码，检查文档状态、相对链接和 git diff，不重复运行功能测试。分支仍为 feature/garden-editor；Step 11 尚未提交、发布或合并。Step 12 的采纳/拒绝、冲突确认和回退，以及 Steps 13–14，继续等待用户另行授权。
+
+后续集成状态（2026-10-24 核对）：步骤 10–11 已随 PR #10 合并 main（fa97a09，步骤 11 提交 d05ceba）。用户已授权在新的 feature/wiki-review-export 分支完成步骤 12、13；上述本步交付时的未提交/未合并与功能边界为历史记录。

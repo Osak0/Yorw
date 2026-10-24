@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from .storage.database import Database
+from .source_status import source_status
 
 
 class TopicFields(BaseModel):
@@ -47,7 +48,7 @@ class Garden:
         if not rows:
             raise HTTPException(409,detail='REVISION_CONFLICT')
         revision = rows[0]
-        revision['sources'] = json.loads(revision.pop('sources_json'))
+        revision['sources'] = source_status(self.db, json.loads(revision.pop('sources_json')))
         return revision
 
     def _parent(self, identity, parent_id):
@@ -113,7 +114,7 @@ class Garden:
             revision_id = str(uuid4())
             timestamp = datetime.now(timezone.utc).isoformat()
             conn.execute("INSERT INTO revisions(id,topic_id,ordinal,body_md,sources_json,origin,base_revision_id,created_at) VALUES(?,?,?,?,?,'manual',?,?)",
-                         (revision_id,identity,current['ordinal']+1,value.body_md,json.dumps(current['sources']),base,timestamp))
+                         (revision_id,identity,current['ordinal']+1,value.body_md,conn.execute('SELECT sources_json FROM revisions WHERE id=?',(base,)).fetchone()[0],base,timestamp))
             conn.execute('UPDATE topics SET current_revision_id=?,version=version+1,updated_at=? WHERE id=?',(revision_id,timestamp,identity))
             return self.get(identity)
 

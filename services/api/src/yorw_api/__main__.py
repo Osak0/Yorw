@@ -70,6 +70,10 @@ def create_app(token: str, database: Database) -> FastAPI:
     from .garden import router as garden_router
     app.include_router(garden_router(database))
     app.include_router(suggestions_router(suggestions))
+    from .wiki_review import router as review_router
+    from .exports import router as exports_router
+    app.include_router(review_router(suggestions))
+    app.include_router(exports_router(database))
     return app
 
 

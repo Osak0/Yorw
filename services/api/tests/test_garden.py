@@ -65,7 +65,9 @@ def test_save_failure_rolls_back_pointer_and_preserves_sources(garden):
     with pytest.raises(sqlite3.IntegrityError):garden.save(identity,SaveBody(body_md='unsaved',base_revision_id=rid))
     assert garden.get(identity)==baseline and len(garden.history(identity)['items'])==2
     with garden.db.write() as conn:conn.execute('DROP TRIGGER reject_revision')
-    assert garden.save(identity,SaveBody(body_md='edited',base_revision_id=rid))['revision']['sources']==source
+    saved=garden.save(identity,SaveBody(body_md='edited',base_revision_id=rid))
+    assert saved['revision']['sources']==[{**source[0],'available':False}]
+    assert json.loads(garden.db.connection.execute('SELECT sources_json FROM revisions WHERE id=?',(saved['revision']['id'],)).fetchone()[0])==source
 
 
 def test_create_is_atomic_idempotent_and_rejects_invalid_fields(garden):
@@ -100,7 +102,7 @@ def test_step9_database_upgrade_preserves_existing_research_assets(tmp_path):
     old.close()
     updated=Database(workspace)
     try:
-        assert updated.version==8
+        assert updated.version==9
         assert updated.connection.execute('SELECT body_md FROM notes').fetchone()[0]=='Retained note 中文'
         assert updated.connection.execute('SELECT body_md FROM messages').fetchone()[0]=='Retained answer'
         assert updated.connection.execute('SELECT count(*) FROM topics').fetchone()[0]==0

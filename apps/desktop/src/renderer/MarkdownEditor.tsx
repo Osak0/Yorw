@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import { EditorState } from '@codemirror/state'
+import { Annotation, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { markdown } from '@codemirror/lang-markdown'
+const externalUpdate=Annotation.define<boolean>()
 
 export function MarkdownEditor({ value, onChange, onSave, label = 'Markdown 笔记正文' }: {value: string; onChange(value: string): void; onSave(): void; label?:string}) {
   const host = useRef<HTMLDivElement>(null)
@@ -14,7 +15,7 @@ export function MarkdownEditor({ value, onChange, onSave, label = 'Markdown 笔�
       keymap.of([{ key: 'Mod-s', run: () => { callbacks.current.onSave(); return true } }]),
       basicSetup, markdown(), EditorView.lineWrapping,
       EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' }),
-      EditorView.updateListener.of(update => { if (update.docChanged) callbacks.current.onChange(update.state.doc.toString()) }),
+      EditorView.updateListener.of(update => { if (update.docChanged&&!update.transactions.some(t=>t.annotation(externalUpdate))) callbacks.current.onChange(update.state.doc.toString()) }),
       EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto', fontFamily: 'Consolas, "Microsoft YaHei", monospace', fontSize: '14px' }, '.cm-content': { minHeight: '240px' } })
     ] }) })
     editor.current = view
@@ -22,7 +23,7 @@ export function MarkdownEditor({ value, onChange, onSave, label = 'Markdown 笔�
   }, [])
   useEffect(() => {
     const view = editor.current
-    if (view && view.state.doc.toString() !== value) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
+    if (view && view.state.doc.toString() !== value) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value },annotations:externalUpdate.of(true) })
   }, [value])
   return <div className="markdown-editor" ref={host} />
 }
