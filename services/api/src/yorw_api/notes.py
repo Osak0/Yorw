@@ -42,6 +42,10 @@ class Notes:
         note = dict(zip((column[0] for column in cursor.description), row))
         note['sources'] = json.loads(note.pop('sources_json'))
         note['document_available'] = note.pop('deleted_at') is None
+        for source in note['sources']:
+            if isinstance(source, dict) and 'chunk_id' in source:
+                live = self.db.connection.execute('SELECT extraction_version FROM chunks WHERE id=? AND document_id=?',(source['chunk_id'],note['document_id'])).fetchone()
+                source['available'] = note['document_available'] and live is not None and live[0] == source.get('extraction_version')
         return note
 
     def list(self, document_id: str) -> list[dict]:

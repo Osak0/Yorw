@@ -61,7 +61,7 @@ Yorw/
 | chunks | id、document_id FK、extraction_version、ordinal、physical_page、text；UNIQUE(document_id, extraction_version, ordinal)；页码必须为正 | 5；步骤 8 加检索索引 |
 | notes | 步骤 7 已落地 id、document_id FK、body_md、sources_json、version、created_at、updated_at；步骤 10 再扩展 topic_id 与所属约束 | 7；步骤 10 增加 topic_id |
 | conversations | id、document_id FK、created_at；首版每篇文献一个会话，document_id UNIQUE | 9 |
-| messages | id、conversation_id FK、ordinal、role、body_md、status、sources_json、provider_snapshot_json、prompt_version?、request_id?、created_at；UNIQUE(conversation_id, ordinal) | 9 |
+| messages | 步骤 9 已落地：id、conversation_id FK、question、body_md、status、error_code、sources_json、provider_json（含提示版本）、created_at、note_id FK；一条记录保存一次问题和助手输出，取消/失败保留部分正文 | 9 |
 | topics | id、parent_id? 自引用 FK、title、current_revision_id?、version、created_at、updated_at；父子关系不能形成环 | 10 |
 | revisions | id、topic_id FK、ordinal、body_md、sources_json、origin、restored_from_id?、created_at；UNIQUE(topic_id, ordinal)；保存后不可修改 | 10 |
 | suggestions | id、topic_id FK、base_revision_id FK、body_md、sources_json、materials_json、provider_snapshot_json、prompt_version、status、created_at；不充当正式正文 | 11 |
@@ -163,3 +163,5 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 | 干净 Windows | 尚未落实 | 14 前落实测试机/VM；无验证则不宣称发布通过 |
 
 步骤 0 的设计交付与设计分支合并已完成；当前进度以 PLAN 为准。后续仍按功能分支逐步实现、等待用户 review，不自动进入下一步或合并。
+
+步骤 9 在 feature/document-chat 已通过用户 review（2026-10-24），待提交合并：证据预览确认后发送，外部 SSE 增量持久化、本地每 500ms 轮询，历史不自动进入下一轮提示。引用按本轮 S 编号校验并支持物理页跳转；转笔记保留原始引用且不覆盖草稿。边界、状态与真实服务验收见[步骤 9 记录](dev-evidence/step-09.md)。

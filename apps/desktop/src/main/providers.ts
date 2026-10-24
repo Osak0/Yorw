@@ -64,6 +64,11 @@ export class Providers {
     return job
   }
   // Main-process only: credentials go directly to the private service, never renderer.
+  async chatCredentials() {
+    await this.queue.catch(() => {})
+    const config = (await this.backend.request('/v1/providers')).items.find((item: ProviderConfig) => item.kind === 'chat') as ProviderConfig | undefined
+    return config ? { version: config.version, key: await this.key(config).catch(() => '') } : {version:0,key:''}
+  }
   async embeddingCredentials() {
     await this.queue.catch(() => {})
     const config = (await this.backend.request('/v1/providers')).items.find((item: ProviderConfig) => item.kind === 'embedding') as ProviderConfig | undefined
