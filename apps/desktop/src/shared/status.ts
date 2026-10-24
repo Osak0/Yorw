@@ -1,3 +1,14 @@
+export interface Topic { id:string; parent_id:string|null; title:string; current_revision_id:string; version:number; created_at:string; updated_at:string }
+export interface Revision { id:string; topic_id:string; ordinal:number; body_md:string; sources:unknown[]; origin:string; base_revision_id:string|null; restored_from_id:string|null; created_at:string }
+export interface TopicView { topic:Topic; revision:Revision }
+export interface TopicFields {title:string;parent_id:string|null}
+export interface GardenBridge {
+ list():Promise<Result<{items:Topic[]}>>; get(id:string):Promise<Result<TopicView>>;
+ create(input:TopicFields & {id:string}):Promise<Result<TopicView>>;
+ update(input:TopicFields & {id:string;version:number}):Promise<Result<TopicView>>;
+ save(input:{id:string;base_revision_id:string;body_md:string}):Promise<Result<TopicView>>;
+ history(id:string):Promise<Result<{items:Revision[]}>>
+}
 export interface ChatSource { id: string; chunk_id: string; document_id: string; text: string; physical_page: number; extraction_version: number; available: boolean }
 export interface ChatMessage { id: string; document_id: string; question: string; body_md: string; status: string; error_code: string | null; sources: ChatSource[]; citations: number[]; note_id: string | null; provider: {model: string; base_url: string; version: number} }
 export interface ChatInput { document_id: string; question: string; segment_ids: string[]; config_version: number }
@@ -11,7 +22,7 @@ export interface NoteSource { citation?: string; physical_page?: number; text?: 
 export interface NoteRecord { id: string; document_id: string; body_md: string; sources: NoteSource[]; version: number; created_at: string; updated_at: string; document_available: boolean }
 export interface NoteInput { id: string; document_id: string; body_md: string; version: number }
 export interface NotesBridge { list(documentId: string): Promise<Result<{items: NoteRecord[]}>>; save(input: NoteInput): Promise<Result<NoteRecord>> }
-export interface DesktopBridge { chat: ChatBridge; search: SearchBridge; notes: NotesBridge; getStatus(): Promise<AppStatus>; documents: { readPdf(id: string): Promise<Result<Uint8Array>>; savePosition(input: {id: string; page: number}): Promise<Result<{page: number}>>; list(): Promise<Result<{items: DocumentRecord[]}>>; importPdf(): Promise<Result<ImportResult>>; update(input: DocumentInput): Promise<Result<DocumentRecord>>; remove(input: {id: string; version: number}): Promise<Result<{removed: boolean; cleanup_pending: boolean}>> }; tasks: { cancel(id: string): Promise<Result<TaskRecord>>; get(id: string): Promise<Result<TaskRecord>>; retry(id: string): Promise<Result<TaskRecord>> }; providers: { list(): Promise<Result<ProviderConfig[]>>; save(input: ProviderInput): Promise<Result<ProviderConfig>>; test(kind: ProviderKind): Promise<Result<ProbeResult>> } }
+export interface DesktopBridge { garden: GardenBridge; chat: ChatBridge; search: SearchBridge; notes: NotesBridge; getStatus(): Promise<AppStatus>; documents: { readPdf(id: string): Promise<Result<Uint8Array>>; savePosition(input: {id: string; page: number}): Promise<Result<{page: number}>>; list(): Promise<Result<{items: DocumentRecord[]}>>; importPdf(): Promise<Result<ImportResult>>; update(input: DocumentInput): Promise<Result<DocumentRecord>>; remove(input: {id: string; version: number}): Promise<Result<{removed: boolean; cleanup_pending: boolean}>> }; tasks: { cancel(id: string): Promise<Result<TaskRecord>>; get(id: string): Promise<Result<TaskRecord>>; retry(id: string): Promise<Result<TaskRecord>> }; providers: { list(): Promise<Result<ProviderConfig[]>>; save(input: ProviderInput): Promise<Result<ProviderConfig>>; test(kind: ProviderKind): Promise<Result<ProbeResult>> } }
 
 export type ProviderKind = 'chat' | 'embedding'
 export interface ProviderConfig { kind: ProviderKind; base_url: string; model: string; version: number; has_key?: boolean; key_error?: boolean }

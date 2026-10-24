@@ -4,7 +4,7 @@
 
 知栖是面向个人研究者与科研学习者的本地优先阅读与知识工作区，希望将文献阅读、AI 讨论、笔记和专题 Wiki 连接起来，让研究中的认识持续积累，并能回到原文核查与修订。
 
-> 项目已进入开发阶段：已支持本地文献导入、管理、PDF 阅读、Markdown 笔记、文献内检索及带来源问答；问答已通过 review，Wiki 等能力仍按计划开发。
+> 项目已进入开发阶段：已支持本地文献导入、管理、PDF 阅读、Markdown 笔记、文献内检索及带来源问答；问答已通过 review；Garden 人工专题编辑已通过 review，AI Wiki 草稿等能力仍按计划开发。
 
 ## 产品背景
 
@@ -55,7 +55,7 @@ pnpm dev
 
 `pnpm package:win` 自动检查类型、构建桌面与 Python 后端，并生成 `release/desktop/` 中的未签名测试安装包；`pnpm package:dir` 生成可直接启动的分发目录。开发模式使用独立的 Yorw-development 数据目录。工作区位于 Electron userData 下的 `workspace/`，包含 SQLite 数据库、受管理文献、临时文件、日志和内部迁移备份；用户资料与安装资源分开保存。
 
-工作区基础已加入 SQLite 迁移、启动校验和受管理文件存储；Storage 已支持 PDF 导入、去重、文字抽取、元数据编辑、移除，以及阅读器翻页、缩放与页码恢复；House 已实现模型配置与连接测试，Garden 尚待后续步骤实现。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 与[步骤 3 验收记录](docs/dev-evidence/step-03.md) 包含验证范围和已知限制。各步骤的历史运行记录见对应验收文档；当前 review 程序为 `release/step9-review/win-unpacked/Yorw.exe`。
+工作区基础已加入 SQLite 迁移、启动校验和受管理文件存储；Storage 已支持 PDF 导入、去重、文字抽取、元数据编辑、移除，以及阅读器翻页、缩放与页码恢复；House 已实现模型配置与连接测试，Garden 已支持专题目录与人工正文修订，并通过 Step 10 review。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 与[步骤 3 验收记录](docs/dev-evidence/step-03.md) 包含验证范围和已知限制。各步骤的历史运行记录见对应验收文档；当前 review 程序为 `release/step10-review/win-unpacked/Yorw.exe`。
 
 ### House 模型连接
 
@@ -96,3 +96,9 @@ pnpm dev
 在阅读工具栏点击“问答”，输入问题，准备并勾选原文证据，核对聊天服务与发送范围后生成。回答逐步显示并本地保存；支持取消、重新准备证据后重试、点击有效引用跳至物理页，以及转存为保留引用快照的笔记。只发送本次问题和选定证据，不自动发送历史对话。没有证据时不调用聊天模型。
 
 引用仅说明材料来源，不保证回答正确；无效引用、服务失败、中断及来源失效均有提示。2026-10-24 用户已使用 DeepSeek 完成 Step 9 review，详见[步骤 9 记录](docs/dev-evidence/step-09.md)。
+
+### Garden 专题编辑
+
+在 Garden 创建专题，可指定父级、重命名或调整层级；正文使用 Markdown 编辑、预览和 Ctrl+S 保存。每次正文变更创建新的只读修订，历史可查看；切换专题或导航保留本次会话的正文草稿，关闭应用前有未保存提醒。冲突或失败不会覆盖当前草稿。
+
+本步提供人工编辑，AI 草稿、确认与回退将在后续步骤实现。详见[步骤 10 验收说明](docs/dev-evidence/step-10.md)。

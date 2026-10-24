@@ -64,6 +64,8 @@ def create_app(token: str, database: Database) -> FastAPI:
     app.include_router(notes_router(database))
     app.include_router(search_router(search))
     app.include_router(chat_router(chat))
+    from .garden import router as garden_router
+    app.include_router(garden_router(database))
     return app
 
 
