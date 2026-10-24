@@ -4,7 +4,7 @@ import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 
-export function MarkdownEditor({ value, onChange, onSave }: {value: string; onChange(value: string): void; onSave(): void}) {
+export function MarkdownEditor({ value, onChange, onSave, label = 'Markdown 笔记正文' }: {value: string; onChange(value: string): void; onSave(): void; label?:string}) {
   const host = useRef<HTMLDivElement>(null)
   const editor = useRef<EditorView | null>(null)
   const callbacks = useRef({ onChange, onSave })
@@ -13,7 +13,7 @@ export function MarkdownEditor({ value, onChange, onSave }: {value: string; onCh
     const view = new EditorView({ parent: host.current!, state: EditorState.create({ doc: value, extensions: [
       keymap.of([{ key: 'Mod-s', run: () => { callbacks.current.onSave(); return true } }]),
       basicSetup, markdown(), EditorView.lineWrapping,
-      EditorView.contentAttributes.of({ 'aria-label': 'Markdown 笔记正文', spellcheck: 'false' }),
+      EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' }),
       EditorView.updateListener.of(update => { if (update.docChanged) callbacks.current.onChange(update.state.doc.toString()) }),
       EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto', fontFamily: 'Consolas, "Microsoft YaHei", monospace', fontSize: '14px' }, '.cm-content': { minHeight: '240px' } })
     ] }) })

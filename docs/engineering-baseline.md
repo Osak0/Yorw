@@ -59,12 +59,12 @@ Yorw/
 | schema_migrations | version INTEGER PK、checksum、applied_at；禁止改写已应用迁移 | 3 |
 | documents | id、sha256 UNIQUE、relative_path?、original_name、title?、authors_json、year?、metadata_source_json、page_count?、extraction_status、extraction_version、active_index_generation?、last_page、version、created_at、updated_at、deleted_at? | 5 |
 | chunks | id、document_id FK、extraction_version、ordinal、physical_page、text；UNIQUE(document_id, extraction_version, ordinal)；页码必须为正 | 5；步骤 8 加检索索引 |
-| notes | 步骤 7 已落地 id、document_id FK、body_md、sources_json、version、created_at、updated_at；步骤 10 再扩展 topic_id 与所属约束 | 7；步骤 10 增加 topic_id |
+| notes | 步骤 7 已落地 id、document_id FK、body_md、sources_json、version、created_at、updated_at；当前仅关联文献。步骤 10 专题正文独立存入 revisions，不创建未使用的 topic_id 或专题附属笔记接口 | 7 |
 | conversations | id、document_id FK、created_at；首版每篇文献一个会话，document_id UNIQUE | 9 |
 | messages | 步骤 9 已落地：id、conversation_id FK、question、body_md、status、error_code、sources_json、provider_json（含提示版本）、created_at、note_id FK；一条记录保存一次问题和助手输出，取消/失败保留部分正文 | 9 |
 | topics | id、parent_id? 自引用 FK、title、current_revision_id?、version、created_at、updated_at；父子关系不能形成环 | 10 |
-| revisions | id、topic_id FK、ordinal、body_md、sources_json、origin、restored_from_id?、created_at；UNIQUE(topic_id, ordinal)；保存后不可修改 | 10 |
-| suggestions | id、topic_id FK、base_revision_id FK、body_md、sources_json、materials_json、provider_snapshot_json、prompt_version、status、created_at；不充当正式正文 | 11 |
+| revisions | 步骤 10 已落地 id、topic_id FK、ordinal、body_md、sources_json、origin、base_revision_id?、restored_from_id?、created_at；UNIQUE(topic_id, ordinal)，触发器禁止 UPDATE/DELETE；Step 12 再实现回退 | 10 |
+| suggestions | 步骤 11 已落地 id、topic_id/base_revision_id FK、base_body_md、instruction、body_md、sources_json、materials_json、request_json、provider_snapshot_json（含 context_title）、prompt_version、status/error_code、唯一 request_id、task_id FK、created_at；不充当正式正文 | 11 |
 | tasks | id、kind、target_id?、status、stage、progress?、input_json、result_json?、error_json?、created_at、updated_at；输入不含密钥 | 5 |
 | provider_configs | kind PK(chat/embedding)、base_url、model、options_json、version、updated_at；无明文或密文 key，仅 main 管理 key | 4 |
 | search_documents / search_segments | 派生索引版本；原 chunk_id FK、文献/页码、原文偏移与子串、分块版本、预分词文本；不改变按页原文 ID | 8 |
@@ -164,4 +164,8 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 
 步骤 0 的设计交付与设计分支合并已完成；当前进度以 PLAN 为准。后续仍按功能分支逐步实现、等待用户 review，不自动进入下一步或合并。
 
-步骤 9 在 feature/document-chat 已通过用户 review（2026-10-24），待提交合并：证据预览确认后发送，外部 SSE 增量持久化、本地每 500ms 轮询，历史不自动进入下一轮提示。引用按本轮 S 编号校验并支持物理页跳转；转笔记保留原始引用且不覆盖草稿。边界、状态与真实服务验收见[步骤 9 记录](dev-evidence/step-09.md)。
+步骤 9 已通过用户 review（2026-10-24），后续合并 main（82cb6c1 / PR #9）：证据预览确认后发送，外部 SSE 增量持久化、本地每 500ms 轮询，历史不自动进入下一轮提示。引用按本轮 S 编号校验并支持物理页跳转；转笔记保留原始引用且不覆盖草稿。边界、状态与真实服务验收见[步骤 9 记录](dev-evidence/step-09.md)。
+
+步骤 10 在 feature/garden-editor 已通过用户 review（2026-10-24），已提交 9b42842，尚未发布合并：专题目录与人工正文修订已落地，保存正文比较 base_revision_id；改名/移动比较 topic.version，父级链检查防环。初始空白修订为 1，历史只读。详情见[步骤 10 记录](dev-evidence/step-10.md)。
+
+步骤 11 按用户明确授权沿用 feature/garden-editor（Step 10 提交 9b42842，未发布/合并），不新建分支。材料目录/预览、配置版本绑定发送、任务生成与来源快照已实现，2026-10-24 用户 review 通过；本步修改尚未提交、发布或合并。材料对象版本、范围限制和状态规则见[步骤 11 记录](dev-evidence/step-11.md)。采纳/拒绝与回退接口仍属 Step 12，当前没有覆盖 Wiki 正文的 AI 操作。

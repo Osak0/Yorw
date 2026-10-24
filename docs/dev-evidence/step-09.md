@@ -1,6 +1,6 @@
 # 步骤 9：Storage 带来源问答
 
-2026-10-24 · `feature/document-chat` · 起点 main `0abed38`（已合并 PR #8）。**用户 review 通过**；待用户提交合并，本轮不提交、不合并、不进入步骤 10。
+2026-10-24 · `feature/document-chat` · 起点 main `0abed38`（已合并 PR #8）。**用户 review 通过**；后续已合并 main（82cb6c1，PR #9），步骤 10 另见其交付记录。
 
 ## 交付与边界
 
@@ -35,7 +35,7 @@
 
 这是用户本地执行提供的真实服务证据。未读取用户 key、重发其文档或独立核验截图中模型陈述的事实正确性；不将总体 review 扩展为全部逐题质量指标。引用存在仍不代表模型解读正确。
 
-本轮收口只更新 PLAN、README、工程基线和本记录，并清理可重新生成的临时 pytest 工作区、Python 缓存和 PyInstaller build；保留源码、迁移、必要测试、依赖锁定、冻结后端、当前 release/step9-review 程序及原生阶段报告。文档变更仅检查链接、状态及 diff，不重复调用真实 API 或重跑无关测试。分支仍为 feature/document-chat，提交/合并由用户处理。
+本轮收口只更新 PLAN、README、工程基线和本记录，并清理可重新生成的临时 pytest 工作区、Python 缓存和 PyInstaller build；保留源码、迁移、必要测试、依赖锁定、冻结后端、当前 release/step9-review 程序及原生阶段报告。文档变更仅检查链接、状态及 diff，不重复调用真实 API 或重跑无关测试。当时分支为 feature/document-chat；后续用户已提交合并 main（82cb6c1 / PR #9）。
 
 ## 复现与回归清单
 
