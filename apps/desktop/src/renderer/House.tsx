@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import type { ProviderConfig, ProviderKind } from '../shared/status'
+import {WorkspacePanel} from './WorkspacePanel'
 
 const messages: Record<string, string> = {
   INSUFFICIENT_BALANCE: '账号余额不足，请检查服务账户', CONNECTED: '连接成功', AUTH_FAILED: '鉴权失败，请检查 API Key 与账号权限', MODEL_OR_ENDPOINT_NOT_FOUND: '模型或接口不存在，请检查地址与模型名', RATE_LIMITED: '服务限流或额度不足，请稍后重试', TIMEOUT: '连接超时，请重试', NETWORK_ERROR: '网络连接失败，请检查网络与服务地址', INVALID_RESPONSE: '服务响应格式不兼容', KEY_MISSING: '请先保存 API Key', CONFIG_MISSING: '请先保存模型配置', CONFIG_CONFLICT: '配置已更新，请重新加载后再保存', INVALID_CONFIG: '配置格式错误，请检查 URL 与模型名', KEY_REENTRY_REQUIRED: '更换服务地址时，请重新输入密钥或选择清除密钥', KEY_UNAVAILABLE: '密钥无法解密，请重新输入', SECURE_STORAGE_UNAVAILABLE: '系统安全存储不可用，无法保存密钥', BACKEND_NOT_READY: '本地服务尚未就绪，请稍后重试', OPERATION_FAILED: '操作失败，请重试；草稿已保留', UPSTREAM_HTTP_ERROR: '服务请求失败，请检查服务状态', RESPONSE_TOO_LARGE: '测试响应过大'
@@ -44,7 +45,7 @@ function ProviderForm({ kind, saved, onSaved }: { kind: ProviderKind; saved?: Pr
     <p role="status" className={error ? 'failed' : ''}>{notice || '测试会向所填服务发送一段固定短文本，可能产生少量 API 费用。'}</p>
   </section>
 }
-export function House() {
+export function House({active=true}:{active?:boolean}) {
   const [configs, setConfigs] = useState<ProviderConfig[] | null>(null)
   const [notice, setNotice] = useState('正在加载配置…')
   async function load() {
@@ -52,5 +53,5 @@ export function House() {
     catch { setNotice('加载失败，请重试') }
   }
   useEffect(() => { void load() }, [])
-  return <><button onClick={() => window.location.reload()}>重新加载（放弃未保存修改）</button><p>聊天与 embedding 分别配置。密钥由系统安全存储加密，保存后无法在界面中读回。</p>{notice && <p role="status">{notice} <button onClick={() => void load()}>重新加载</button></p>}{configs && (['chat', 'embedding'] as ProviderKind[]).map(kind => <ProviderForm key={kind} kind={kind} saved={configs.find(config => config.kind === kind)} onSaved={saved => setConfigs(previous => [...(previous ?? []).filter(config => config.kind !== kind), saved])} />)}</>
+  return <><button onClick={() => window.location.reload()}>重新加载（放弃未保存修改）</button><p>聊天与 embedding 分别配置。密钥由系统安全存储加密，保存后无法在界面中读回。</p>{notice && <p role="status">{notice} <button onClick={() => void load()}>重新加载</button></p>}{configs && (['chat', 'embedding'] as ProviderKind[]).map(kind => <ProviderForm key={kind} kind={kind} saved={configs.find(config => config.kind === kind)} onSaved={saved => setConfigs(previous => [...(previous ?? []).filter(config => config.kind !== kind), saved])} />)}<WorkspacePanel active={active}/></>
 }

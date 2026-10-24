@@ -126,6 +126,8 @@ class Suggestions:
             item=rows[0]
             for field,key in [('sources_json','sources'),('materials_json','materials'),('provider_snapshot_json','provider')]:item[key]=json.loads(item.pop(field))
             item.pop('request_json')
+            decisions=self.library.rows('SELECT action,revision_id FROM wiki_decisions WHERE suggestion_id=?',(identity,))
+            item['decision']=decisions[0] if decisions else None
             item['stale']=self.garden.get(item['topic_id'])['revision']['id']!=item['base_revision_id']
             for source,material in zip(item['sources'],item['materials']):
                 try:self.snapshot(Material.model_validate(material));source['available']=True

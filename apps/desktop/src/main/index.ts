@@ -10,7 +10,9 @@ import { Search } from './search'
 import { Chat } from './chat'
 import { Garden } from './garden'
 import { Suggestions } from './suggestions'
+import { Workspace } from './workspace'
 import { runSuggestionsSmoke } from './suggestions-smoke'
+import { runReviewExportSmoke } from './review-export-smoke'
 import { runGardenSmoke } from './garden-smoke'
 import { runChatSmoke } from './chat-smoke'
 import { runNotesSmoke } from './notes-smoke'
@@ -43,7 +45,7 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = error instanceof Error && ['INVALID_CITATION','SUGGESTION_DECIDED','SUGGESTION_NOT_READY','INVALID_EXPORT_SELECTION','EXPORT_TOO_LARGE','EXPORT_UNAVAILABLE','EXPORT_DESTINATION_PROTECTED','SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
       return { ok: false, code }
     }
   }
@@ -53,7 +55,15 @@ else app.whenReady().then(async () => {
   ipcMain.handle('suggestions:generate',providerAction(input=>suggestions.generate(input)))
   ipcMain.handle('suggestions:list',providerAction(input=>suggestions.list(input)))
   ipcMain.handle('suggestions:cancel',providerAction(input=>suggestions.cancel(input)))
+  const workspace = new Workspace(backend,workspacePath,readerSmoke ? smokeReport! : app.getPath('userData'))
+  ipcMain.handle('workspace:info',providerAction(()=>workspace.info()))
+  ipcMain.handle('workspace:catalog',providerAction(()=>workspace.catalog()))
+  ipcMain.handle('workspace:create',providerAction(input=>workspace.create(input)))
+  ipcMain.handle('workspace:save',providerAction(input=>workspace.save(input)))
   const garden = new Garden(backend)
+  ipcMain.handle('garden:accept',providerAction(input=>garden.accept(input)))
+  ipcMain.handle('garden:reject',providerAction(input=>garden.reject(input)))
+  ipcMain.handle('garden:restore',providerAction(input=>garden.restore(input)))
   ipcMain.handle('garden:list',providerAction(()=>garden.list()))
   ipcMain.handle('garden:get',providerAction(input=>garden.get(input)))
   ipcMain.handle('garden:create',providerAction(input=>garden.create(input)))
@@ -149,6 +159,7 @@ else app.whenReady().then(async () => {
       if(readerSmoke && process.argv.includes('--chat-smoke')) await runChatSmoke(window,providers,reportDir)
       if(readerSmoke && process.argv.includes('--garden-smoke')) await runGardenSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--suggestions-smoke')) await runSuggestionsSmoke(window,backend,providers,reportDir)
+      if(readerSmoke && process.argv.includes('--review-export-smoke')) await runReviewExportSmoke(window,backend,providers,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
       await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, notesProof, searchProof }, null, 2))
@@ -170,7 +181,7 @@ else app.whenReady().then(async () => {
     } catch (error) {
       try { if (readerSmoke) {
         await mkdir(reportDir, { recursive: true })
-        const reader = window.isDestroyed() ? null : await window.webContents.executeJavaScript(`({feedback: document.querySelector('.reader-feedback')?.textContent, text: document.querySelector('.textLayer')?.textContent, note: document.querySelector('.note-status')?.textContent})`).catch(() => null)
+        const reader = window.isDestroyed() ? null : await window.webContents.executeJavaScript(`({feedback: document.querySelector('.reader-feedback')?.textContent, text: document.querySelector('.textLayer')?.textContent, note: document.querySelector('.note-status')?.textContent, workspace:document.querySelector('.workspace-panel')?.textContent})`).catch(() => null)
         await writeFile(join(reportDir, 'failure.json'), JSON.stringify({ message: error instanceof Error ? error.message : 'SMOKE_FAILED', reader }))
         if (!window.isDestroyed()) await writeFile(join(reportDir, 'failure.png'), (await window.webContents.capturePage()).toPNG())
       } } finally { await backend.stop(); app.exit(1) }

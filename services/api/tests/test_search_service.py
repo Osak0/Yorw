@@ -25,11 +25,11 @@ def running(frozen,workspace):
         child.stdin.write(json.dumps({'token':'t'*64,'workspace_path':str(workspace)})+'\n');child.stdin.flush()
         handshake=json.loads(child.stdout.readline())
         base=f"http://127.0.0.1:{handshake['port']}"
-        def request(path,method='GET',body=None,key=''):
+        def request(path,method='GET',body=None,key='',binary=False):
             headers={'Authorization':'Bearer '+'t'*64,'Content-Type':'application/json'}
             if key:headers['X-Provider-Key']=key
             req=urllib.request.Request(base+path,method=method,data=json.dumps(body).encode() if body is not None else None,headers=headers)
-            with urllib.request.urlopen(req,timeout=5) as response:return json.load(response)
+            with urllib.request.urlopen(req,timeout=5) as response:return response.read() if binary else json.load(response)
         for _ in range(100):
             try:
                 request('/v1/health');break

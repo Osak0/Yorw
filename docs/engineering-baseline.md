@@ -63,8 +63,9 @@ Yorw/
 | conversations | id、document_id FK、created_at；首版每篇文献一个会话，document_id UNIQUE | 9 |
 | messages | 步骤 9 已落地：id、conversation_id FK、question、body_md、status、error_code、sources_json、provider_json（含提示版本）、created_at、note_id FK；一条记录保存一次问题和助手输出，取消/失败保留部分正文 | 9 |
 | topics | id、parent_id? 自引用 FK、title、current_revision_id?、version、created_at、updated_at；父子关系不能形成环 | 10 |
-| revisions | 步骤 10 已落地 id、topic_id FK、ordinal、body_md、sources_json、origin、base_revision_id?、restored_from_id?、created_at；UNIQUE(topic_id, ordinal)，触发器禁止 UPDATE/DELETE；Step 12 再实现回退 | 10 |
+| revisions | 步骤 10 已落地 id、topic_id FK、ordinal、body_md、sources_json、origin、base_revision_id?、restored_from_id?、created_at；UNIQUE(topic_id, ordinal)，触发器禁止 UPDATE/DELETE；步骤 12 已实现采纳和回退，用户 review 通过 | 10 |
 | suggestions | 步骤 11 已落地 id、topic_id/base_revision_id FK、base_body_md、instruction、body_md、sources_json、materials_json、request_json、provider_snapshot_json（含 context_title）、prompt_version、status/error_code、唯一 request_id、task_id FK、created_at；不充当正式正文 | 11 |
+| wiki_decisions | 步骤 12：唯一 request_id、topic_id FK、唯一 suggestion_id? FK、action、revision_id? FK、request_json、created_at；不可变决策记录，事务保证幂等与正文指针一致 | 12 |
 | tasks | id、kind、target_id?、status、stage、progress?、input_json、result_json?、error_json?、created_at、updated_at；输入不含密钥 | 5 |
 | provider_configs | kind PK(chat/embedding)、base_url、model、options_json、version、updated_at；无明文或密文 key，仅 main 管理 key | 4 |
 | search_documents / search_segments | 派生索引版本；原 chunk_id FK、文献/页码、原文偏移与子串、分块版本、预分词文本；不改变按页原文 ID | 8 |
@@ -109,11 +110,11 @@ Python API 前缀 `/v1`，JSON 字段 snake_case。返回普通对象或 `{items
 | search.status/index/query/cancel | GET/POST /v1/documents/{id}/index；POST /v1/documents/{id}/search；POST /v1/search/tasks/{id}/cancel | 语义开关与所确认配置版本；main 注入 key；返回任务或原文候选、召回方式与降级原因；tasks.get 可读索引任务，通用抽取 cancel/retry 不处理索引 |
 | chat.history/ask | GET/POST /v1/documents/{id}/messages | question、request_id → 历史或 message_id+task_id；上下文由后端受控选择 |
 | topics.list/create/update | GET/POST /v1/topics；PATCH /v1/topics/{id} | title、parent_id、version → topic |
-| topics.get/saveBody | GET /v1/topics/{id}；POST /v1/topics/{id}/revisions | body_md、sources、base_revision_id → revision、topic |
-| topics.generate | POST /v1/topics/{id}/suggestions | materials[{kind,id,version}]、instruction、base_revision_id → task_id |
-| topics.getSuggestion/accept/reject | GET /v1/suggestions/{id}；POST /v1/suggestions/{id}/accept、/reject | 确认可含用户修改的 body_md/sources、base_revision_id → revision 或建议状态 |
-| topics.revisions/restore | GET /v1/topics/{id}/revisions；POST /v1/topics/{id}/restore | revision_id、base_revision_id → 新 revision |
-| workspace.info/export | GET /v1/workspace；POST /v1/exports；GET /v1/exports/{task_id}/file | 对象 IDs → 导出任务；完成后 main 获取含 Markdown/来源清单的 ZIP 字节并经原生对话框保存，不接受 renderer 任意路径 |
+| garden.get/save | GET /v1/topics/{id}；POST /v1/topics/{id}/revisions | body_md、base_revision_id → revision、topic；来源由后端保留，不接受手工伪造 |
+| suggestions.catalog/preview/generate/list/cancel | GET /v1/materials；POST /v1/topics/{id}/materials/preview；GET/POST /v1/topics/{id}/suggestions；POST /v1/suggestions/{id}/cancel | materials[{kind,id,version,segment_ids}]、instruction、base_revision_id；生成另需 request_id/config_version → 独立草稿及 task_id |
+| garden.accept/reject | POST /v1/suggestions/{id}/accept、/reject | request_id、base_revision_id；采纳另含人工确认 body_md；来源只取后端快照 → 当前 view 与原决策 |
+| garden.history/restore | GET /v1/topics/{id}/revisions；POST /v1/topics/{id}/revisions/{revision}/restore | request_id、base_revision_id → 当前 view 与新修订决策 |
+| workspace.info/catalog/create/save | GET /v1/workspace；GET /v1/exports/catalog；POST /v1/exports；GET /v1/exports/{task_id}/file | note_ids/topic_ids → 导出任务；main 获取含 Markdown/来源清单的 ZIP 并经原生对话框保存，不接受 renderer 任意路径；实际位置由 main 补充 |
 | events.subscribe | GET /v1/tasks/{id}/events（SSE） | task_id → 按序事件；main 通过受限 IPC 转发，提供取消订阅函数 |
 
 原生文件选择取消返回 cancelled，不计业务失败。renderer 仅在用户输入 key 时短暂持有表单值，经专用 IPC 提交后清空；保存后不得读回 key。main 密钥密文保存成功后才更新 provider 配置；失败不报成功。Python 内存中的 key 由 main 通过会话鉴权的内部配置操作提供，不入库。没有 key 时仍允许保存配置，状态显示未配置完整。密钥安全能力不可用时拒绝持久化，不能悄悄降级明文。
@@ -159,13 +160,18 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 | 密钥/进程/分发 | 步骤 2、4 已验证启停与本地安全存储；干净机器验收仍待步骤 14 | 2、4、14：安全保存与恢复、子进程启停、干净 Windows 实测 |
 | 真实模型与预算 | 用户已确认 DeepSeek 聊天接入及智谱 embedding-3 检索 review；预算、普遍语义质量未作保证 | 4：用户安全配置与短文本连接测试，分别验证 chat/embedding |
 | PDF 与跨语言检索 | 步骤 5、8 固定夹具与用户样例通过；代表性长文与逐题质量统计待后续集成验收 | 5、8：合法样例清单、摘要、证据页码与 PLAN 的 12 问记录 |
-| 修订与来源 | 数据和接口约定已定义，尚无运行代码 | 9–12：真实引用流转、删除失效、冲突/回退测试 |
+| 修订与来源 | 步骤 9–11 已实现并通过 review；步骤 12 的引用修订、并发冲突、回退与重启测试已通过，并于 2026-10-24 通过用户 review | 9–12：真实引用流转、删除失效、冲突/回退测试 |
 | 干净 Windows | 尚未落实 | 14 前落实测试机/VM；无验证则不宣称发布通过 |
 
 步骤 0 的设计交付与设计分支合并已完成；当前进度以 PLAN 为准。后续仍按功能分支逐步实现、等待用户 review，不自动进入下一步或合并。
 
 步骤 9 已通过用户 review（2026-10-24），后续合并 main（82cb6c1 / PR #9）：证据预览确认后发送，外部 SSE 增量持久化、本地每 500ms 轮询，历史不自动进入下一轮提示。引用按本轮 S 编号校验并支持物理页跳转；转笔记保留原始引用且不覆盖草稿。边界、状态与真实服务验收见[步骤 9 记录](dev-evidence/step-09.md)。
 
-步骤 10 在 feature/garden-editor 已通过用户 review（2026-10-24），已提交 9b42842，尚未发布合并：专题目录与人工正文修订已落地，保存正文比较 base_revision_id；改名/移动比较 topic.version，父级链检查防环。初始空白修订为 1，历史只读。详情见[步骤 10 记录](dev-evidence/step-10.md)。
+步骤 10 在 feature/garden-editor 已通过用户 review（2026-10-24），已提交 9b42842，随 PR #10 合并 main（fa97a09）：专题目录与人工正文修订已落地，保存正文比较 base_revision_id；改名/移动比较 topic.version，父级链检查防环。初始空白修订为 1，历史只读。详情见[步骤 10 记录](dev-evidence/step-10.md)。
 
-步骤 11 按用户明确授权沿用 feature/garden-editor（Step 10 提交 9b42842，未发布/合并），不新建分支。材料目录/预览、配置版本绑定发送、任务生成与来源快照已实现，2026-10-24 用户 review 通过；本步修改尚未提交、发布或合并。材料对象版本、范围限制和状态规则见[步骤 11 记录](dev-evidence/step-11.md)。采纳/拒绝与回退接口仍属 Step 12，当前没有覆盖 Wiki 正文的 AI 操作。
+步骤 11 按用户明确授权沿用 feature/garden-editor（Step 10 提交 9b42842），不新建分支。材料目录/预览、配置版本绑定发送、任务生成与来源快照已实现，2026-10-24 用户 review 通过；提交 d05ceba，随 PR #10 合并 main（fa97a09）。材料对象版本、范围限制和状态规则见[步骤 11 记录](dev-evidence/step-11.md)。步骤 11 本身不修改正式正文；步骤 12 的显式确认接口另行负责创建新修订。
+
+
+步骤 12、13 按用户明确授权在 feature/wiki-review-export 合并交付，起点 main fa97a09，2026-10-24 用户 review 通过；修改尚未提交、发布或合并，步骤 14 未实施。schema 8→9 只新增 009_wiki_decisions.sql，不修改已应用迁移。POST /v1/suggestions/{id}/accept、/reject 和 /v1/topics/{id}/revisions/{revision}/restore 为本地确认操作，不调用模型。采纳要求已完成、尚未处理、同一正文基线、材料仍有效，以及合法本轮引用；拒绝不改正文；回退复制目标历史正文及原始来源 JSON，新建修订。每个操作绑定 UUID request_id，重试返回原决策和当前正文，不重复修改指针。动态来源可用性不写回不可变快照。详见[步骤 12 记录](dev-evidence/step-12.md)。
+
+House 数据位置由 main 从当前实际工作区路径提供；renderer 不传任意路径。GET /v1/exports/catalog 返回可导出的已保存内容，POST /v1/exports 按选择的 IDs 在同一数据库锁内创建快照，返回成功 export task；GET /v1/exports/{task_id}/file 返回受限 ZIP 字节，main 通过系统保存对话框写入，临时文件加 rename 避免部分写入损坏已有目标。取消、写入失败和受保护路径不会报告成功。内容格式 yorw-content-export-v1，文件名使用 UUID，正文与来源清单分开；不含完整备份/恢复/目录迁移。详见[步骤 13 记录](dev-evidence/step-13.md)。
