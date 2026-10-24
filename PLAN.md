@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-24
 
-状态：步骤 0–9 已完成并合并 main（步骤 9：82cb6c1 / PR #9）；步骤 10 在 `feature/garden-editor` 已通过用户 review（2026-10-24），待用户提交合并。步骤 11–14 未实施，不自动进入下一步。
+状态：步骤 0–9 已合并 main（步骤 9：82cb6c1 / PR #9）；步骤 10 已 review 通过并提交为 9b42842，尚未发布合并。按用户明确要求，步骤 11 沿用 `feature/garden-editor`，已于 2026-10-24 通过用户 review，修改尚未提交、发布或合并。步骤 12–14 未实施。
 
 ## 1. 文档职责与接手入口
 
@@ -152,8 +152,8 @@
 - [x] 7. Storage 文献笔记 — 已合并 main（152f04e，PR #7）；[记录](docs/dev-evidence/step-07.md)
 - [x] 8. 文献检索模块 — 2026-10-23 用户 review 通过；feature/document-search；已确认智谱 embedding-3 接入、自定义语义阈值、直接检索入口及“关键词命中 OR 语义达到阈值”的并集规则；已合并 main（0abed38，PR #8）；[记录](docs/dev-evidence/step-08.md)
 - [x] 9. Storage 带来源问答 — 2026-10-24 用户 review 通过；feature/document-chat；用户截图确认 deepseek-flash 带引用回答及转笔记，已合并 main（82cb6c1，PR #9）；[记录](docs/dev-evidence/step-09.md)
-- [x] 10. Garden 专题目录与编辑 — 2026-10-24 用户 review 通过；feature/garden-editor；目录、Markdown 编辑、人工修订与只读历史完成，待用户提交合并；[记录](docs/dev-evidence/step-10.md)
-- [ ] 11. Garden 选材与 AI 草稿 — 未实施
+- [x] 10. Garden 专题目录与编辑 — 2026-10-24 用户 review 通过；feature/garden-editor；目录、Markdown 编辑、人工修订与只读历史完成，已提交 9b42842，尚未发布合并；[记录](docs/dev-evidence/step-10.md)
+- [x] 11. Garden 选材与 AI 草稿 — 2026-10-24 用户 review 通过；按用户授权沿用 feature/garden-editor，基于 9b42842；选材预览、独立建议草稿及来源快照完成，尚未提交、发布或合并；用户未单独提供模型质量量化结果；[记录](docs/dev-evidence/step-11.md)
 - [ ] 12. Garden 修改确认与回退 — 未实施
 - [ ] 13. House 数据位置与内容导出 — 未实施
 - [ ] 14. 完整流程与分发验证 — 未实施

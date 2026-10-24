@@ -3,6 +3,7 @@ import type {Revision,Topic,TopicView} from '../shared/status'
 import {gardenBook,wikiDirty,type WikiDraft} from './garden-book'
 import {MarkdownEditor} from './MarkdownEditor'
 import {MarkdownPreview} from './MarkdownPreview'
+import {SuggestionsPanel} from './SuggestionsPanel'
 import './notes.css'
 import './garden.css'
 
@@ -10,6 +11,7 @@ function descendants(topics:Topic[],id:string){const found=new Set([id]);let cha
 
 function TopicEditor({topic,draft,topics}:{topic:Topic;draft:WikiDraft;topics:Topic[]}){
  const book=gardenBook()
+ const [suggestionsOpen,setSuggestionsOpen]=useState(false)
  const [title,setTitle]=useState(topic.title),[parent,setParent]=useState(topic.parent_id??''),[version,setVersion]=useState(topic.version)
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[preview,setPreview]=useState(false)
  const [history,setHistory]=useState<Revision[]|null>(null),[chosen,setChosen]=useState(''),[remote,setRemote]=useState<TopicView|null>(null)
@@ -30,7 +32,8 @@ function TopicEditor({topic,draft,topics}:{topic:Topic;draft:WikiDraft;topics:To
   <button disabled={draft.saving} onClick={()=>{if(!wikiDirty(draft)||window.confirm('放弃当前专题未保存正文，载入最新已保存修订？'))void book.latest(topic.id).then(value=>{book.acceptLatest(value,false);setRemote(null)}).catch(e=>setNotice(error(e)))}}>载入最新保存正文</button>
   {draft.conflict&&<div className="note-conflict"><p>保存基线已变化，当前草稿没有被覆盖。</p><button onClick={()=>void compare()}>比较最新修订</button>{remote&&<><p>最新修订 {remote.revision.ordinal}</p><pre>{remote.revision.body_md}</pre><button onClick={()=>{book.acceptLatest(remote,true);setRemote(null)}}>保留草稿，基于最新继续</button></>}</div>}
   <div className="garden-history"><button disabled={busy} onClick={()=>void loadHistory()}>查看修订历史</button>{history&&<><label>历史修订<select aria-label="历史修订" value={chosen} onChange={e=>setChosen(e.target.value)}>{history.map(r=><option key={r.id} value={r.id}>修订 {r.ordinal} · {r.origin} · {r.created_at}</option>)}</select></label>{old&&<><p>只读快照；查看历史不会覆盖当前草稿。本步尚不提供回退。</p><MarkdownPreview body={old.body_md||'*空白初始修订。*'}/></>}</>}</div>
-  <p className="notes-footnote">Ctrl+S 保存正文为新修订；草稿尚无崩溃恢复能力。人工内容不会自动获得论文来源，AI 草稿与采纳回退将在后续步骤提供。</p>
+  <button onClick={()=>setSuggestionsOpen(v=>!v)}>{suggestionsOpen?'收起材料与 AI 草稿':'材料与 AI 草稿'}</button>{suggestionsOpen&&<SuggestionsPanel topicId={topic.id} baseRevisionId={draft.base} dirty={wikiDirty(draft)}/>}
+  <p className="notes-footnote">Ctrl+S 保存正文为新修订；草稿尚无崩溃恢复能力。人工内容不会自动获得论文来源，AI 草稿在材料面板中独立生成，采纳与回退将在后续步骤提供。</p>
  </article>
 }
 

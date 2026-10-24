@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('yorw', Object.freeze({
   getStatus: () => ipcRenderer.invoke('app:getStatus'),
+  suggestions:Object.freeze({catalog:()=>ipcRenderer.invoke('suggestions:catalog'),preview:(input:unknown)=>ipcRenderer.invoke('suggestions:preview',input),generate:(input:unknown)=>ipcRenderer.invoke('suggestions:generate',input),list:(id:unknown)=>ipcRenderer.invoke('suggestions:list',id),cancel:(id:unknown)=>ipcRenderer.invoke('suggestions:cancel',id)}),
   garden: Object.freeze({list:()=>ipcRenderer.invoke('garden:list'),get:(id:unknown)=>ipcRenderer.invoke('garden:get',id),create:(input:unknown)=>ipcRenderer.invoke('garden:create',input),update:(input:unknown)=>ipcRenderer.invoke('garden:update',input),save:(input:unknown)=>ipcRenderer.invoke('garden:save',input),history:(id:unknown)=>ipcRenderer.invoke('garden:history',id)}),
   chat: Object.freeze({ list: (id: unknown) => ipcRenderer.invoke('chat:list', id), ask: (input: unknown) => ipcRenderer.invoke('chat:ask', input), cancel: (id: unknown) => ipcRenderer.invoke('chat:cancel', id), note: (id: unknown) => ipcRenderer.invoke('chat:note', id) }),
   search: Object.freeze({ status: (id: unknown) => ipcRenderer.invoke('search:status', id), index: (input: unknown) => ipcRenderer.invoke('search:index', input), query: (input: unknown) => ipcRenderer.invoke('search:query', input), cancel: (id: unknown) => ipcRenderer.invoke('search:cancel', id) }),

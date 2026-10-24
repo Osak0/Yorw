@@ -1,6 +1,6 @@
 # 步骤 10：Garden 专题目录与人工编辑
 
-2026-10-24 · feature/garden-editor · 起点 main 82cb6c1（已合并 PR #9）。**用户 review 通过**（2026-10-24）；待用户提交合并，本轮不提交、不合并、不进入步骤 11。
+2026-10-24 · feature/garden-editor · 起点 main 82cb6c1（已合并 PR #9）。**用户 review 通过**（2026-10-24）；已由用户提交为 9b42842，尚未发布合并；用户后续明确授权步骤 11 沿用 feature/garden-editor，见步骤 11 记录。
 
 ## 交付范围
 
