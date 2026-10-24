@@ -1,8 +1,8 @@
-import type { NoteRecord, NotesBridge } from '../shared/status'
+import type { NoteRecord, NoteSource, NotesBridge } from '../shared/status'
 
 export interface DraftNote {
   id: string; body: string; savedBody: string; version: number
-  saving: boolean; message: string; conflict: boolean; remote?: NoteRecord
+  saving: boolean; message: string; conflict: boolean; remote?: NoteRecord; sources?: NoteSource[]
 }
 interface Snapshot { notes: DraftNote[]; selected: string; loaded: boolean; loading: boolean; error: string }
 export const dirty = (note: DraftNote) => note.body !== note.savedBody
@@ -23,13 +23,22 @@ export class Notebook {
     this.publish({ notes: this.snapshot.notes.map(note => note.id === id ? { ...note, ...change } : note) })
   }
   hasUnsaved() { return this.snapshot.notes.some(note => dirty(note) || note.saving) }
+  async importSaved(id: string) {
+    await this.load()
+    const result = await this.bridge.list(this.documentId)
+    if (!result.ok) throw new Error('NOTE_LOAD_FAILED')
+    const record = result.value.items.find(item => item.id === id)
+    if (!record) throw new Error('NOTE_NOT_FOUND')
+    if (!this.snapshot.notes.some(item => item.id === id)) this.publish({notes:[...this.snapshot.notes,{id,body:record.body_md,savedBody:record.body_md,sources:record.sources,version:record.version,saving:false,conflict:false,message:'已保存'}]})
+    this.select(id)
+  }
   async load() {
     if (this.snapshot.loaded || this.snapshot.loading) return
     this.publish({ loading: true, error: '' })
     try {
       const result = await this.bridge.list(this.documentId)
       if (!result.ok) { this.publish({ error: '笔记加载失败，请重试；不会以空白覆盖已保存内容。' }); return }
-      const notes = result.value.items.map(note => ({ id: note.id, body: note.body_md, savedBody: note.body_md, version: note.version, saving: false, conflict: false, message: '' }))
+      const notes = result.value.items.map(note => ({ id: note.id, body: note.body_md, savedBody: note.body_md, sources: note.sources, version: note.version, saving: false, conflict: false, message: '' }))
       this.publish({ notes, selected: notes[0]?.id ?? '', loaded: true })
     } catch { this.publish({ error: '笔记加载失败，请重试。' }) }
     finally { this.publish({ loading: false }) }

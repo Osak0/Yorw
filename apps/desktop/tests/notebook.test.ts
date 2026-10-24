@@ -74,3 +74,14 @@ test('document notebooks and note selections keep independent drafts; load failu
   await failed.notebook.load()
   expect(failed.notebook.getSnapshot().loaded).toBe(true)
 })
+
+test('importing an answer note preserves existing dirty drafts and its evidence', async()=>{
+ const {notebook,bridge}=setup()
+ await notebook.load();notebook.edit(doc,'unsaved draft')
+ const imported={...record('answer'),id:'new-answer',sources:[{citation:'S1',physical_page:1,text:'source'}]}
+ vi.mocked(bridge.list).mockResolvedValue({ok:true,value:{items:[record(),imported]}})
+ await notebook.importSaved('new-answer')
+ expect(notebook.getSnapshot().notes[0].body).toBe('unsaved draft')
+ expect(notebook.getSnapshot().selected).toBe('new-answer')
+ expect(notebook.getSnapshot().notes[1].sources).toEqual(imported.sources)
+})

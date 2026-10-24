@@ -7,6 +7,8 @@ import { Providers } from './providers'
 import { Documents } from './documents'
 import { Notes } from './notes'
 import { Search } from './search'
+import { Chat } from './chat'
+import { runChatSmoke } from './chat-smoke'
 import { runNotesSmoke } from './notes-smoke'
 import { runSearchSmoke } from './search-smoke'
 
@@ -32,17 +34,22 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     return backend.status
   })
-  const providers = new Providers(backend, join(app.getPath('userData'), 'secrets'))
+  const providers = new Providers(backend, join(readerSmoke ? smokeReport! : app.getPath('userData'), 'secrets'))
   const providerAction = (action: (input: any) => Promise<unknown>) => async (event: Electron.IpcMainInvokeEvent, input: unknown) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = error instanceof Error && ['CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
       return { ok: false, code }
     }
   }
   const documents = new Documents(backend)
   const notes = new Notes(backend)
+  const chat = new Chat(backend, providers)
+  ipcMain.handle('chat:list', providerAction(input => chat.list(input)))
+  ipcMain.handle('chat:ask', providerAction(input => chat.ask(input)))
+  ipcMain.handle('chat:cancel', providerAction(input => chat.cancel(input)))
+  ipcMain.handle('chat:note', providerAction(input => chat.note(input)))
   const search = new Search(backend, providers)
   ipcMain.handle('search:status', providerAction(input => search.status(input)))
   ipcMain.handle('search:index', providerAction(input => search.index(input)))
@@ -122,6 +129,7 @@ else app.whenReady().then(async () => {
       if (notesSmoke) notesProof = await runNotesSmoke(window, backend, reportDir, () => preventedUnloads)
       if (readerSmoke && process.argv.includes('--search-smoke')) searchProof = await runSearchSmoke(window, reportDir)
       await new Promise(resolve => setTimeout(resolve, 400))
+      if(readerSmoke && process.argv.includes('--chat-smoke')) await runChatSmoke(window,providers,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
       await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, notesProof, searchProof }, null, 2))

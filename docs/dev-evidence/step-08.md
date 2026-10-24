@@ -1,6 +1,6 @@
 # 步骤 8：Storage 文献内检索
 
-2026-10-23 · `feature/document-search` · **用户 review 通过**。起点 main `152f04e` 已包含步骤 7（PR #7）；本步尚未提交或合并，由用户后续处理。未开始步骤 9。
+2026-10-23 · `feature/document-search` · **用户 review 通过**。起点 main `152f04e` 已包含步骤 7（PR #7）；后续已合并 main（0abed38，PR #8）；步骤 9 另见其交付记录。
 
 ## 已确认的交付
 
