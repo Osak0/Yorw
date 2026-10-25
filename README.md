@@ -18,9 +18,9 @@
 
 ## 本机 MVP 验证版
 
-Windows x64 · 0.1.0。2026-10-25 本机 MVP 已通过步骤 14 review，正在准备 v0.1.0 release，尚未合并或发布。按照用户选择，干净 Windows 机器的验收暂未执行。
+Windows x64 · 0.1.0。2026-10-25 本机 MVP 已通过步骤 14 review，已合并 main 并发布 [v0.1.0 预发布版本](https://github.com/Osak0/Yorw/releases/tag/v0.1.0)。按照用户选择，干净 Windows 机器的验收暂未执行。
 
-- 安装包：`release/step14-review/Yorw-Setup-0.1.0-x64.exe`。
+- 下载：[v0.1.0 发布页](https://github.com/Osak0/Yorw/releases/tag/v0.1.0)，安装器为 `Yorw-Setup-0.1.0-x64.exe`，已核对与步骤 14 验收包的 SHA256 一致。
 - 直接运行：完整 `release/step14-review/win-unpacked/` 目录中的 `Yorw.exe`，不能只复制单个 exe。
 - [使用指南](docs/user-guide.md) · [已知限制](docs/known-limitations.md) · [深度体验反馈模板](docs/review-feedback.md)。
 
@@ -39,7 +39,7 @@ Windows x64 · 0.1.0。2026-10-25 本机 MVP 已通过步骤 14 review，正在�
 
 ## 项目与开发文档
 
-[产品设计](product_design.md)保存设计基线；[开发计划](PLAN.md)记录当前范围、状态与后置功能；[工程与验证记录索引](docs/dev-evidence/README.md)提供复现入口；[v0.1.0 发布说明草稿](docs/releases/v0.1.0.md)供本轮发布使用。
+[产品设计](product_design.md)保存设计基线；[开发计划](PLAN.md)记录当前范围、状态与后置功能；[工程与验证记录索引](docs/dev-evidence/README.md)提供复现入口；[v0.1.0 发布说明](docs/releases/v0.1.0.md)记录发布状态与验证边界。
 
 开发需 Node 24、pnpm 11.25.0、uv 和 Python 3.12，精确版本见仓库版本文件与锁文件。
 

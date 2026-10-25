@@ -1,12 +1,12 @@
 # 步骤 14：本机 MVP 验证与交付
 
-2026-10-25 · feature/mvp-release-validation · 起点 main 3fb4860（PR #11，步骤 12–13 提交 5bd8533）。**步骤 14 用户 review 通过**（本机交付范围）；尚未提交、发布或合并，v0.1.0 release 由用户后续创建。**不将本机通过写成所有分发环境通过。**
+2026-10-25 · feature/mvp-release-validation · 起点 main 3fb4860（PR #11，步骤 12–13 提交 5bd8533）。**步骤 14 用户 review 通过**（本机交付范围）；提交 efa63da 随 PR #12 合并 main（6937846），2026-10-25 发布 v0.1.0 预发布版本。**不将本机通过写成所有分发环境通过。**
 
 用户已明确选择：“暂时没有，先交付本机验证版”。本机未发现 Windows Sandbox、VirtualBox 或 VMware；未创建或假设已有干净 Windows 环境。独立机器与真实代表性论文逐题质量评估继续列为待验证，不因此扩大 MVP 功能范围。
 
 ## 交付物与变化
 
-- Windows x64 / 0.1.0：release/step14-review/Yorw-Setup-0.1.0-x64.exe，以及完整 win-unpacked/ 分发目录。包未签名，没有公开发布或自动更新。
+- Windows x64 / 0.1.0：release/step14-review/Yorw-Setup-0.1.0-x64.exe，以及完整 win-unpacked/ 分发目录。包未签名，已作为 v0.1.0 预发布附件公开发布，未实现自动更新。
 - 安装包包含冻结后端和 resources/help/ 下的使用指南、已知限制、反馈模板；独立分发目录另附相同文档、自编写样例、artifact-manifest.json 和 SHA256SUMS.txt。
 - README 收敛为面向用户的产品介绍、实际技术栈和文档入口；保留 Storage / Garden / House 的正式名称。新增[使用指南](../user-guide.md)、[限制说明](../known-limitations.md)、[反馈模板](../review-feedback.md)及[开发证据索引](README.md)。
 - 新增自编写样例生成器、原生组合烟测和可复现验证脚本。smoke 模式的 Electron profile、密钥密文与工作区都隔离到新报告目录，普通启动继续使用原工作区。
@@ -76,10 +76,12 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/step14-re
 
 ## Review 后文档与仓库收尾
 
-2026-10-25 同步 PLAN、README、工程基线及验证索引，标记本机范围的步骤 14 review 通过；新增 [v0.1.0 发布说明草稿](../releases/v0.1.0.md)。分支仍为 feature/mvp-release-validation；后续提交、发布分支、合并 main 和创建 release 由用户完成，当前不填入尚不存在的提交或发布结果。
+2026-10-25 同步 PLAN、README、工程基线及验证索引，标记本机范围的步骤 14 review 通过；整理 [v0.1.0 发布说明](../releases/v0.1.0.md)。用户随后完成提交 efa63da、PR #12 合并 main（6937846）及 v0.1.0 预发布；当前本地 main、origin/main 与标签指向同一提交。
 
 清理 19 个可重新生成目录及 3 个临时文件，共 139,018,654 字节（约 132.6 MiB）：pytest/诊断/中间烟测工作区、已卸载测试安装的空目录、重复样例缓存、PyInstaller build、pytest/Python 缓存，以及失败烟测的重复 ZIP、builder-debug.yml 和当前无自动更新用途的 blockmap。部分测试目录需要在沙箱外清理，已重新核对全部绝对路径位于本仓库并排除重解析路径后执行。
 
 保留最终安装器、完整 win-unpacked 目录、使用文档、样例及样例 ZIP、原始 artifact-manifest.json / SHA256SUMS.txt、冻结后端，以及 .cache/step14-flow-final/、.cache/step14-installed-proof/ 和对应导出 ZIP。原始构建指纹继续代表生成制品时的源码快照，不因本轮文档收尾而伪填为未来 release 提交。
 
-本轮没有修改应用源码、测试或依赖，也没有重建已验收安装包；仅检查文档状态、相对链接、diff、保留证据和制品哈希。用户已有暂存区保持不变，本轮新增文档修改尚未重新暂存。干净 Windows、真实论文逐题质量评估等限制仍保留，不由整体 review 结论补写为已实测。
+本轮没有修改应用源码、测试或依赖，也没有重建已验收安装包；仅检查文档状态、相对链接、diff、保留证据和制品哈希。当时保留用户已有暂存区，文档随后由用户提交。干净 Windows、真实论文逐题质量评估等限制仍保留，不由整体 review 结论补写为已实测。
+
+2026-10-25 发布附件复核：误传旧安装器已移除；当前线上安装器 Yorw-Setup-0.1.0-x64.exe 的 API SHA256 与本步验收包一致，其他 4 个附件哈希也匹配本机制品，线上校验清单中的安装器条目正确。详见 [v0.1.0 发布说明](../releases/v0.1.0.md)。本次不重建包或重跑功能验证。

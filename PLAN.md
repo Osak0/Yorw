@@ -2,7 +2,7 @@
 
 版本：v1 · 更新日期：2026-10-25
 
-状态：步骤 0–13 已通过用户 review 并合并 main（步骤 12–13：3fb4860 / PR #11，提交 5bd8533）。步骤 14 在 feature/mvp-release-validation 基于 main 3fb4860 完成本机验证，2026-10-25 用户 review 通过；尚未提交、发布或合并，v0.1.0 release 由用户后续创建。按用户选择，干净 Windows 验收暂未执行，不宣称所有分发环境已通过。
+状态：步骤 0–14 已通过用户 review 并合并 main。步骤 14 提交 efa63da 随 PR #12 合并（6937846）；2026-10-25 已发布 [v0.1.0 预发布版本](https://github.com/Osak0/Yorw/releases/tag/v0.1.0)，标签指向 6937846。按用户选择，干净 Windows 验收暂未执行，不宣称所有分发环境已通过。
 
 ## 1. 文档职责与接手入口
 
@@ -156,7 +156,7 @@
 - [x] 11. Garden 选材与 AI 草稿 — 2026-10-24 用户 review 通过；按用户授权沿用 feature/garden-editor，基于 9b42842；选材预览、独立建议草稿及来源快照完成，提交 d05ceba 后随 PR #10 合并 main（fa97a09）；用户未单独提供模型质量量化结果；[记录](docs/dev-evidence/step-11.md)
 - [x] 12. Garden 修改确认与回退 — 2026-10-24 用户 review 通过；feature/wiki-review-export；建议比较/编辑/采纳/拒绝、基础版本冲突检查与历史回退为新修订完成；与步骤 13 按用户授权合并交付，已提交 5bd8533 并随 PR #11 合并 main（3fb4860）；[记录](docs/dev-evidence/step-12.md)
 - [x] 13. House 数据位置与内容导出 — 2026-10-24 用户 review 通过；feature/wiki-review-export；工作区位置、已保存笔记/Wiki 选取、Markdown 与来源清单 ZIP 导出完成，已提交 5bd8533 并随 PR #11 合并 main（3fb4860）；不含完整备份/恢复/迁移；[记录](docs/dev-evidence/step-13.md)
-- [x] 14. 完整流程与分发验证（本机交付范围）— 2026-10-25 用户 review 通过；feature/mvp-release-validation；本机 MVP 安装包、连续流程/故障恢复及使用文档完成，尚未提交、发布或合并；用户选择暂不提供干净 Windows 环境，独立机器与真实代表性论文逐题质量评估仍单列待验证；[记录](docs/dev-evidence/step-14.md)
+- [x] 14. 完整流程与分发验证（本机交付范围）— 2026-10-25 用户 review 通过；feature/mvp-release-validation；本机 MVP 安装包、连续流程/故障恢复及使用文档完成，提交 efa63da 随 PR #12 合并 main（6937846），v0.1.0 已发布为预发布版本；用户选择暂不提供干净 Windows 环境，独立机器与真实代表性论文逐题质量评估仍单列待验证；[记录](docs/dev-evidence/step-14.md)
 
 更新清单时附上交付记录、验证证据、review 结论及实际 commit/PR；不预填不存在的链接或结果。
 
@@ -196,7 +196,7 @@
 | 干净 Windows 验证环境 | 2026-10-25 用户选择“暂时没有，先交付本机验证版”；干净机器验收暂未执行。已执行的本机受限 PATH 验证不替代干净 Windows，不能宣称所有分发环境通过。 |
 | 时间预算 | review 等待单独计时；时间不足先削减展示复杂度和后置功能，不跳过来源、持久化、确认与关键验证。 |
 
-计划不包含自动发布、自动合并或无人监督连续开发授权。步骤 0–14 的本轮交付均已通过 review，步骤 14 仅涵盖已确认的本机范围；用户将自行提交、发布分支、合并 main 并创建 v0.1.0 release。后续改进基于体验反馈另行确认，不自动扩大 MVP 范围。
+计划不包含自动发布、自动合并或无人监督连续开发授权。步骤 0–14 的本轮交付均已通过 review，步骤 14 仅涵盖已确认的本机范围；用户已完成提交、合并 main 并发布 v0.1.0 预发布版本；当前等待进一步体验验证与改进指令。后续改进基于体验反馈另行确认，不自动扩大 MVP 范围。
 
 - [产品设计](product_design.md)：产品理念与设计基线。
 - [README.md](README.md)
