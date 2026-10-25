@@ -1,8 +1,8 @@
 # 知栖 Yorw：MVP 开发与 Review 计划
 
-版本：v1 · 更新日期：2026-10-24
+版本：v1 · 更新日期：2026-10-25
 
-状态：步骤 0–11 已合并 main（步骤 10–11：fa97a09 / PR #10；步骤 11 提交 d05ceba）。按用户授权，步骤 12、13 合并为一次交付，在 feature/wiki-review-export 基于 main fa97a09 实现，已于 2026-10-24 通过用户 review；尚未提交、发布或合并。步骤 14 未实施。
+状态：步骤 0–13 已通过用户 review 并合并 main（步骤 12–13：3fb4860 / PR #11，提交 5bd8533）。步骤 14 在 feature/mvp-release-validation 基于 main 3fb4860 完成本机验证，2026-10-25 用户 review 通过；尚未提交、发布或合并，v0.1.0 release 由用户后续创建。按用户选择，干净 Windows 验收暂未执行，不宣称所有分发环境已通过。
 
 ## 1. 文档职责与接手入口
 
@@ -154,9 +154,9 @@
 - [x] 9. Storage 带来源问答 — 2026-10-24 用户 review 通过；feature/document-chat；用户截图确认 deepseek-flash 带引用回答及转笔记，已合并 main（82cb6c1，PR #9）；[记录](docs/dev-evidence/step-09.md)
 - [x] 10. Garden 专题目录与编辑 — 2026-10-24 用户 review 通过；feature/garden-editor；目录、Markdown 编辑、人工修订与只读历史完成，已提交 9b42842，后随 PR #10 合并 main（fa97a09）；[记录](docs/dev-evidence/step-10.md)
 - [x] 11. Garden 选材与 AI 草稿 — 2026-10-24 用户 review 通过；按用户授权沿用 feature/garden-editor，基于 9b42842；选材预览、独立建议草稿及来源快照完成，提交 d05ceba 后随 PR #10 合并 main（fa97a09）；用户未单独提供模型质量量化结果；[记录](docs/dev-evidence/step-11.md)
-- [x] 12. Garden 修改确认与回退 — 2026-10-24 用户 review 通过；feature/wiki-review-export；建议比较/编辑/采纳/拒绝、基础版本冲突检查与历史回退为新修订完成；与步骤 13 按用户授权合并交付，尚未提交、发布或合并；[记录](docs/dev-evidence/step-12.md)
-- [x] 13. House 数据位置与内容导出 — 2026-10-24 用户 review 通过；feature/wiki-review-export；工作区位置、已保存笔记/Wiki 选取、Markdown 与来源清单 ZIP 导出完成，尚未提交、发布或合并；不含完整备份/恢复/迁移；[记录](docs/dev-evidence/step-13.md)
-- [ ] 14. 完整流程与分发验证 — 未实施
+- [x] 12. Garden 修改确认与回退 — 2026-10-24 用户 review 通过；feature/wiki-review-export；建议比较/编辑/采纳/拒绝、基础版本冲突检查与历史回退为新修订完成；与步骤 13 按用户授权合并交付，已提交 5bd8533 并随 PR #11 合并 main（3fb4860）；[记录](docs/dev-evidence/step-12.md)
+- [x] 13. House 数据位置与内容导出 — 2026-10-24 用户 review 通过；feature/wiki-review-export；工作区位置、已保存笔记/Wiki 选取、Markdown 与来源清单 ZIP 导出完成，已提交 5bd8533 并随 PR #11 合并 main（3fb4860）；不含完整备份/恢复/迁移；[记录](docs/dev-evidence/step-13.md)
+- [x] 14. 完整流程与分发验证（本机交付范围）— 2026-10-25 用户 review 通过；feature/mvp-release-validation；本机 MVP 安装包、连续流程/故障恢复及使用文档完成，尚未提交、发布或合并；用户选择暂不提供干净 Windows 环境，独立机器与真实代表性论文逐题质量评估仍单列待验证；[记录](docs/dev-evidence/step-14.md)
 
 更新清单时附上交付记录、验证证据、review 结论及实际 commit/PR；不预填不存在的链接或结果。
 
@@ -193,10 +193,10 @@
 | PDF 抽取质量 | 步骤 5 用代表性样例检查；不能将错误抽取当成完整论文。更换解析器前说明许可、效果与交付影响。 |
 | 中文问题检索英文论文 | 步骤 8 已有智谱真实样例与用户 review；0.50 初始阈值可能过滤跨语言候选，支持自定义调整。5–10 篇代表性论文及逐题效果统计仍待后续集成验收，不预填准确率。 |
 | 来源与修订完整性 | 步骤 9 引用传递及失效机制已验证并通过 review；步骤 11 已通过 review；步骤 12 修订引用、并发编辑冲突与回退本地验证完成，并于 2026-10-24 通过用户 review；出现伪来源或覆盖用户编辑时先修复，不进入下一步。 |
-| 干净 Windows 验证环境 | 在最终分发验收前落实虚拟机或其他干净机器；未执行则明确记为未验证，不能宣称无开发环境依赖。 |
+| 干净 Windows 验证环境 | 2026-10-25 用户选择“暂时没有，先交付本机验证版”；干净机器验收暂未执行。已执行的本机受限 PATH 验证不替代干净 Windows，不能宣称所有分发环境通过。 |
 | 时间预算 | review 等待单独计时；时间不足先削减展示复杂度和后置功能，不跳过来源、持久化、确认与关键验证。 |
 
-计划不包含自动发布、自动合并或无人监督连续开发授权。步骤 12、13 review 已通过；提交、发布和合并尚未执行，步骤 14 等待用户另行授权，后续按第 4 节逐步推进。
+计划不包含自动发布、自动合并或无人监督连续开发授权。步骤 0–14 的本轮交付均已通过 review，步骤 14 仅涵盖已确认的本机范围；用户将自行提交、发布分支、合并 main 并创建 v0.1.0 release。后续改进基于体验反馈另行确认，不自动扩大 MVP 范围。
 
 - [产品设计](product_design.md)：产品理念与设计基线。
 - [README.md](README.md)

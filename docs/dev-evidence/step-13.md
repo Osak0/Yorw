@@ -63,3 +63,5 @@ renderer 只提交选择和任务 ID，不接收通用文件路径写接口。ma
 保留 release/step12-13-review 程序、冻结后端，以及 .cache/step12-desktop-proof/、.cache/step12-13-packaged/、.cache/step12-13-final/ 的报告/截图和对应 3 份导出 ZIP。未触及用户真实工作区或密钥。文档状态、相对链接、保留产物及 git diff 检查通过；本轮没有功能代码变更，不重复运行功能测试。
 
 分支仍为 feature/wiki-review-export，修改尚未提交、发布或合并；步骤 14 未实施，等待用户另行授权。
+
+后续集成状态（2026-10-25 核对）：本步与另一合并交付步骤已提交为 5bd8533，随 PR #11 合并 main（3fb4860）。步骤 14 已获用户授权，在新分支 feature/mvp-release-validation 执行；前文未提交/未合并及尚未开始步骤 14 的描述保留为本步交付时的历史。
