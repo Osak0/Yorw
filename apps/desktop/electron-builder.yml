@@ -8,9 +8,18 @@ files:
 extraResources:
   - from: ../../services/api/dist/yorw-api
     to: backend/yorw-api
+  - from: ../../docs/user-guide.md
+    to: help/user-guide.md
+  - from: ../../docs/known-limitations.md
+    to: help/known-limitations.md
+  - from: ../../docs/review-feedback.md
+    to: help/review-feedback.md
 win:
   target: nsis
-  signAndEditExecutable: false
+  artifactName: Yorw-Setup-${version}-${arch}.${ext}
+  signExecutable: false
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  runAfterFinish: false
+  deleteAppDataOnUninstall: false

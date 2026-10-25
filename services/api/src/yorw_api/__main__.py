@@ -16,6 +16,8 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+HTTP_SHUTDOWN_GRACE_SECONDS = 2
+
 
 def create_app(token: str, database: Database) -> FastAPI:
     from .library import Library, router as library_router
@@ -94,7 +96,10 @@ def main():
         return
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(create_app(token, database), log_level="warning", access_log=False))
+    # A stalled PDF reader may leave a response open forever. Bound HTTP draining
+    # before lifespan cleanup; Electron retains its independent 3-second kill fallback.
+    server = uvicorn.Server(uvicorn.Config(create_app(token, database), log_level="warning", access_log=False,
+                                         timeout_graceful_shutdown=HTTP_SHUTDOWN_GRACE_SECONDS))
 
     def watch_parent():
         # EOF also shuts down the service after an unexpected desktop exit.

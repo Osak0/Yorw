@@ -2,47 +2,46 @@
 
 **Your own research workplace.**
 
-知栖是面向个人研究者与科研学习者的本地优先阅读与知识工作区，希望将文献阅读、AI 讨论、笔记和专题 Wiki 连接起来，让研究中的认识持续积累，并能回到原文核查与修订。
+知栖是面向个人研究者与科研学习者的本地优先阅读与知识工作区，把文献阅读、带来源的 AI 讨论、笔记和专题 Wiki 连接起来，让认识持续积累，并能回到原文核查。
 
-> 项目已进入开发阶段：已支持本地文献导入、管理、PDF 阅读、Markdown 笔记、文献内检索及带来源问答；Garden 人工专题编辑与 AI Wiki 建议草稿已通过 review，建议采纳、历史回退及内容导出已通过步骤 12、13 review；完整流程与分发验收仍按计划推进。
+论文、笔记和 AI 对话常常分散在不同工具中。知栖围绕研究主题整理这些材料，同时保留用户判断，区分论文事实、个人观点与模型推断。
 
-## 产品背景
+## 三个属于知栖的空间
 
-论文、笔记和 AI 对话常常分散在不同工具中，围绕一个研究问题形成的理解难以复用。知栖希望让阅读、讨论和知识整理在同一工作区连贯进行，同时保留用户判断，区分论文事实、个人观点与模型推断。
+- **Storage**：积累研究材料与阅读过程。导入和管理 PDF、阅读与检索原文、记录 Markdown 笔记，进行带来源的问答。
+- **Garden**：让理解逐渐长成知识体系。从所选论文片段、笔记和讨论生成专题 Wiki 建议，经人工比较确认后采纳，保留来源与修订，支持历史回退。
+- **House**：安放自己的研究工作区。分别配置聊天与 embedding 服务、查看数据位置，导出已保存笔记与 Wiki 的 Markdown 和来源清单。
 
-## 产品概览
+首版流程：**导入论文 → 阅读与问答 → 保存笔记 → 选材生成 Wiki → 比较确认 → 导出与重启继续。**
 
-**Storage、Garden、House** 是知栖三个界面的正式名称，也表达我们对科研工作区的理解：积累材料、培育知识，并拥有属于自己的研究空间。
+数据默认本地保存，但不等于完全离线：使用云端聊天或 embedding 时，相关文本发送至用户配置的服务商，可能计费。内容导出也不等于完整备份。
 
-- **Storage**：积累研究材料与阅读过程。在这里管理和阅读 PDF、记录笔记，与 AI 进行带来源的讨论，并回到原文核查证据。
-- **Garden**：让理解逐渐长成知识体系。从选定的论文、笔记与讨论培育专题 Wiki，确认 AI 修改，保留来源和修订记录。
-- **House**：安放自己的研究工作区。首版用于模型连接、本地数据位置与内容导出；个人资料与研究主题将在后续逐步完善。
+## 本机 MVP 验证版
 
-首版聚焦：**导入论文 → 阅读与问答 → 保存笔记 → 生成并确认 Wiki 草稿 → 重启后继续使用。**
+Windows x64 · 0.1.0。2026-10-25 本机 MVP 已通过步骤 14 review，正在准备 v0.1.0 release，尚未合并或发布。按照用户选择，干净 Windows 机器的验收暂未执行。
 
-数据默认本地保存，但不等于完全离线：使用云端聊天或 embedding 服务时，相关文本需要发送至用户配置的服务商；两类模型分别配置。
+- 安装包：`release/step14-review/Yorw-Setup-0.1.0-x64.exe`。
+- 直接运行：完整 `release/step14-review/win-unpacked/` 目录中的 `Yorw.exe`，不能只复制单个 exe。
+- [使用指南](docs/user-guide.md) · [已知限制](docs/known-limitations.md) · [深度体验反馈模板](docs/review-feedback.md)。
 
-## 计划技术栈
+本版未签名。分发目录附带使用文档、自编写样例和 SHA-256 清单；本机验证不等同于所有 Windows 环境均已通过。
 
-| 模块 | 选型 |
+## 当前技术栈
+
+| 模块 | 已使用组件 |
 | --- | --- |
-| 桌面应用 | Electron + electron-vite，Windows x64 优先 |
-| 前端与界面 | React + TypeScript、Tailwind CSS、shadcn/ui、Lucide |
-| 状态管理 | TanStack Query + 少量 Zustand |
+| 桌面与界面 | Electron + electron-vite、React + TypeScript、CSS |
 | 本地后端 | Python 3.12 + FastAPI + Pydantic + Uvicorn |
 | 阅读与编辑 | PDF.js + pypdf、CodeMirror 6 + Markdown 预览 |
-| 存储与检索 | SQLite + 本地文件、FTS5 + 多语言 embedding + NumPy |
-| 模型接入 | 可替换的聊天与 embedding 接口，用户自行配置 API |
-| 工程与发布 | pnpm、uv、Vitest、pytest、PyInstaller、electron-builder |
+| 存储与检索 | SQLite + 本地文件、FTS5 + embedding + NumPy |
+| 模型接入 | 独立的聊天与 embedding 配置、兼容 API；用户自行提供密钥 |
+| 工程与分发 | pnpm、uv、Vitest、pytest、PyInstaller、electron-builder / NSIS |
 
-## 项目文档
+## 项目与开发文档
 
-- [产品设计](product_design.md)：产品理念与设计基线。
-- [开发计划](PLAN.md)：当前首版范围、分步实施与 review 验收规则。
+[产品设计](product_design.md)保存设计基线；[开发计划](PLAN.md)记录当前范围、状态与后置功能；[工程与验证记录索引](docs/dev-evidence/README.md)提供复现入口；[v0.1.0 发布说明草稿](docs/releases/v0.1.0.md)供本轮发布使用。
 
-## 开发与验证（Windows x64）
-
-需要 Node 24、pnpm 11.25.0、uv 和 Python 3.12。仓库版本文件记录本次验证的补丁版本。
+开发需 Node 24、pnpm 11.25.0、uv 和 Python 3.12，精确版本见仓库版本文件与锁文件。
 
 ```powershell
 $env:UV_CACHE_DIR = "$PWD/.cache/uv"
@@ -51,70 +50,4 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm typecheck`、`pnpm test` 检查桌面代码；`services/api/.venv/Scripts/python.exe -m pytest services/api/tests -q` 验证后端。打包后端测试需要先执行 `pnpm build:backend`，否则该项明确跳过。
-
-`pnpm package:win` 自动检查类型、构建桌面与 Python 后端，并生成 `release/desktop/` 中的未签名测试安装包；`pnpm package:dir` 生成可直接启动的分发目录。开发模式使用独立的 Yorw-development 数据目录。工作区位于 Electron userData 下的 `workspace/`，包含 SQLite 数据库、受管理文献、临时文件、日志和内部迁移备份；用户资料与安装资源分开保存。
-
-工作区基础已加入 SQLite 迁移、启动校验和受管理文件存储；Storage 已支持 PDF 导入、去重、文字抽取、元数据编辑、移除，以及阅读器翻页、缩放与页码恢复；House 已实现模型配置与连接测试，Garden 已支持专题目录与人工正文修订，并通过 Step 10 review。[步骤 2 验收记录](docs/dev-evidence/step-02.md) 与[步骤 3 验收记录](docs/dev-evidence/step-03.md) 包含验证范围和已知限制。各步骤的历史运行记录见对应验收文档；当前 review 程序为 `release/step12-13-review/win-unpacked/Yorw.exe`。
-
-### House 模型连接
-
-聊天预设 DeepSeek：API Base URL 为 `https://api.deepseek.com`，模型名为 `deepseek-flash`（按 [DeepSeek 官方文档](https://api-docs.deepseek.com/) 于 2026-10-23 核对）。可编辑为其他兼容 Chat Completions 的服务。embedding 使用独立的地址、模型和密钥，需服务支持 `/embeddings`。
-
-运行 `pnpm dev` 后进入 House，在本地输入 API Key，保存后点击“测试已保存配置”；测试可能产生少量 API 费用。密钥由 Electron 系统安全存储加密保存，不回显、不写入 SQLite。首次缺配置、服务鉴权失败、限流、超时均有提示。2026-10-23 用户已完成 DeepSeek 接入验收，并确认服务商平台显示用量请求；智谱 embedding-3 已在步骤 8 完成本地接入并通过用户 review。详见[步骤 4 验收记录](docs/dev-evidence/step-04.md)。
-
-### Storage 文献库
-
-在 Storage 点击“导入 PDF”，通过系统对话框选择单个文件。导入后保留受管副本，按 SHA-256 去重，并在后台按物理页抽取文字；列表显示进度与结果，可编辑标题、作者、年份，停止或重新抽取，或移除文献。未知元数据保持为空，不从文件名推测作者和年份。
-
-本步上限为每文件 50 MiB、2000 页；不包含 OCR 或解密。加密、损坏、无文本和部分抽取会分别提示；移除仅处理受管副本及片段，原始选中文件不受影响。重启可继续访问已导入记录。步骤 5 已通过用户 review；本步程序位于 `release/step5-review/win-unpacked/Yorw.exe`。[步骤 5 验收记录](docs/dev-evidence/step-05.md) 包含运行入口和验证范围。
-
-### PDF 阅读
-
-在 Storage 点击“打开阅读”，可翻页、输入物理页码、切换缩放或适合宽度，并选择原文文字。当前页渲染完成后保存页码，重新打开或重启后恢复；保存失败会提示，不影响已载入页面的阅读。抽取不完整、无文本或尚未就绪的文献仍可尝试阅读，但不因此视为 AI 已获取完整原文。
-
-阅读使用本地打包的 PDF.js，无需为阅读器配置模型服务。暂不提供解密、批注、PDF 内搜索或精确引用高亮；恢复的是物理页码，不包含缩放和页内滚动位置。步骤 6 已通过用户 review；本步程序位于 `release/step6-review/win-unpacked/Yorw.exe`。详见[步骤 6 验收记录](docs/dev-evidence/step-06.md)。
-
-### 文献笔记
-
-打开 Storage 中的文献，点击“笔记”即可新建多条 Markdown 笔记，切换编辑与预览，点击“保存笔记”或在编辑器内按 Ctrl+S 保存。宽窗口支持拖动或用方向键调整侧栏宽度，窄窗口通过覆盖面板编辑，Escape 可关闭。
-
-已保存内容存入本地 SQLite，重新打开文献或重启后可继续编辑；未保存草稿按文献在本次会话中保留，关闭应用会提示确认。保存失败或版本冲突不会覆盖草稿，可重试或比较已保存版本。草稿尚无崩溃恢复能力，重要内容请及时保存。预览支持基础 Markdown 与表格，不加载原始 HTML、图片或可点击外链；关联文献不等于具有已验证的原文引用。步骤 7 已合并 main，详见[验收记录](docs/dev-evidence/step-07.md)。
-
-### 文献内检索
-
-在 Storage 阅读工具栏直接点击“检索”，查找当前文献的原文片段和物理页。关键词检索在本地运行；语义索引可独立使用 House 中的智谱 `embedding-3` 预设或兼容服务。语义建索引前需确认发送当前文献全部已抽取文字分块；启用语义查询会发送本次查询，可能产生费用。
-
-缺配置、缺密钥或服务失败时明确降级为关键词；模型配置变化后需重建语义索引。候选片段不等于答案，关键词模式不保证中文能召回英文原文。步骤 8 已通过用户 review；详见[步骤 8 记录](docs/dev-evidence/step-08.md)。
-
-语义候选支持输入 0–1 之间自定义最低余弦相似度（如 0.255）并显示实际分数；默认 0.50 是待模型校准的初始筛选值，相似度不代表事实可信度。
-
-关键词命中或语义相似度达到自定义阈值，满足任一条件即展示；只有两者都不满足时才无结果。阈值仅过滤语义候选。
-
-### 文献问答
-
-在阅读工具栏点击“问答”，输入问题，准备并勾选原文证据，核对聊天服务与发送范围后生成。回答逐步显示并本地保存；支持取消、重新准备证据后重试、点击有效引用跳至物理页，以及转存为保留引用快照的笔记。只发送本次问题和选定证据，不自动发送历史对话。没有证据时不调用聊天模型。
-
-引用仅说明材料来源，不保证回答正确；无效引用、服务失败、中断及来源失效均有提示。2026-10-24 用户已使用 DeepSeek 完成 Step 9 review，详见[步骤 9 记录](docs/dev-evidence/step-09.md)。
-
-### Garden 专题编辑
-
-在 Garden 创建专题，可指定父级、重命名或调整层级；正文使用 Markdown 编辑、预览和 Ctrl+S 保存。每次正文变更创建新的只读修订，历史可查看；切换专题或导航保留本次会话的正文草稿，关闭应用前有未保存提醒。冲突或失败不会覆盖当前草稿。
-
-人工编辑已通过 review；AI 建议草稿在 Step 11 提供，确认采纳与回退已在 Step 12 通过 review。详见[步骤 10 验收说明](docs/dev-evidence/step-10.md)。
-
-### Garden 选材与 AI 草稿
-
-打开专题下方“材料与 AI 草稿”，选择论文原文片段、已保存笔记或已完成对话，预览完整发送范围并确认后生成。建议草稿与正式正文分开保存，显示本轮来源、原文页码和材料类型；生成、取消或失败均不覆盖正文。可以收起面板、重启后继续查看已提交草稿。
-
-材料变更和旧基础版本会提示；生成仍不自动采纳建议；Step 12 提供独立的比较确认流程。2026-10-24 用户已确认 Step 11 review 通过，详见[步骤 11 记录](docs/dev-evidence/step-11.md)。
-
-### Garden 确认与回退
-
-在建议历史点击“比较与处理建议”，查看生成时基础正文、最新已保存正文和原始建议，编辑“确认后的正文”、核查来源并勾选确认后，采纳为新修订；也可明确拒绝，保留原记录。过期基线或失效材料不能采纳，未保存手工正文不会被覆盖。查看历史后可比较并回退为新修订，恢复该版本的正文与来源快照；失效来源仍会标记。2026-10-24 用户已确认 Step 12 review 通过。详见[步骤 12 记录](docs/dev-evidence/step-12.md)。
-
-### House 数据位置与导出
-
-进入 House 的“本地数据与内容导出”，查看工作区路径，选择已保存笔记及 Wiki 当前修订，创建快照后通过系统保存对话框导出 ZIP。正文 Markdown 保持原样，每份正文附 `.sources.json` 和 `.sources.md` 来源清单，`manifest.json` 记录文件与版本。取消保存后可再次保存同一快照。
-
-这是内容导出，**不等于完整备份**：不含 PDF、密钥、模型配置、聊天历史、未采纳建议、未保存草稿或完整修订历史；不提供恢复导入或目录迁移。一次最多 500 项，正文和清单合计上限 20 MiB；请保存到工作区及应用数据目录之外。2026-10-24 用户已确认 Step 13 review 通过。详见[步骤 13 记录](docs/dev-evidence/step-13.md)。
+开发模式使用独立的 Yorw-development 工作区。`pnpm typecheck`、`pnpm test` 检查桌面；`services/api/.venv/Scripts/python.exe -m pytest services/api/tests -q` 验证后端。`pnpm package:win` 构建未签名安装包；打包和完整流程复现见[步骤 14 记录](docs/dev-evidence/step-14.md)。

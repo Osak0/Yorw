@@ -157,11 +157,11 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 | --- | --- | --- |
 | 视觉方向 | 用户已选方案三，保留 Storage/Garden/House 名称；步骤 1 设计及步骤 2–8 对应界面已 review，通过范围见各步记录 | 1：统一设计说明与名称修订稿 |
 | 工具链 | Python 3.12.10、依赖锁定、开发构建与本机分发已验证；不再沿用设计阶段的未安装状态 | 2：环境检查记录、锁文件及最小构建 |
-| 密钥/进程/分发 | 步骤 2、4 已验证启停与本地安全存储；干净机器验收仍待步骤 14 | 2、4、14：安全保存与恢复、子进程启停、干净 Windows 实测 |
+| 密钥/进程/分发 | 步骤 2、4 已验证启停与本地安全存储；步骤 14 本机安装/故障恢复与 review 通过，干净机器仍未验证 | 2、4、14：安全保存与恢复、子进程启停、本机安装与待补独立环境 |
 | 真实模型与预算 | 用户已确认 DeepSeek 聊天接入及智谱 embedding-3 检索 review；预算、普遍语义质量未作保证 | 4：用户安全配置与短文本连接测试，分别验证 chat/embedding |
 | PDF 与跨语言检索 | 步骤 5、8 固定夹具与用户样例通过；代表性长文与逐题质量统计待后续集成验收 | 5、8：合法样例清单、摘要、证据页码与 PLAN 的 12 问记录 |
 | 修订与来源 | 步骤 9–11 已实现并通过 review；步骤 12 的引用修订、并发冲突、回退与重启测试已通过，并于 2026-10-24 通过用户 review | 9–12：真实引用流转、删除失效、冲突/回退测试 |
-| 干净 Windows | 尚未落实 | 14 前落实测试机/VM；无验证则不宣称发布通过 |
+| 干净 Windows | 2026-10-25 用户选择暂时无独立环境，先交付本机验证版 | 本机受限 PATH / 安装检查与干净 Windows 分开记录，不宣称完整发布验收通过 |
 
 步骤 0 的设计交付与设计分支合并已完成；当前进度以 PLAN 为准。后续仍按功能分支逐步实现、等待用户 review，不自动进入下一步或合并。
 
@@ -172,6 +172,9 @@ Python 内部最小接口：`ChatProvider.stream(messages, options, cancel)` 产
 步骤 11 按用户明确授权沿用 feature/garden-editor（Step 10 提交 9b42842），不新建分支。材料目录/预览、配置版本绑定发送、任务生成与来源快照已实现，2026-10-24 用户 review 通过；提交 d05ceba，随 PR #10 合并 main（fa97a09）。材料对象版本、范围限制和状态规则见[步骤 11 记录](dev-evidence/step-11.md)。步骤 11 本身不修改正式正文；步骤 12 的显式确认接口另行负责创建新修订。
 
 
-步骤 12、13 按用户明确授权在 feature/wiki-review-export 合并交付，起点 main fa97a09，2026-10-24 用户 review 通过；修改尚未提交、发布或合并，步骤 14 未实施。schema 8→9 只新增 009_wiki_decisions.sql，不修改已应用迁移。POST /v1/suggestions/{id}/accept、/reject 和 /v1/topics/{id}/revisions/{revision}/restore 为本地确认操作，不调用模型。采纳要求已完成、尚未处理、同一正文基线、材料仍有效，以及合法本轮引用；拒绝不改正文；回退复制目标历史正文及原始来源 JSON，新建修订。每个操作绑定 UUID request_id，重试返回原决策和当前正文，不重复修改指针。动态来源可用性不写回不可变快照。详见[步骤 12 记录](dev-evidence/step-12.md)。
+步骤 12、13 按用户明确授权在 feature/wiki-review-export 合并交付，起点 main fa97a09，2026-10-24 用户 review 通过；已提交 5bd8533，随 PR #11 合并 main（3fb4860）；步骤 14 在 feature/mvp-release-validation 执行。schema 8→9 只新增 009_wiki_decisions.sql，不修改已应用迁移。POST /v1/suggestions/{id}/accept、/reject 和 /v1/topics/{id}/revisions/{revision}/restore 为本地确认操作，不调用模型。采纳要求已完成、尚未处理、同一正文基线、材料仍有效，以及合法本轮引用；拒绝不改正文；回退复制目标历史正文及原始来源 JSON，新建修订。每个操作绑定 UUID request_id，重试返回原决策和当前正文，不重复修改指针。动态来源可用性不写回不可变快照。详见[步骤 12 记录](dev-evidence/step-12.md)。
 
 House 数据位置由 main 从当前实际工作区路径提供；renderer 不传任意路径。GET /v1/exports/catalog 返回可导出的已保存内容，POST /v1/exports 按选择的 IDs 在同一数据库锁内创建快照，返回成功 export task；GET /v1/exports/{task_id}/file 返回受限 ZIP 字节，main 通过系统保存对话框写入，临时文件加 rename 避免部分写入损坏已有目标。取消、写入失败和受保护路径不会报告成功。内容格式 yorw-content-export-v1，文件名使用 UUID，正文与来源清单分开；不含完整备份/恢复/目录迁移。详见[步骤 13 记录](dev-evidence/step-13.md)。
+
+
+步骤 14 于 2026-10-25 通过用户 review（本机范围），feature/mvp-release-validation 尚未提交、发布或合并，v0.1.0 release 由用户后续创建。沿用已锁定依赖；当前实际前端使用 React/TypeScript、CSS 和现有模块状态对象，规划中的 Tailwind/shadcn、TanStack Query/Zustand 尚未引入，README 按当前依赖修正，不视为技术路线更换。新增隔离连续流程与服务退出/重启烟测、受限 PATH 验证脚本及自编写样例生成器；smoke 模式的 Electron profile 也隔离到报告目录，普通启动路径不变。HTTP 关闭等待增加 2 秒边界，防止停止读取 PDF 的客户端无限阻塞服务退出，Electron 继续保留 3 秒回收兜底；不改变 SQLite 事务或模型数据协议。安装包保留资源版本编辑、关闭代码签名，携带使用文档；未做自动更新或公开发布。干净 Windows 与真实论文逐题质量评估仍未验证。详情见[步骤 14](dev-evidence/step-14.md)。

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, safeStorage, dialog } from 'electron'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
 import { Backend } from './backend'
 import { Providers } from './providers'
 import { Documents } from './documents'
@@ -17,10 +18,13 @@ import { runGardenSmoke } from './garden-smoke'
 import { runChatSmoke } from './chat-smoke'
 import { runNotesSmoke } from './notes-smoke'
 import { runSearchSmoke } from './search-smoke'
+import { runMvpSmoke, resumeMvpSmoke } from './mvp-smoke'
 
 let backend: Backend
 let quitting = false
-if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'Yorw-development'))
+const smokeProfile = process.argv.includes('--yorw-smoke') ? process.argv.find(arg=>arg.startsWith('--report-dir='))?.slice(13) : undefined
+if(smokeProfile){const profile=join(resolve(smokeProfile),'electron-profile');mkdirSync(profile,{recursive:true});app.setPath('userData',profile)}
+else if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'Yorw-development'))
 if (!app.requestSingleInstanceLock()) app.quit()
 else app.whenReady().then(async () => {
   const root = resolve(__dirname, '../../../..')
@@ -117,7 +121,7 @@ else app.whenReady().then(async () => {
       let readerProof: unknown = null
       let notesProof: unknown = null
       let searchProof: unknown = null
-      if (readerSmoke) {
+      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([fixture]), 'Reader fixture.pdf')
@@ -150,7 +154,7 @@ else app.whenReady().then(async () => {
           if (!dark) throw new Error('EMPTY_CANVAS')
           return { restoredPage: 2, darkPixels: dark, text: document.querySelector('.textLayer').textContent }
         })()`)
-      } else {
+      } else if(!readerSmoke) {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
       }
       if (notesSmoke) notesProof = await runNotesSmoke(window, backend, reportDir, () => preventedUnloads)
@@ -160,6 +164,9 @@ else app.whenReady().then(async () => {
       if(readerSmoke && process.argv.includes('--garden-smoke')) await runGardenSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--suggestions-smoke')) await runSuggestionsSmoke(window,backend,providers,reportDir)
       if(readerSmoke && process.argv.includes('--review-export-smoke')) await runReviewExportSmoke(window,backend,providers,reportDir)
+      let faultObserved=false
+      if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runMvpSmoke(window,backend,providers,reportDir)
+      if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeMvpSmoke(window,backend,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
       await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, notesProof, searchProof }, null, 2))
@@ -177,7 +184,7 @@ else app.whenReady().then(async () => {
         if (layouts.some(layout => !layout.toolbarFits)) throw new Error('TOOLBAR_OVERFLOW')
       }
       await backend.stop()
-      app.exit(probe.status.state === 'ready' && !probe.nodeExposed ? 0 : 1)
+      app.exit((probe.status.state === 'ready'||faultObserved) && !probe.nodeExposed ? 0 : 1)
     } catch (error) {
       try { if (readerSmoke) {
         await mkdir(reportDir, { recursive: true })

@@ -9,6 +9,8 @@ export class Backend {
   private stopping = false
   status: AppStatus = { state: 'starting', message: '正在启动本地服务' }
   constructor(private command: string, private args: string[], private cwd: string, private workspacePath?: string) {}
+  // Main-process diagnostics only; never exposed to renderer IPC.
+  get processId():number|undefined { return this.child?.pid }
   async start(): Promise<void> {
     if (this.stopping) return
     try {
