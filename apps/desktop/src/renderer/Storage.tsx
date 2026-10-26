@@ -22,8 +22,7 @@ function Editor({ document, onClose, onSaved }: {document: DocumentRecord; onClo
   }
   return <section aria-label="编辑文献元数据"><h2>编辑元数据</h2><p>未知信息可留空；保存后标记为人工编辑，不补造作者或年份。</p><fieldset disabled={busy}><label>标题<input value={title} maxLength={1000} onChange={e => setTitle(e.target.value)} /></label><label>作者（每行一位）<textarea value={authors} onChange={e => setAuthors(e.target.value)} /></label><label>年份<input value={year} onChange={e => setYear(e.target.value)} inputMode="numeric" /></label><div className="actions"><button onClick={() => void save()}>保存</button><button onClick={onClose}>取消编辑</button></div></fieldset><p role="status">{message}</p></section>
 }
-export function Storage({ onReading }: {onReading(value: boolean): void}) {
-  const [reading, setReading] = useState<DocumentRecord | null>(null)
+export function Storage({ activeDocumentId, onOpenDocument, onShowLibrary }: {activeDocumentId: string | null; onOpenDocument(document: DocumentRecord): void; onShowLibrary(): void}) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [loaded, setLoaded] = useState(false)
   const [message, setMessage] = useState('正在加载文献…')
@@ -38,6 +37,11 @@ export function Storage({ onReading }: {onReading(value: boolean): void}) {
     void load(); const timer = setInterval(load, 1200)
     return () => { active = false; clearInterval(timer) }
   }, [])
+  const reading = activeDocumentId ? documents.find(document => document.id === activeDocumentId) ?? null : null
+  function closeReading() {
+    void window.yorw.documents.list().then(result => { if (result.ok) setDocuments(result.value.items) })
+    onShowLibrary()
+  }
   async function importPdf() {
     setBusy(true); setMessage('请选择 PDF，正在导入…')
     try { const result = await window.yorw.documents.importPdf(); if (!result.ok) setMessage(explain(result.code)); else setMessage(result.value.cancelled ? '已取消选择' : result.value.deduplicated ? '该 PDF 已在文献库中，已复用现有记录。' : '副本已保存，正在后台抽取文字。') }
@@ -62,6 +66,10 @@ export function Storage({ onReading }: {onReading(value: boolean): void}) {
     try { const result = await window.yorw.tasks.retry(document.task.id); setMessage(result.ok ? '已创建新的抽取任务。' : explain(result.code)) }
     catch { setMessage('重试失败。') } finally { setBusy(false) }
   }
-  if (reading) return <ReadingWorkspace key={reading.id} document={reading} onClose={() => { void window.yorw.documents.list().then(result => { if (result.ok) setDocuments(result.value.items) }); setReading(null); onReading(false) }} />
-  return <><div className="library-toolbar"><button className="import-button" disabled={busy} onClick={() => void importPdf()}>导入 PDF</button><span>{documents.length} 篇文献 · 单文件上限 50 MiB</span></div><p role="status">{message}</p>{editing && <Editor key={editing.id + ':' + editing.version} document={editing} onClose={() => setEditing(null)} onSaved={() => setMessage('元数据已保存。')} />}{loaded && !documents.length && <section><h2>从一篇论文开始</h2><p>导入 PDF，保存自己的研究材料。导入后可打开阅读器，翻页并保存阅读位置。</p></section>}<div className="document-list">{documents.map(document => <section key={document.id} className="document-row"><h2>{document.title || document.original_name}</h2><p className="file-name">{document.original_name}</p><p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.page_count === null ? '页数待解析' : `${document.page_count} 页`}</p><p><strong>{labels[document.extraction_status] ?? document.extraction_status}</strong>{document.task?.status === 'running' && document.task.progress !== null ? ` · ${Math.round(document.task.progress * 100)}%` : ''}</p>{document.warning && <p className="warning">{explain(document.warning)}</p>}<div className="actions"><button disabled={busy} onClick={() => { setReading(document); onReading(true) }}>打开阅读</button><button disabled={busy} onClick={() => setEditing(document)}>编辑元数据</button>{['pending','running'].includes(document.extraction_status) && <button disabled={busy} onClick={() => void cancel(document)}>停止抽取</button>}{['failed', 'partial'].includes(document.extraction_status) && <button disabled={busy} onClick={() => void retry(document)}>重新抽取</button>}<button disabled={busy} onClick={() => void remove(document)}>移除文献</button></div></section>)}</div></>
+  if (activeDocumentId) {
+    if (!loaded) return <p role="status" className="library-view">正在加载文献…</p>
+    if (!reading) return <section className="library-view" aria-label="文献不可用"><h2>文献不可用</h2><p>这篇文献可能已被移除，请从文献库重新选择。</p><button onClick={onShowLibrary}>返回文献库</button></section>
+    return <ReadingWorkspace key={reading.id} document={reading} onClose={closeReading} />
+  }
+  return <div className="library-view"><div className="library-toolbar"><button className="import-button" disabled={busy} onClick={() => void importPdf()}>导入 PDF</button><span>{documents.length} 篇文献 · 单文件上限 50 MiB</span></div><p role="status">{message}</p>{editing && <Editor key={editing.id + ':' + editing.version} document={editing} onClose={() => setEditing(null)} onSaved={() => setMessage('元数据已保存。')} />}{loaded && !documents.length && <section><h2>从一篇论文开始</h2><p>导入 PDF，保存自己的研究材料。导入后可打开阅读器，翻页并保存阅读位置。</p></section>}<div className="document-list">{documents.map(document => <section key={document.id} className="document-row"><h2>{document.title || document.original_name}</h2><p className="file-name">{document.original_name}</p><p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.page_count === null ? '页数待解析' : `${document.page_count} 页`}</p><p><strong>{labels[document.extraction_status] ?? document.extraction_status}</strong>{document.task?.status === 'running' && document.task.progress !== null ? ` · ${Math.round(document.task.progress * 100)}%` : ''}</p>{document.warning && <p className="warning">{explain(document.warning)}</p>}<div className="actions"><button disabled={busy} onClick={() => onOpenDocument(document)}>打开阅读</button><button disabled={busy} onClick={() => setEditing(document)}>编辑元数据</button>{['pending','running'].includes(document.extraction_status) && <button disabled={busy} onClick={() => void cancel(document)}>停止抽取</button>}{['failed', 'partial'].includes(document.extraction_status) && <button disabled={busy} onClick={() => void retry(document)}>重新抽取</button>}<button disabled={busy} onClick={() => void remove(document)}>移除文献</button></div></section>)}</div></div>
 }

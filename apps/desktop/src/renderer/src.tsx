@@ -7,11 +7,17 @@ import { hasUnsavedGarden } from './garden-book'
 import { House } from './House'
 import { Storage } from './Storage'
 import { hasUnsavedNotes } from './notebook'
+import { addWorkspaceTab, documentTab, moduleForTab, tabKindLabel, topicTab, type WorkspaceTab } from './workspace-tabs'
 declare global { interface Window { yorw: DesktopBridge } }
+type Module = 'Storage' | 'Garden' | 'House'
+const MODULES: Module[] = ['Storage', 'Garden', 'House']
 function App() {
   const [started, setStarted] = useState(false)
-  const [reading, setReading] = useState(false)
-  const [page, setPage] = useState('Storage')
+  const [module, setModule] = useState<Module>('Storage')
+  const [tabs, setTabs] = useState<WorkspaceTab[]>([])
+  const [activeKey, setActiveKey] = useState<string | null>(null)
+  const [storageKey, setStorageKey] = useState<string | null>(null)
+  const [gardenKey, setGardenKey] = useState<string | null>(null)
   const [status, setStatus] = useState<AppStatus>({ state: 'starting', message: '正在连接本地服务' })
   useEffect(() => {
     let active = true
@@ -32,6 +38,37 @@ function App() {
     window.addEventListener('beforeunload', protect)
     return () => window.removeEventListener('beforeunload', protect)
   }, [])
-  return <><header><strong>知栖 <span>Yorw</span></strong><nav aria-label="工作区">{['Storage', 'Garden', 'House'].map(name => <button key={name} aria-current={page === name ? 'page' : undefined} onClick={() => setPage(name)}>{name}</button>)}</nav></header><main className={reading && page === 'Storage' ? 'reader-active' : page === 'Garden' ? 'garden-active' : ''}><p className="eyebrow">YOUR OWN RESEARCH WORKPLACE</p><h1>{page}</h1><p className="page-intro">{page === 'Storage' ? '积累材料，让每一次阅读有所沉淀。' : page === 'Garden' ? '培育理解，让知识逐渐生长。' : '安放属于自己的研究工作区。'}</p>{status.state !== 'ready' && <p role="status" className={status.state}>{status.message}</p>}{(status.state === 'ready' || started) && <><div hidden={page !== 'Garden'}><Garden /></div><div hidden={page !== 'House'}><House active={page==='House'}/></div><div hidden={page !== 'Storage'}><Storage onReading={setReading} /></div></>}</main></>
+  function openTab(tab: WorkspaceTab) {
+    setTabs(previous => addWorkspaceTab(previous, tab))
+    setActiveKey(tab.key)
+    setModule(moduleForTab(tab))
+    if (tab.kind === 'document') setStorageKey(tab.key)
+    else setGardenKey(tab.key)
+  }
+  function activateTab(tab: WorkspaceTab) {
+    setActiveKey(tab.key)
+    setModule(moduleForTab(tab))
+    if (tab.kind === 'document') setStorageKey(tab.key)
+    else setGardenKey(tab.key)
+  }
+  function showModule(name: Module) {
+    setModule(name)
+    setActiveKey(null)
+    if (name === 'Storage') setStorageKey(null)
+    if (name === 'Garden') setGardenKey(null)
+  }
+  function showLibrary() { setStorageKey(null); setActiveKey(null) }
+  const storageDocumentId = storageKey ? tabs.find(tab => tab.key === storageKey)?.id ?? null : null
+  const gardenTopicId = gardenKey ? tabs.find(tab => tab.key === gardenKey)?.id ?? null : null
+  return <div className="app-shell">
+    <header className="app-header"><div className="app-brand"><strong>知栖 <span>Yorw</span></strong></div><nav className="module-nav" aria-label="工作区">{MODULES.map(name => <button key={name} aria-current={module === name ? 'page' : undefined} onClick={() => showModule(name)}>{name}</button>)}</nav></header>
+    <div className="workspace-tabbar" role="tablist" aria-label="工作标签">{tabs.length ? tabs.map(tab => <button key={tab.key} type="button" role="tab" aria-selected={activeKey === tab.key} className="workspace-tab" title={`${tabKindLabel(tab)} · ${tab.title}`} onClick={() => activateTab(tab)}><span className="workspace-tab-title">{tab.title}</span><span className="workspace-tab-kind">{tabKindLabel(tab)}</span></button>) : <span className="workspace-tab-empty">打开文献或专题后，在这里切换</span>}</div>
+    {status.state !== 'ready' && <p role="status" className={`app-status ${status.state}`}>{status.message}</p>}
+    {(status.state === 'ready' || started) && <main className="app-main">
+      <div className="module-view" hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onShowLibrary={showLibrary} /></div>
+      <div className="module-view" hidden={module !== 'Garden'}><Garden activeTopicId={gardenTopicId} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} /></div>
+      <div className="module-view house-view" hidden={module !== 'House'}><House active={module === 'House'} /></div>
+    </main>}
+  </div>
 }
 createRoot(document.getElementById('root')!).render(<App />)
