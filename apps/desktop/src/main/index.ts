@@ -15,7 +15,7 @@ import { Workspace } from './workspace'
 import { Layout } from './layout'
 import { Intelligence } from './intelligence'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
-import {runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke} from './workspace-tabs-smoke'
+import {runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
 let quitting = false
@@ -124,7 +124,7 @@ else app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
-      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')) {
+      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')&&!process.argv.includes('--tabs-citation-smoke')&&!process.argv.includes('--tabs-tool-resume-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([fixture]), 'Reader fixture.pdf')
@@ -175,6 +175,8 @@ else app.whenReady().then(async () => {
       }
       const tabProof = readerSmoke && process.argv.includes('--tabs-smoke') ? await runWorkspaceTabsSmoke(window) : null
       const tabResumeProof = readerSmoke && process.argv.includes('--tabs-resume-smoke') ? await runWorkspaceTabsResumeSmoke(window) : null
+      const citationProof = readerSmoke && process.argv.includes('--tabs-citation-smoke') ? await runWorkspaceCitationSmoke(window,providers) : null
+      const toolResumeProof = readerSmoke && process.argv.includes('--tabs-tool-resume-smoke') ? await runWorkspaceTabsToolResumeSmoke(window) : null
       const tabCloseProof = readerSmoke && process.argv.includes('--tabs-close-smoke') ? await runWorkspaceTabsCloseSmoke(window) : null
       if (tabCloseProof) {
         const documents = await backend.request('/v1/documents')
@@ -191,7 +193,7 @@ else app.whenReady().then(async () => {
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
-      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, tabCloseProof, tabFaultProof }, null, 2))
+      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, citationProof, toolResumeProof, tabCloseProof, tabFaultProof }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
       if (readerSmoke && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
         const layouts = []

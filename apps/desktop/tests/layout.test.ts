@@ -38,6 +38,28 @@ test('layout round-trips through an atomic file and drops unknown fields', async
   })
 })
 
+test('tool tabs are valid Storage pages and persist as the active page', async () => {
+  await withDirectory(async directory => {
+    const store = new Layout(directory)
+    const toolLayout: WorkspaceLayout = {
+      version: 1,
+      module: 'Storage',
+      tabs: [
+        { kind: 'document', id: documentId, title: 'Paper' },
+        { kind: 'notes', id: documentId, title: 'Paper' },
+        { kind: 'chat', id: documentId, title: 'Paper' }
+      ],
+      activeKey: `notes:${documentId}`,
+      storageKey: `notes:${documentId}`,
+      gardenKey: null
+    }
+    await store.save(toolLayout)
+    await expect(store.load()).resolves.toEqual({ layout: toolLayout })
+    await expect(store.save({ ...toolLayout, module: 'Garden' })).rejects.toThrow('INVALID_LAYOUT')
+    await expect(store.save({ ...toolLayout, tabs: [{ kind: 'other', id: documentId }] })).rejects.toThrow('INVALID_LAYOUT')
+  })
+})
+
 test('corrupt or structurally invalid layouts report invalid instead of loading', async () => {
   await withDirectory(async directory => {
     const store = new Layout(directory)

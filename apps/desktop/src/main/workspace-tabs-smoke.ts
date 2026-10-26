@@ -1,7 +1,9 @@
+import { createServer } from 'node:http'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type { Backend } from './backend'
+import type { Providers } from './providers'
 
 /** Drives the real renderer through the stage-1/2 tab flow in an isolated smoke workspace. */
 export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unknown> {
@@ -100,6 +102,44 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
 
     documentTab().click()
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'FINAL_READER')
+    const toolTab = kind => tabs().find(tab => tab.textContent.includes('Reader fixture') && tab.querySelector('.workspace-tab-kind')?.textContent === kind)
+    const documentTabCount = () => tabs().filter(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '文献' && tab.textContent.includes('Reader fixture')).length
+
+    button('展开为标签').click()
+    await waitFor(() => tabs().length === 5 && document.querySelector('.document-tool-view input[aria-label="文献内检索"]'), 'SEARCH_TOOL')
+    const searchToolTab = toolTab('检索')
+    const searchToolQuery = document.querySelector('.document-tool-view input[aria-label="文献内检索"]')?.value
+    button('返回阅读侧栏').click()
+    await waitFor(() => tabs().length === 4 && document.querySelector('.notes-sidebar input[aria-label="文献内检索"]'), 'SEARCH_BACK')
+    const searchBackQuery = document.querySelector('.notes-sidebar input[aria-label="文献内检索"]')?.value
+    const searchReturned = searchBackQuery === 'evidence'
+
+    button('笔记').click()
+    await waitFor(() => document.querySelector('.notes-sidebar .notes-panel'), 'NOTES_SIDEBAR')
+    button('展开为标签').click()
+    await waitFor(() => tabs().length === 5 && document.querySelector('.document-tool-view .notes-panel'), 'NOTES_TOOL')
+    const notesToolTab = toolTab('笔记')
+    button('返回阅读侧栏').click()
+    await waitFor(() => tabs().length === 4 && document.querySelector('.notes-sidebar .notes-panel'), 'NOTES_BACK')
+    const notesReturned = !!document.querySelector('.notes-sidebar .notes-panel')
+
+    button('问答').click()
+    await waitFor(() => document.querySelector('.notes-sidebar .chat-panel'), 'CHAT_SIDEBAR')
+    button('展开为标签').click()
+    await waitFor(() => tabs().length === 5 && document.querySelector('.document-tool-view .chat-panel'), 'CHAT_TOOL')
+    const chatToolTab = toolTab('问答')
+    const chatToolInput = !!document.querySelector('.document-tool-view [aria-label="研究问题"]')
+    button('返回阅读侧栏').click()
+    await waitFor(() => tabs().length === 4 && document.querySelector('.notes-sidebar .chat-panel'), 'CHAT_BACK')
+    const chatReturned = !!document.querySelector('.notes-sidebar .chat-panel')
+
+    const toolHosts = {
+      search: { tabOpened: !!searchToolTab, sharedQuery: searchToolQuery, returned: searchReturned },
+      notes: { tabOpened: !!notesToolTab, returned: notesReturned },
+      chat: { tabOpened: !!chatToolTab, inputVisible: chatToolInput, returned: chatReturned },
+      tabsAfterReturn: tabs().length,
+      documentTabCount: documentTabCount()
+    }
     const semanticTab = document.querySelector('.workspace-tab[aria-selected="true"]')
     const tablist = document.querySelector('[role="tablist"]')
     const panel = document.querySelector('[role="tabpanel"]')
@@ -125,6 +165,7 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
       topicAInstructionBack,
       topicBInstruction,
       topicTitleUpdated,
+      toolHosts,
       documentBQuery,
       documentAQueryBack,
       documentAPageBack,
@@ -235,6 +276,90 @@ export async function runWorkspaceTabsFaultSmoke(window: BrowserWindow, backend:
   })()`)
 }
 
+/** Uses owned loopback models to verify a tool-tab citation opens the correct reading tab and page. */
+export async function runWorkspaceCitationSmoke(window: BrowserWindow, providers: Providers): Promise<unknown> {
+  const calls: Array<{ path: string; body: unknown }> = []
+  const server = createServer((req, res) => {
+    let raw = ''
+    req.on('data', part => raw += part)
+    req.on('end', () => {
+      const body = JSON.parse(raw)
+      calls.push({ path: req.url ?? '', body })
+      if (req.url?.endsWith('/embeddings')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ data: body.input.map((_text: string, index: number) => ({ index, embedding: [1, 0] })) }))
+        return
+      }
+      const system = body.messages[0].content, data = JSON.parse(body.messages[1].content)
+      let text: string
+      if (system.includes('筛选器')) {
+        const parsed = JSON.parse(data.question)
+        text = JSON.stringify({ items: parsed.candidates.map((item: { id: string }) => ({ id: item.id, sentence: 0 })) })
+      } else if (system.includes('改写')) text = JSON.stringify({ query: 'English evidence' })
+      else text = 'English fixture evidence [S1].'
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n')
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+    for (const kind of ['chat', 'embedding'] as const) {
+      const old = (await providers.list()).find(config => config.kind === kind)
+      await providers.save({ kind, version: old?.version ?? 0, base_url: url, model: 'local-tabs-fixture', key: `${kind}-tabs-key` })
+    }
+    const result = await window.webContents.executeJavaScript(`(async()=>{
+      const waitFor=async(predicate,label)=>{const end=Date.now()+30000;while(Date.now()<end){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('CITATION_TIMEOUT_'+label)}
+      const button=text=>[...document.querySelectorAll('button')].find(element=>element.textContent===text)
+      const tabs=()=>[...document.querySelectorAll('.workspace-tab')]
+      const kind=tab=>tab.querySelector('.workspace-tab-kind')?.textContent
+      const setValue=(element,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,value);element.dispatchEvent(new Event('input',{bubbles:true}))}
+      const readingTab=()=>tabs().find(tab=>tab.textContent.includes('Reader fixture')&&kind(tab)==='文献')
+      const searchToolTab=()=>tabs().find(tab=>tab.textContent.includes('Reader fixture')&&kind(tab)==='检索')
+      await waitFor(()=>tabs().length===4,'RESTORE')
+      await waitFor(()=>document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'),'READER')
+      const previous=document.querySelector('[aria-label="上一页"]')
+      if(previous&&!previous.disabled){previous.click();await waitFor(()=>document.querySelector('input[aria-label="物理页码"]')?.value==='1','PAGE_ONE')}
+      const startPage=document.querySelector('input[aria-label="物理页码"]')?.value
+      button('检索').click()
+      await waitFor(()=>document.querySelector('.notes-sidebar input[aria-label="文献内检索"]'),'SEARCH')
+      setValue(document.querySelector('.notes-sidebar input[aria-label="文献内检索"]'),'English evidence')
+      await waitFor(()=>!button('搜索').disabled,'SEARCH_ENABLED')
+      button('搜索').click()
+      await waitFor(()=>document.querySelector('.search-hit'),'HIT')
+      const hitPage=Number(document.querySelector('.search-hit small')?.textContent.match(/\\d+/)?.[0])
+      button('展开为标签').click()
+      await waitFor(()=>tabs().length===5&&document.querySelector('.document-tool-view .search-hit'),'TOOL')
+      const toolHits=document.querySelectorAll('.document-tool-view .search-hit').length
+      document.querySelector('.document-tool-view .search-hit button:last-child').click()
+      await waitFor(()=>readingTab()?.getAttribute('aria-selected')==='true'&&document.querySelector('input[aria-label="物理页码"]')?.value===String(hitPage),'JUMP')
+      const jumpPage=document.querySelector('input[aria-label="物理页码"]')?.value
+      readingTab().parentElement.querySelector('.workspace-tab-close').click()
+      await waitFor(()=>tabs().length===4,'CLOSE_READING')
+      searchToolTab().click()
+      await waitFor(()=>document.querySelector('.document-tool-view .search-hit'),'TOOL_AGAIN')
+      document.querySelector('.document-tool-view .search-hit button:last-child').click()
+      await waitFor(()=>tabs().length===5,'CREATE_READING')
+      await waitFor(()=>readingTab()?.getAttribute('aria-selected')==='true'&&document.querySelector('input[aria-label="物理页码"]')?.value===String(hitPage),'JUMP_CREATED')
+      return {
+        startPage,
+        hitPage,
+        toolHits,
+        jumpPage,
+        readingSelectedAfterJump:true,
+        readingRecreated:!!readingTab(),
+        searchToolKept:!!searchToolTab(),
+        tabCountAfterCreate:tabs().length,
+        otherDocumentKept:tabs().some(tab=>/synthetic study b/i.test(tab.textContent))
+      }
+    })()`)
+    return { ...(result as Record<string, unknown>), modelRequests: calls.length }
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  }
+}
+
 /** Checks chat input and Garden directory/editor fit at the two requested workstation sizes. */
 export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: string): Promise<unknown> {
   const ui = (code: string) => window.webContents.executeJavaScript(`(async()=>{
@@ -243,7 +368,7 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   })()`)
   const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
   const sizes: Array<[number, number]> = [[1280, 720], [1440, 900]]
-  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown } = { chat: [], garden: [] }
+  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown; tool?: unknown[] } = { chat: [], garden: [] }
   await ui(`document.querySelector('.chat-toggle').click();await wait(()=>document.querySelector('[aria-label="研究问题"]'),'CHAT')`)
   for (const [width, height] of sizes) {
     window.setContentSize(width, height)
@@ -285,12 +410,50 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   await ui(`const close=[...document.querySelectorAll('.notes-overlay button')].find(button=>button.textContent==='关闭');close.click();await wait(()=>!document.querySelector('.notes-overlay'),'OVERLAY_CLOSE');await new Promise(resolve=>setTimeout(resolve,150))`)
   const focusReturned = await window.webContents.executeJavaScript(`document.activeElement?.classList.contains('chat-toggle') ?? false`)
   result.narrow = { ...narrow, focusReturned }
+  await ui(`document.querySelector('.chat-toggle').click();await wait(()=>document.querySelector('.notes-heading-actions'),'SIDEBAR');[...document.querySelectorAll('.notes-heading-actions button')].find(button=>button.title==='展开为标签').click();await wait(()=>document.querySelector('.document-tool-view .chat-panel'),'TOOL')`)
+  result.tool = []
+  for (const [width, height] of sizes) {
+    window.setContentSize(width, height)
+    await pause(800)
+    const check = await window.webContents.executeJavaScript(`(() => {
+      const inside = element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }
+      const tool = document.querySelector('.document-tool-view')
+      const header = document.querySelector('.document-tool-header')
+      const body = document.querySelector('.document-tool-body')
+      const input = document.querySelector('.document-tool-view [aria-label="研究问题"]')
+      return { width: innerWidth, height: innerHeight, toolVisible: !!tool && inside(tool), headerVisible: !!header && inside(header), bodyVisible: !!body && inside(body), inputVisible: !!input && inside(input), horizontalOverflow: document.documentElement.scrollWidth > innerWidth }
+    })()`)
+    ;(result.tool as unknown[]).push(check)
+    await writeFile(join(reportDir, `tool-chat-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
+  }
+  await ui(`[...document.querySelectorAll('button')].find(button=>button.textContent==='返回阅读侧栏').click();await wait(()=>document.querySelector('.notes-sidebar .chat-panel'),'TOOL_BACK')`)
   await writeFile(join(reportDir, 'layout-panels.json'), JSON.stringify(result, null, 2))
   const chatOk = result.chat.every((item: any) => item.inputVisible && item.panelVisible && !item.horizontalOverflow)
   const gardenOk = result.garden.every((item: any) => item.workspaceVisible && item.directoryVisible && item.contentVisible && item.editor && !item.horizontalOverflow)
   const narrowOk = (result.narrow as any).overlayVisible && (result.narrow as any).inputVisible && !(result.narrow as any).horizontalOverflow && focusReturned
-  if (!chatOk || !gardenOk || !narrowOk) throw new Error('PANEL_LAYOUT_FAILED')
+  const toolOk = (result.tool as any[]).every(item => item.toolVisible && item.headerVisible && item.bodyVisible && item.inputVisible && !item.horizontalOverflow)
+  if (!chatOk || !gardenOk || !narrowOk || !toolOk) throw new Error('PANEL_LAYOUT_FAILED')
   return result
+}
+
+/** Checks a restored search tool tab can render and return to the reader. */
+export async function runWorkspaceTabsToolResumeSmoke(window: BrowserWindow): Promise<unknown> {
+  return window.webContents.executeJavaScript(`(async()=>{
+    const waitFor=async(predicate,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('TOOL_RESUME_TIMEOUT_'+label)}
+    const tabs=()=>[...document.querySelectorAll('.workspace-tab')]
+    const kind=tab=>tab.querySelector('.workspace-tab-kind')?.textContent
+    const findTab=value=>tabs().find(tab=>tab.textContent.includes('Reader fixture')&&kind(tab)===value)
+    await waitFor(()=>findTab('文献')?.getAttribute('aria-selected')==='true','ACTIVE')
+    await waitFor(()=>document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'),'READER')
+    const tabCount=tabs().length
+    const titles=tabs().map(tab=>tab.textContent)
+    findTab('检索').click()
+    await waitFor(()=>document.querySelector('.document-tool-view .search-panel'),'TOOL')
+    const toolHeader=document.querySelector('.document-tool-view')?.textContent??''
+    findTab('文献').click()
+    await waitFor(()=>document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'),'RETURN')
+    return {tabCount,titles,searchToolRestored:!!findTab('检索'),toolOpened:!!toolHeader,readerPage:document.querySelector('input[aria-label="物理页码"]')?.value??'',active:document.querySelector('.workspace-tab[aria-selected="true"]')?.textContent??''}
+  })()`)
 }
 
 /** Checks the layout restored from the previous run in the same isolated workspace. */

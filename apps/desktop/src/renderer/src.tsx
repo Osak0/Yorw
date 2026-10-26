@@ -8,7 +8,7 @@ import { House } from './House'
 import { Storage } from './Storage'
 import { documentHasUnsavedNotes, hasUnsavedNotes, notebookFor, unsavedDocumentIds } from './notebook'
 import { sessionStore } from './session-state'
-import { addWorkspaceTab, documentTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, topicTab, type WorkspaceTab } from './workspace-tabs'
+import { addWorkspaceTab, documentTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, toolTab, topicTab, type StorageTool, type WorkspaceTab } from './workspace-tabs'
 declare global { interface Window { yorw: DesktopBridge } }
 type Module = 'Storage' | 'Garden' | 'House'
 type CloseChoice = 'save' | 'discard' | 'cancel'
@@ -27,6 +27,8 @@ function App() {
   const [closePrompt, setClosePrompt] = useState<WorkspaceTab | null>(null)
   const [unsaved, setUnsaved] = useState<{ documents: Set<string>; topics: Set<string> }>(() => ({ documents: new Set(), topics: new Set() }))
   const [layoutRevision, setLayoutRevision] = useState(0)
+  const [pendingJump, setPendingJump] = useState<{ documentId: string; page: number; sequence: number } | null>(null)
+  const jumpSequence = useRef(0)
   const restored = useRef(false)
   const closeResolver = useRef<((choice: CloseChoice) => void) | null>(null)
   const closeDialog = useRef<HTMLDivElement>(null)
@@ -34,7 +36,9 @@ function App() {
   const navRefs = useRef(new Map<Module, HTMLButtonElement>())
   const sidebarRevision = useRef('')
   const saveNotice = useRef(false)
-  const storageDocumentId = storageKey ? tabs.find(tab => tab.key === storageKey)?.id ?? null : null
+  const storageTab = storageKey ? tabs.find(tab => tab.key === storageKey) : undefined
+  const storageDocumentId = storageTab && storageTab.kind !== 'topic' ? storageTab.id : null
+  const storageTool: 'document' | StorageTool | null = storageTab && storageTab.kind !== 'topic' ? storageTab.kind : null
   const gardenTopicId = gardenKey ? tabs.find(tab => tab.key === gardenKey)?.id ?? null : null
   useEffect(() => {
     let active = true
@@ -92,7 +96,7 @@ function App() {
         const activeTab = active ? restoredTabs.find(tab => tab.key === active) : undefined
         setTabs(restoredTabs)
         setActiveKey(active)
-        setStorageKey(layout.storageKey && restoredTabs.some(tab => tab.key === layout.storageKey && tab.kind === 'document') ? layout.storageKey : null)
+        setStorageKey(layout.storageKey && restoredTabs.some(tab => tab.key === layout.storageKey && tab.kind !== 'topic') ? layout.storageKey : null)
         setGardenKey(layout.gardenKey && restoredTabs.some(tab => tab.key === layout.gardenKey && tab.kind === 'topic') ? layout.gardenKey : null)
         setModule(activeTab ? moduleForTab(activeTab) : layout.module)
         if (layout.sidebar) sessionStore().applySidebarPreference(layout.sidebar)
@@ -110,7 +114,7 @@ function App() {
       module,
       tabs: tabs.map(tab => ({ kind: tab.kind, id: tab.id, title: tab.title })),
       activeKey: activeKey && tabs.some(tab => tab.key === activeKey) ? activeKey : null,
-      storageKey: storageKey && tabs.some(tab => tab.key === storageKey && tab.kind === 'document') ? storageKey : null,
+      storageKey: storageKey && tabs.some(tab => tab.key === storageKey && tab.kind !== 'topic') ? storageKey : null,
       gardenKey: gardenKey && tabs.some(tab => tab.key === gardenKey && tab.kind === 'topic') ? gardenKey : null,
       sidebar: sessionStore().sidebarPreferenceFor(storageDocumentId),
       directoryCollapsed: false
@@ -137,7 +141,7 @@ function App() {
     setTabs(previous => {
       let changed = false
       const next = previous.map(tab => {
-        if (tab.kind !== 'document') return tab
+        if (tab.kind === 'topic') return tab
         const title = titles.get(tab.id)
         if (title !== undefined && title !== tab.title) { changed = true; return { ...tab, title } }
         return tab
@@ -162,14 +166,14 @@ function App() {
     setTabs(previous => addWorkspaceTab(previous, tab))
     setActiveKey(tab.key)
     setModule(moduleForTab(tab))
-    if (tab.kind === 'document') setStorageKey(tab.key)
-    else setGardenKey(tab.key)
+    if (tab.kind === 'topic') setGardenKey(tab.key)
+    else setStorageKey(tab.key)
   }
   function activateTab(tab: WorkspaceTab) {
     setActiveKey(tab.key)
     setModule(moduleForTab(tab))
-    if (tab.kind === 'document') setStorageKey(tab.key)
-    else setGardenKey(tab.key)
+    if (tab.kind === 'topic') setGardenKey(tab.key)
+    else setStorageKey(tab.key)
     requestAnimationFrame(() => tabRefs.current.get(tab.key)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
   }
   function showModule(name: Module) {
@@ -180,7 +184,8 @@ function App() {
   }
   function showLibrary() { setStorageKey(null); setActiveKey(null) }
   function tabIsUnsaved(tab: WorkspaceTab) {
-    return tab.kind === 'document' ? documentHasUnsavedNotes(tab.id) : gardenBook().hasUnsavedTopic(tab.id)
+    if (tab.kind === 'topic') return gardenBook().hasUnsavedTopic(tab.id)
+    return tab.kind === 'document' || tab.kind === 'notes' ? documentHasUnsavedNotes(tab.id) : false
   }
   function askClose(tab: WorkspaceTab): Promise<CloseChoice> {
     if (!tabIsUnsaved(tab)) return Promise.resolve('discard')
@@ -193,20 +198,54 @@ function App() {
     resolve?.(choice)
   }
   async function saveTab(tab: WorkspaceTab): Promise<boolean> {
-    if (tab.kind === 'document') {
+    if (tab.kind === 'document' || tab.kind === 'notes') {
       const notebook = notebookFor(tab.id)
       await notebook.saveAll()
       return !notebook.hasUnsaved()
     }
-    const book = gardenBook()
-    await book.save(tab.id)
-    const draft = book.getSnapshot().drafts[tab.id]
-    return !draft || (!wikiDirty(draft) && !draft.saving)
+    if (tab.kind === 'topic') {
+      const book = gardenBook()
+      await book.save(tab.id)
+      const draft = book.getSnapshot().drafts[tab.id]
+      return !draft || (!wikiDirty(draft) && !draft.saving)
+    }
+    return true
   }
   function discardTab(tab: WorkspaceTab) {
-    if (tab.kind === 'document') notebookFor(tab.id).discardAll()
-    else gardenBook().discardTopic(tab.id)
+    if (tab.kind === 'document' || tab.kind === 'notes') notebookFor(tab.id).discardAll()
+    else if (tab.kind === 'topic') gardenBook().discardTopic(tab.id)
   }
+  function expandTool(document: DocumentRecord, tool: StorageTool) {
+    const title = document.title || document.original_name
+    const key = `${tool}:${document.id}`
+    setTabs(previous => addWorkspaceTab(previous, toolTab(tool, document.id, title)))
+    setActiveKey(key)
+    setStorageKey(key)
+    setModule('Storage')
+    sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
+  }
+  function collapseTool(document: DocumentRecord, tool: StorageTool) {
+    const title = document.title || document.original_name
+    const documentKey = `document:${document.id}`
+    setTabs(previous => addWorkspaceTab(previous.filter(tab => tab.key !== `${tool}:${document.id}`), documentTab(document.id, title)))
+    setActiveKey(documentKey)
+    setStorageKey(documentKey)
+    setModule('Storage')
+    sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
+  }
+  function openDocumentAt(document: DocumentRecord, page: number) {
+    const title = document.title || document.original_name
+    const key = `document:${document.id}`
+    setTabs(previous => addWorkspaceTab(previous, documentTab(document.id, title)))
+    setActiveKey(key)
+    setStorageKey(key)
+    setModule('Storage')
+    const sequence = ++jumpSequence.current
+    setPendingJump({ documentId: document.id, page, sequence })
+  }
+  const clearJump = useCallback((sequence: number) => {
+    setPendingJump(current => current && current.sequence === sequence ? null : current)
+  }, [])
   async function closeTab(tab: WorkspaceTab): Promise<boolean> {
     const choice = await askClose(tab)
     if (choice === 'cancel') return false
@@ -247,9 +286,9 @@ function App() {
     if (!keep) { setActiveKey(null); setStorageKey(null); setGardenKey(null); return }
     setActiveKey(keep.key)
     setModule(moduleForTab(keep))
-    const keepDocument = keep.kind === 'document' ? keep : remaining.find(item => item.key === storageKey && item.kind === 'document')
+    const keepStorage = keep.kind !== 'topic' ? keep : remaining.find(item => item.key === storageKey && item.kind !== 'topic')
     const keepTopic = keep.kind === 'topic' ? keep : remaining.find(item => item.key === gardenKey && item.kind === 'topic')
-    setStorageKey(keepDocument?.key ?? null)
+    setStorageKey(keepStorage?.key ?? null)
     setGardenKey(keepTopic?.key ?? null)
     requestAnimationFrame(() => tabRefs.current.get(keep.key)?.focus())
   }
@@ -277,9 +316,9 @@ function App() {
     <header className="app-header"><div className="app-brand"><strong>知栖 <span>Yorw</span></strong></div><nav className="module-nav" aria-label="工作区">{MODULES.map(name => <button key={name} ref={element => { if (element) navRefs.current.set(name, element); else navRefs.current.delete(name) }} aria-current={module === name ? 'page' : undefined} onClick={() => showModule(name)}>{name}</button>)}</nav></header>
     <div className="workspace-tabbar">
       {tabs.length ? <div className="workspace-tablist" role="tablist" aria-label="工作标签">{tabs.map(tab => <div className={`workspace-tab-item${activeKey === tab.key ? ' active' : ''}`} role="presentation" key={tab.key}>
-        <button type="button" role="tab" id={`tab-${tab.key}`} data-tab-key={tab.key} aria-selected={activeKey === tab.key} aria-controls={tab.kind === 'document' ? 'storage-panel' : 'garden-panel'} tabIndex={tab.key === tabStopKey ? 0 : -1} className="workspace-tab" title={`${tabKindLabel(tab)} · ${tab.title}`} ref={element => { if (element) tabRefs.current.set(tab.key, element); else tabRefs.current.delete(tab.key) }} onClick={() => activateTab(tab)} onKeyDown={event => onTabKeyDown(event, tab)}>
+        <button type="button" role="tab" id={`tab-${tab.key}`} data-tab-key={tab.key} aria-selected={activeKey === tab.key} aria-controls={tab.kind === 'topic' ? 'garden-panel' : 'storage-panel'} tabIndex={tab.key === tabStopKey ? 0 : -1} className="workspace-tab" title={`${tabKindLabel(tab)} · ${tab.title}`} ref={element => { if (element) tabRefs.current.set(tab.key, element); else tabRefs.current.delete(tab.key) }} onClick={() => activateTab(tab)} onKeyDown={event => onTabKeyDown(event, tab)}>
           <span className="workspace-tab-title">{tab.title}</span><span className="workspace-tab-kind">{tabKindLabel(tab)}</span>
-          {(tab.kind === 'document' ? unsaved.documents.has(tab.id) : unsaved.topics.has(tab.id)) && <span className="workspace-tab-dirty" aria-label="有未保存内容" title="有未保存内容">●</span>}
+          {((tab.kind === 'document' || tab.kind === 'notes') ? unsaved.documents.has(tab.id) : tab.kind === 'topic' ? unsaved.topics.has(tab.id) : false) && <span className="workspace-tab-dirty" aria-label="有未保存内容" title="有未保存内容">●</span>}
         </button>
         <button type="button" className="workspace-tab-close" aria-label={`关闭${tabKindLabel(tab)} ${tab.title}`} title={`关闭${tabKindLabel(tab)}`} onClick={event => { event.stopPropagation(); void closeTab(tab) }}>×</button>
       </div>)}</div> : <span className="workspace-tab-empty">打开文献或专题后，在这里切换</span>}
@@ -288,7 +327,7 @@ function App() {
     {layoutNotice && <p role="status" className="app-notice">{layoutNotice}<button onClick={() => setLayoutNotice('')}>关闭提示</button></p>}
     {status.state !== 'ready' && <p role="status" className={`app-status ${status.state}`}>{status.message}</p>}
     {(status.state === 'ready' || started) && (layoutReady ? <main className="app-main">
-      <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab?.kind === 'document' ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab?.kind === 'document' ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
+      <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab && activeTab.kind !== 'topic' ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab && activeTab.kind !== 'topic' ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} activeTool={storageTool} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onOpenTool={(tool, document) => expandTool(document, tool)} onCollapseTool={(tool, document) => collapseTool(document, tool)} onNavigate={(document, page) => openDocumentAt(document, page)} onShowNotes={document => expandTool(document, 'notes')} pendingJump={pendingJump} onJumpApplied={clearJump} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
       <div className="module-view" id="garden-panel" role={module === 'Garden' && activeTab?.kind === 'topic' ? 'tabpanel' : undefined} aria-labelledby={module === 'Garden' && activeTab?.kind === 'topic' ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Garden'}><Garden activeTopicId={gardenTopicId} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} onTitles={updateTopicTitles} /></div>
       <div className="module-view house-view" hidden={module !== 'House'}><House active={module === 'House'} /></div>
     </main> : <p className="app-status" role="status">正在恢复工作标签…</p>)}

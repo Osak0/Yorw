@@ -10,8 +10,7 @@ GlobalWorkerOptions.workerSrc = workerUrl
 const asset = (directory: string) => new URL(`./pdf-assets/${directory}/`, window.location.href).href
 const errorMessage = (code: string) => ({ DOCUMENT_FILE_MISSING: '受管 PDF 副本不存在，请返回文献库重新导入。', DOCUMENT_NOT_FOUND: '文献已被移除，请返回文献库。', PAGE_COUNT_UNAVAILABLE: '当前后端尚无有效页数，阅读位置暂时无法保存。', INVALID_PAGE: '页码超出有效范围。' }[code] ?? '操作失败，请检查本地服务后重试。')
 
-export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSearch, searchOpen, onChat, chatOpen, jump }: {document: DocumentRecord; onClose(): void; onNotes(): void; notesOpen: boolean; onSearch(): void; searchOpen: boolean; onChat(): void; chatOpen:boolean; jump?:{page:number;sequence:number}}) {
-  useEffect(()=>{if(jump)go(jump.page)},[jump])
+export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSearch, searchOpen, onChat, chatOpen, jump, onJumpApplied }: {document: DocumentRecord; onClose(): void; onNotes(): void; notesOpen: boolean; onSearch(): void; searchOpen: boolean; onChat(): void; chatOpen:boolean; jump?:{page:number;sequence:number}; onJumpApplied?(sequence:number):void}) {
   const session = useDocumentSession(record.id)
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [page, setPage] = useState(session.page ?? 1)
@@ -32,6 +31,11 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
   const saveSequence = useRef(0)
   useEffect(() => { if (pdf) sessionStore().updateDocument(record.id, { page }) }, [pdf, page, record.id])
   useEffect(() => { sessionStore().updateDocument(record.id, { zoom }) }, [zoom, record.id])
+  useEffect(() => {
+    if (!jump || !pdf) return
+    go(jump.page)
+    onJumpApplied?.(jump.sequence)
+  }, [jump, pdf, onJumpApplied])
   useEffect(() => {
     const element = viewport.current!
     const observer = new ResizeObserver(entries => { if (entries[0].contentRect.width > 0) setWidth(entries[0].contentRect.width) })

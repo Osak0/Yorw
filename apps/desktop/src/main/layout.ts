@@ -5,6 +5,7 @@ import type { WorkspaceLayout, WorkspaceLayoutModule, WorkspaceLayoutSidebarMode
 
 const MODULES = new Set<WorkspaceLayoutModule>(['Storage', 'Garden', 'House'])
 const SIDEBAR_MODES = new Set<WorkspaceLayoutSidebarMode>(['notes', 'search', 'chat'])
+const TAB_KINDS = new Set(['document', 'topic', 'notes', 'search', 'chat'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_TABS = 50
 const MAX_TITLE = 500
@@ -23,23 +24,24 @@ function validate(value: unknown): WorkspaceLayout | null {
   for (const item of input.tabs) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null
     const tab = item as Record<string, unknown>
-    if (tab.kind !== 'document' && tab.kind !== 'topic') return null
+    if (typeof tab.kind !== 'string' || !TAB_KINDS.has(tab.kind)) return null
     if (typeof tab.id !== 'string' || !UUID.test(tab.id)) return null
     if (tab.title !== undefined && (typeof tab.title !== 'string' || tab.title.length > MAX_TITLE)) return null
-    const key = tabKey({ kind: tab.kind, id: tab.id })
+    const kind = tab.kind as WorkspaceLayoutTab['kind']
+    const key = tabKey({ kind, id: tab.id })
     if (keys.has(key)) return null
     keys.add(key)
-    tabs.push({ kind: tab.kind, id: tab.id, ...(tab.title === undefined ? {} : { title: tab.title }) })
+    tabs.push({ kind, id: tab.id, ...(tab.title === undefined ? {} : { title: tab.title }) })
   }
   if (input.activeKey !== null && typeof input.activeKey !== 'string') return null
   const activeKey = input.activeKey as string | null
   if (activeKey !== null && !keys.has(activeKey)) return null
-  if (activeKey !== null && (activeKey.startsWith('document:') ? 'Storage' : 'Garden') !== input.module) return null
+  if (activeKey !== null && (activeKey.startsWith('topic:') ? 'Garden' : 'Storage') !== input.module) return null
   if (input.storageKey !== null && typeof input.storageKey !== 'string') return null
   if (input.gardenKey !== null && typeof input.gardenKey !== 'string') return null
   const storageKey = input.storageKey as string | null
   const gardenKey = input.gardenKey as string | null
-  if (storageKey !== null && !tabs.some(tab => tabKey(tab) === storageKey && tab.kind === 'document')) return null
+  if (storageKey !== null && !tabs.some(tab => tabKey(tab) === storageKey && tab.kind !== 'topic')) return null
   if (gardenKey !== null && !tabs.some(tab => tabKey(tab) === gardenKey && tab.kind === 'topic')) return null
   let sidebar: WorkspaceLayout['sidebar']
   if (input.sidebar !== undefined) {
