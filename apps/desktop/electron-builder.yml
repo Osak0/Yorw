@@ -14,6 +14,10 @@ extraResources:
     to: help/known-limitations.md
   - from: ../../docs/review-feedback.md
     to: help/review-feedback.md
+  - from: ../../docs/qa/v0.2.0-retrieval-cases.md
+    to: help/qa/v0.2.0-retrieval-cases.md
+  - from: ../../docs/releases/v0.2.0.md
+    to: help/releases/v0.2.0.md
 win:
   target: nsis
   artifactName: Yorw-Setup-${version}-${arch}.${ext}

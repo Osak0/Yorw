@@ -41,3 +41,16 @@ test('fixed decision routes reject renderer path and body injection',()=>{
  expect(()=>garden.restore({id,revision_id:'../escape',request_id:id,base_revision_id:id})).toThrow('INVALID_INPUT')
  expect(()=>garden.accept({id,request_id:id,base_revision_id:id,body_md:'x'.repeat(200001)})).toThrow('INVALID_INPUT')
 })
+
+test('editing a recoverable draft uses the guarded save and preserves the original partial record',async()=>{
+ const {book,bridge}=setup();await book.select(id)
+ const partial={...suggestion,status:'partial',error_code:'OUTPUT_TRUNCATED',recoverable:true}
+ const review={suggestion:partial,current:view(),body:partial.body_md,requestId:id}
+ book.review(id,review);book.editReview(id,'Manually completed [S1]')
+ const edited=book.getSnapshot().reviews[id]
+ vi.mocked(bridge.accept).mockResolvedValue({ok:true,value:{view:view(edited.body,'new'),decision:{action:'accept',request_id:edited.requestId,revision_id:'new',suggestion_id:id}}})
+ await book.decide(id,'accept',edited)
+ expect(book.getSnapshot().drafts[id]).toMatchObject({body:'Manually completed [S1]',savedBody:'Manually completed [S1]',base:'new'})
+ expect(partial).toMatchObject({body_md:'Original [S1]',status:'partial',error_code:'OUTPUT_TRUNCATED'})
+ expect(book.hasUnsaved()).toBe(false)
+})

@@ -2,6 +2,7 @@
 import json
 import re
 from uuid import UUID, uuid4
+from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from .garden import Garden
@@ -16,6 +17,7 @@ class Decision(BaseModel):
 
 class Accept(Decision):
     body_md: str = Field(min_length=1, max_length=200_000, strict=True)
+    apply_mode: Literal['append', 'replace'] = 'replace'
 
 
 class WikiReview:
@@ -29,7 +31,10 @@ class WikiReview:
         if not rows:
             return None
         row = rows[0]
-        if row['action'] != action or row['topic_id'] != topic or row['suggestion_id'] != suggestion or json.loads(row['request_json']) != value.model_dump(mode='json'):
+        previous = json.loads(row['request_json'])
+        if action == 'accept':
+            previous.setdefault('apply_mode', 'replace')
+        if row['action'] != action or row['topic_id'] != topic or row['suggestion_id'] != suggestion or previous != value.model_dump(mode='json'):
             raise HTTPException(409, detail='REQUEST_CONFLICT')
         # Return current pointer as well as the original operation's revision, never replay it.
         return self._result(row)
@@ -51,7 +56,7 @@ class WikiReview:
                 return retry
             if self.garden._rows('SELECT request_id FROM wiki_decisions WHERE suggestion_id=?', (identity,)):
                 raise HTTPException(409, detail='SUGGESTION_DECIDED')
-            if item['status'] != 'completed':
+            if item['status'] != 'completed' and not item['recoverable']:
                 raise HTTPException(409, detail='SUGGESTION_NOT_READY')
             current = self.garden.get(topic)['revision']
             if current['id'] != str(value.base_revision_id):
@@ -66,7 +71,19 @@ class WikiReview:
             if not value.body_md.strip() or not refs or any(n < 1 or n > len(item['sources']) for n in refs):
                 raise HTTPException(422, detail='INVALID_CITATION')
             raw = conn.execute('SELECT sources_json FROM suggestions WHERE id=?', (identity,)).fetchone()[0]
-            revision = self._insert(conn, topic, current, value.body_md, raw, 'ai_accepted')
+            body = value.body_md
+            if value.apply_mode == 'append':
+                previous = json.loads(conn.execute('SELECT sources_json FROM revisions WHERE id=?', (current['id'],)).fetchone()[0])
+                numbers = [int(n) for n in re.findall(r'\[S(\d+)\]', current['body_md'])]
+                numbers += [int(match.group(1)) for source in previous if isinstance(source, dict) and (match := re.fullmatch(r'S(\d+)', source.get('source_id', '')))]
+                offset = max([len(previous), *numbers])
+                body = re.sub(r'\[S(\d+)\]', lambda match: f'[S{int(match.group(1)) + offset}]', body)
+                additions = [{**source, 'source_id': f'S{i + 1 + offset}'} for i, source in enumerate(json.loads(raw))]
+                raw = json.dumps(previous + additions)
+                body = current['body_md'] + ('\n\n' if current['body_md'] else '') + body
+            if len(body) > 200000:
+                raise HTTPException(422, detail='INVALID_INPUT')
+            revision = self._insert(conn, topic, current, body, raw, 'ai_accepted')
             return self._record(conn, action, topic, identity, revision, value)
 
     def _insert(self, conn, topic, current, body, sources_json, origin, restored=None):

@@ -60,10 +60,10 @@ export class Backend {
       await this.stop()
     }
   }
-  async request(path: string, method = 'GET', body?: unknown, key?: string): Promise<any> {
+  async request(path: string, method = 'GET', body?: unknown, key?: string, credentials?:{chat:{key:string;version:number};embedding:{key:string;version:number}}): Promise<any> {
     if (this.status.state !== 'ready') throw new Error('BACKEND_NOT_READY')
     const response = await fetch(`http://127.0.0.1:${this.port}${path}`, {
-      method, headers: { Authorization: `Bearer ${this.token}`, ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'X-Provider-Key': key } : {}) },
+      method, headers: { Authorization: `Bearer ${this.token}`, ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'X-Provider-Key': key } : {}), ...(credentials?{'X-Chat-Key':credentials.chat.key,'X-Embedding-Key':credentials.embedding.key,'X-Chat-Version':String(credentials.chat.version),'X-Embedding-Version':String(credentials.embedding.version)}:{}) },
       body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body), signal: AbortSignal.timeout(20000)
     })
     if (!response.ok) {

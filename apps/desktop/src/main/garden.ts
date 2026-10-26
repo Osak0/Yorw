@@ -13,9 +13,10 @@ export class Garden {
  list(){return this.backend.request('/v1/topics')}
  get(value:unknown){return this.backend.request(`/v1/topics/${id(value)}`)}
  history(value:unknown){return this.backend.request(`/v1/topics/${id(value)}/revisions`)}
- accept(input:WikiDecisionInput&{id:string;body_md:string}){
+ accept(input:WikiDecisionInput&{id:string;body_md:string;apply_mode?:'append'|'replace'}){
   if(!input||typeof input.body_md!=='string'||!input.body_md.trim()||input.body_md.length>200000)throw new Error('INVALID_INPUT')
-  return this.backend.request(`/v1/suggestions/${id(input.id)}/accept`,'POST',{...this.decision(input),body_md:input.body_md})
+  if(input.apply_mode!==undefined&&!['append','replace'].includes(input.apply_mode))throw new Error('INVALID_INPUT')
+  return this.backend.request(`/v1/suggestions/${id(input.id)}/accept`,'POST',{...this.decision(input),body_md:input.body_md,...(input.apply_mode?{apply_mode:input.apply_mode}:{})})
  }
  reject(input:WikiDecisionInput&{id:string}){return this.backend.request(`/v1/suggestions/${id(input?.id)}/reject`,'POST',this.decision(input))}
  restore(input:WikiDecisionInput&{id:string;revision_id:string}){return this.backend.request(`/v1/topics/${id(input?.id)}/revisions/${id(input?.revision_id)}/restore`,'POST',this.decision(input))}

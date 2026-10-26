@@ -9,20 +9,26 @@
 ## 三个属于知栖的空间
 
 - **Storage**：积累研究材料与阅读过程。导入和管理 PDF、阅读与检索原文、记录 Markdown 笔记，进行带来源的问答。
-- **Garden**：让理解逐渐长成知识体系。从所选论文片段、笔记和讨论生成专题 Wiki 建议，经人工比较确认后采纳，保留来源与修订，支持历史回退。
+- **Garden**：让理解逐渐长成知识体系。描述要求后，从文献、笔记和 Wiki 自动整理草稿；编辑后追加或替换当前 Wiki，保留来源与修订，支持历史回退。
 - **House**：安放自己的研究工作区。分别配置聊天与 embedding 服务、查看数据位置，导出已保存笔记与 Wiki 的 Markdown 和来源清单。
 
-首版流程：**导入论文 → 阅读与问答 → 保存笔记 → 选材生成 Wiki → 比较确认 → 导出与重启继续。**
+当前开发版流程：**导入论文 → 搜索与问答 → 保存笔记 → 描述要求生成 Wiki 草稿 → 编辑采纳 → 导出与重启继续。**
 
 数据默认本地保存，但不等于完全离线：使用云端聊天或 embedding 时，相关文本发送至用户配置的服务商，可能计费。内容导出也不等于完整备份。
 
-## 本机 MVP 验证版
+## v0.2.0 本机 review 版
+
+2026-10-26 · 三项 AI 流程改进已实现，等待用户 review。搜索自动结合关键词与语义召回，展示短原文和跳页入口；问答自动准备材料并支持追问；Garden 自动选材、生成可编辑草稿。House 可关闭默认开启的语义检索。
+
+本机程序位于完整 `release/v0.2.0-review/win-unpacked/` 目录，安装器为 `release/v0.2.0-review/Yorw-Setup-0.2.0-x64.exe`。详见[发布说明](docs/releases/v0.2.0.md)、[完整验证记录](docs/dev-evidence/v0.2.0-completion.md)及[使用指南](docs/user-guide.md)。尚未合并或公开发布；真实模型质量等待用户在 House 配置后验收。
+
+## v0.1.0 历史发布
 
 Windows x64 · 0.1.0。2026-10-25 本机 MVP 已通过步骤 14 review，已合并 main 并发布 [v0.1.0 预发布版本](https://github.com/Osak0/Yorw/releases/tag/v0.1.0)。按照用户选择，干净 Windows 机器的验收暂未执行。
 
 - 下载：[v0.1.0 发布页](https://github.com/Osak0/Yorw/releases/tag/v0.1.0)，安装器为 `Yorw-Setup-0.1.0-x64.exe`，已核对与步骤 14 验收包的 SHA256 一致。
 - 直接运行：完整 `release/step14-review/win-unpacked/` 目录中的 `Yorw.exe`，不能只复制单个 exe。
-- [使用指南](docs/user-guide.md) · [已知限制](docs/known-limitations.md) · [深度体验反馈模板](docs/review-feedback.md)。
+- [v0.1.0 发布说明](docs/releases/v0.1.0.md)保留该版验收与发布证据；当前[使用指南](docs/user-guide.md)和[已知限制](docs/known-limitations.md)面向 v0.2.0。
 
 本版未签名。分发目录附带使用文档、自编写样例和 SHA-256 清单；本机验证不等同于所有 Windows 环境均已通过。
 

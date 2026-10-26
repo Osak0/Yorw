@@ -1,8 +1,10 @@
 # 知栖 Yorw：MVP 开发与 Review 计划
 
-版本：v1 · 更新日期：2026-10-25
+版本：v1 + v0.2.0 改进 · 更新日期：2026-10-26
 
 状态：步骤 0–14 已通过用户 review 并合并 main。步骤 14 提交 efa63da 随 PR #12 合并（6937846）；2026-10-25 已发布 [v0.1.0 预发布版本](https://github.com/Osak0/Yorw/releases/tag/v0.1.0)，标签指向 6937846。按用户选择，干净 Windows 验收暂未执行，不宣称所有分发环境已通过。
+
+后续改进：[v0.2.0 AI 流程计划](docs/plans/v0.2.0-ai-workflows.md)已由用户确认，并进一步授权在新分支持续完成全部计划后统一 review。三阶段实现位于 `feature/ai-workflow-simplification`，包含草稿恢复、统一检索、一键问答及全工作区自动选材；[完整交付与验证记录](docs/dev-evidence/v0.2.0-completion.md)提供当前证据。等待用户 review，未提交、合并或公开发布。真实服务质量由用户在最终 review 程序的 House 配置后验收；本机流程验证不替代真实模型或干净 Windows 评估。下文步骤 0–14 保留 v0.1.0 历史范围，v0.2.0 的后续授权与变更以上述计划和完整记录为准。
 
 ## 1. 文档职责与接手入口
 

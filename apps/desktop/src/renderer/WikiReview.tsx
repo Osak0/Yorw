@@ -6,29 +6,32 @@ import {Sources} from './SuggestionsPanel'
 export function WikiReview({topicId}:{topicId:string}){
  const book=gardenBook(),state=useSyncExternalStore(book.subscribe,book.getSnapshot)
  const review=state.reviews[topicId],draft=state.drafts[topicId]
- const [confirmed,setConfirmed]=useState(false),[notice,setNotice]=useState('')
- useEffect(()=>{setConfirmed(false);setNotice('')},[review?.requestId,review?.suggestion.id,review?.current.revision.id,draft?.base])
+ const [notice,setNotice]=useState('')
+ useEffect(()=>setNotice(''),[review?.suggestion.id])
  if(!review)return null
  const {suggestion,current,body}=review
  const stale=current.revision.id!==suggestion.base_revision_id||draft.base!==current.revision.id
- const unavailable=suggestion.sources.some(s=>s.available===false)
- async function decide(action:'accept'|'reject'){
+ const unavailable=suggestion.sources.some(source=>source.available===false)
+ async function save(mode:'append'|'replace'){
   if(!review)return
-  if(action==='reject'&&!window.confirm('拒绝此建议？保留生成记录，正文不会变化。'))return
-  try{await book.decide(topicId,action,review);setConfirmed(false)}catch(e){setNotice(e instanceof Error?e.message:'操作失败，比较草稿已保留。')}
+  try{await book.decide(topicId,'accept',review,mode)}catch(error){setNotice(error instanceof Error?error.message:'保存失败，草稿已保留。')}
  }
- return <section className="wiki-review" aria-label="比较与确认建议"><h3>比较与确认建议</h3>
-  <p>将下方“确认后的正文”保存为新的完整修订；来源保留本次材料快照。请逐项核查编号与论断，引用存在不代表已验证。</p>
-  <div className="wiki-compare"><div><h4>生成时基础正文</h4><pre>{suggestion.base_body_md||'空白正文'}</pre></div><div><h4>比较时最新正文 · 修订 {current.revision.ordinal}</h4><pre>{current.revision.body_md||'空白正文'}</pre></div><div><h4>AI 原始建议</h4><pre>{suggestion.body_md}</pre></div></div>
-  {stale&&<p role="alert">建议基线已过期，禁止采纳；请基于最新正文重新生成。仍可拒绝旧建议。</p>}
-  {unavailable&&<p role="alert">材料版本失效，禁止采纳；原始快照仍可查看，请重新选材生成。</p>}
-  {wikiDirty(draft)&&<p>手工正文有未保存内容，请先保存或明确放弃，再采纳。</p>}
-  <label>确认后的正文<textarea aria-label="确认后的正文" disabled={draft.saving} value={body} maxLength={200000} onChange={e=>{book.editReview(topicId,e.target.value);setConfirmed(false)}}/></label>
-  <details><summary>预览确认后的正文</summary><MarkdownPreview body={body}/></details><Sources sources={suggestion.sources}/>
-  <label><input type="checkbox" checked={confirmed} disabled={draft.saving} onChange={e=>setConfirmed(e.target.checked)}/>我已比较正文、核查来源，确认将上述正文保存为新修订。</label>
-  <button className="primary" disabled={draft.saving||!confirmed||!body.trim()||stale||unavailable||wikiDirty(draft)} onClick={()=>void decide('accept')}>确认采纳并保存修订</button>
-  <button disabled={draft.saving} onClick={()=>void decide('reject')}>拒绝此建议</button>
-  <button disabled={draft.saving} onClick={()=>{if(body===suggestion.body_md||window.confirm('放弃本次对建议的未保存修改？原始建议保留。'))book.review(topicId,null)}}>关闭比较</button>
-  <p role="status">{notice}</p>
+ async function reject(){if(!review)return;try{await book.decide(topicId,'reject',review)}catch(error){setNotice(error instanceof Error?error.message:'操作失败。')}}
+ const blocked=draft.saving||!body.trim()||stale||unavailable||wikiDirty(draft)
+ return <section className="wiki-review" aria-label="编辑 AI 草稿"><h3>编辑草稿</h3>
+  {suggestion.recoverable&&<p>这份草稿尚未完成，可以在下方补全。原始生成记录继续保留。</p>}
+  {stale&&<p role="alert">正文已更新，请基于最新版本重新生成。当前草稿已保留。</p>}
+  {unavailable&&<p role="alert">来源内容已有变化，请重新生成后再保存。</p>}
+  {wikiDirty(draft)&&<p>正文有未保存修改，请先保存或载入已保存正文。</p>}
+  <label>草稿正文<textarea aria-label="确认后的正文" disabled={draft.saving} value={body} maxLength={200000} onChange={event=>book.editReview(topicId,event.target.value)}/></label>
+  <details><summary>预览草稿</summary><MarkdownPreview body={body}/></details>
+  <details><summary>查看来源</summary><Sources sources={suggestion.sources}/></details>
+  <details><summary>比较已有正文</summary><div className="wiki-compare"><div><h4>当前正文</h4><pre>{current.revision.body_md||'空白正文'}</pre></div><div><h4>原始草稿</h4><pre>{suggestion.body_md}</pre></div></div></details>
+  <div className="draft-actions">
+   <button className="primary" disabled={blocked} onClick={()=>void save('append')}>追加到正文</button>
+   <button disabled={blocked} onClick={()=>void save('replace')}>替换正文</button>
+   <button disabled={draft.saving} onClick={()=>void reject()}>忽略草稿</button>
+   <button disabled={draft.saving} onClick={()=>{if(body===suggestion.body_md||window.confirm('放弃本次对草稿的未保存编辑？'))book.review(topicId,null)}}>关闭草稿</button>
+  </div><p role="status">{notice}</p>
  </section>
 }
