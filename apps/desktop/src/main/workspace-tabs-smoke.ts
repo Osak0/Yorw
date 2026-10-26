@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type { Backend } from './backend'
 
@@ -231,6 +233,64 @@ export async function runWorkspaceTabsFaultSmoke(window: BrowserWindow, backend:
       status: document.querySelector('.app-status.failed')?.textContent ?? ''
     }
   })()`)
+}
+
+/** Checks chat input and Garden directory/editor fit at the two requested workstation sizes. */
+export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: string): Promise<unknown> {
+  const ui = (code: string) => window.webContents.executeJavaScript(`(async()=>{
+    const wait=async(predicate,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('LAYOUT_SMOKE_TIMEOUT_'+label)}
+    ${code}
+  })()`)
+  const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+  const sizes: Array<[number, number]> = [[1280, 720], [1440, 900]]
+  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown } = { chat: [], garden: [] }
+  await ui(`document.querySelector('.chat-toggle').click();await wait(()=>document.querySelector('[aria-label="研究问题"]'),'CHAT')`)
+  for (const [width, height] of sizes) {
+    window.setContentSize(width, height)
+    await pause(800)
+    const check = await window.webContents.executeJavaScript(`(() => {
+      const inside = element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }
+      const input = document.querySelector('[aria-label="研究问题"]')
+      const panel = document.querySelector('.chat-panel')
+      return { width: innerWidth, height: innerHeight, inputVisible: !!input && inside(input), panelVisible: !!panel && inside(panel), horizontalOverflow: document.documentElement.scrollWidth > innerWidth }
+    })()`)
+    result.chat.push(check)
+    await writeFile(join(reportDir, `chat-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
+  }
+  await ui(`document.querySelector('.module-nav button:nth-child(2)').click();await wait(()=>document.querySelector('[data-topic-id]'),'GARDEN');document.querySelector('[data-topic-id]').click();await wait(()=>document.querySelector('.garden-editor'),'EDITOR')`)
+  for (const [width, height] of sizes) {
+    window.setContentSize(width, height)
+    await pause(800)
+    const check = await window.webContents.executeJavaScript(`(() => {
+      const inside = element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }
+      const workspace = document.querySelector('.garden-workspace')
+      const directory = document.querySelector('.garden-directory')
+      const content = document.querySelector('.garden-content')
+      return { width: innerWidth, height: innerHeight, workspaceVisible: !!workspace && inside(workspace), directoryVisible: !!directory && inside(directory), contentVisible: !!content && inside(content), editor: !!document.querySelector('.garden-editor'), horizontalOverflow: document.documentElement.scrollWidth > innerWidth }
+    })()`)
+    result.garden.push(check)
+    await writeFile(join(reportDir, `garden-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
+  }
+  await ui(`const docTab=[...document.querySelectorAll('.workspace-tab')].find(tab=>tab.textContent.includes('Reader fixture'));docTab.click();await wait(()=>document.querySelector('.reader-feedback'),'DOC')`)
+  window.setContentSize(1024, 768)
+  await pause(800)
+  await ui(`await wait(()=>document.querySelector('.notes-overlay[open]'),'OVERLAY')`)
+  const narrow = await window.webContents.executeJavaScript(`(() => {
+    const inside = element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }
+    const overlay = document.querySelector('.notes-overlay[open]')
+    const input = document.querySelector('.notes-overlay [aria-label="研究问题"]')
+    return { width: innerWidth, height: innerHeight, overlayVisible: !!overlay && inside(overlay), inputVisible: !!input && inside(input), horizontalOverflow: document.documentElement.scrollWidth > innerWidth }
+  })()`)
+  await writeFile(join(reportDir, 'narrow-1024x768.png'), (await window.webContents.capturePage()).toPNG())
+  await ui(`const close=[...document.querySelectorAll('.notes-overlay button')].find(button=>button.textContent==='关闭');close.click();await wait(()=>!document.querySelector('.notes-overlay'),'OVERLAY_CLOSE');await new Promise(resolve=>setTimeout(resolve,150))`)
+  const focusReturned = await window.webContents.executeJavaScript(`document.activeElement?.classList.contains('chat-toggle') ?? false`)
+  result.narrow = { ...narrow, focusReturned }
+  await writeFile(join(reportDir, 'layout-panels.json'), JSON.stringify(result, null, 2))
+  const chatOk = result.chat.every((item: any) => item.inputVisible && item.panelVisible && !item.horizontalOverflow)
+  const gardenOk = result.garden.every((item: any) => item.workspaceVisible && item.directoryVisible && item.contentVisible && item.editor && !item.horizontalOverflow)
+  const narrowOk = (result.narrow as any).overlayVisible && (result.narrow as any).inputVisible && !(result.narrow as any).horizontalOverflow && focusReturned
+  if (!chatOk || !gardenOk || !narrowOk) throw new Error('PANEL_LAYOUT_FAILED')
+  return result
 }
 
 /** Checks the layout restored from the previous run in the same isolated workspace. */

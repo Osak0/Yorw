@@ -15,7 +15,7 @@ import { Workspace } from './workspace'
 import { Layout } from './layout'
 import { Intelligence } from './intelligence'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
-import {runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke} from './workspace-tabs-smoke'
+import {runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
 let quitting = false
@@ -36,11 +36,13 @@ else app.whenReady().then(async () => {
   const devUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL
   const allowed = (url: string) => devUrl ? url === devUrl || url === devUrl + '/' : url === pathToFileURL(join(__dirname, '../renderer/index.html')).href
   ipcMain.handle('app:getStatus', event => {
+    if (window.isDestroyed()) return backend.status
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     return backend.status
   })
   const providers = new Providers(backend, join(readerSmoke ? smokeReport! : app.getPath('userData'), 'secrets'))
   const providerAction = (action: (input: any) => Promise<unknown>) => async (event: Electron.IpcMainInvokeEvent, input: unknown) => {
+    if (window.isDestroyed()) throw new Error('WINDOW_CLOSED')
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
@@ -193,16 +195,33 @@ else app.whenReady().then(async () => {
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
       if (readerSmoke && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
         const layouts = []
-        for (const [width, height] of [[1440,1024],[1024,768]]) {
+        for (const [width, height] of [[1440,1024],[1024,768],[1280,720],[1440,900]]) {
           window.setContentSize(width, height)
           await new Promise(resolve => setTimeout(resolve, 1800))
-          const layout = await window.webContents.executeJavaScript(`({ width: innerWidth, toolbarFits: [...document.querySelectorAll('.reader-toolbar button,.reader-toolbar select')].every(x => {const r=x.getBoundingClientRect();return r.left >= 0 && r.right <= innerWidth}), saved: document.querySelector('.reader-feedback')?.textContent })`)
+          const layout = await window.webContents.executeJavaScript(`(() => {
+            const inside = element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }
+            const chat = document.querySelector('[aria-label="研究问题"]')
+            const search = document.querySelector('.search-panel')
+            return {
+              width: innerWidth,
+              height: innerHeight,
+              toolbarFits: [...document.querySelectorAll('.reader-toolbar button,.reader-toolbar select')].every(x => {const r=x.getBoundingClientRect();return r.left >= 0 && r.right <= innerWidth}),
+              toolbarVisible: [...document.querySelectorAll('.reader-toolbar')].every(inside),
+              headerVisible: [...document.querySelectorAll('.app-header,.workspace-tabbar')].every(inside),
+              horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+              chatInputVisible: !chat || inside(chat),
+              searchVisible: !search || inside(search),
+              saved: document.querySelector('.reader-feedback')?.textContent
+            }
+          })()`)
           layouts.push(layout)
-          await writeFile(join(reportDir, `reader-${width}.png`), (await window.webContents.capturePage()).toPNG())
+          const name = width === 1440 && height === 1024 ? `reader-${width}.png` : width === 1024 && height === 768 ? `reader-${width}.png` : `reader-${width}x${height}.png`
+          await writeFile(join(reportDir, name), (await window.webContents.capturePage()).toPNG())
         }
         await writeFile(join(reportDir, 'layouts.json'), JSON.stringify(layouts, null, 2))
-        if (layouts.some(layout => !layout.toolbarFits)) throw new Error('TOOLBAR_OVERFLOW')
+        if (layouts.some(layout => !layout.toolbarFits || !layout.toolbarVisible || !layout.headerVisible || layout.horizontalOverflow || !layout.chatInputVisible || !layout.searchVisible)) throw new Error('LAYOUT_OVERFLOW')
       }
+      if (readerSmoke && process.argv.includes('--layout-smoke')) await runWorkspaceLayoutSmoke(window, reportDir)
       await backend.stop()
       app.exit((probe.status.state === 'ready'||faultObserved) && !probe.nodeExposed ? 0 : 1)
     } catch (error) {
