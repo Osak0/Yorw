@@ -3,10 +3,13 @@ import type {ChatMessage} from '../shared/status'
 import {useAiTask,aiError} from './ai-task'
 import {generationError} from './generation-status'
 import {MarkdownPreview} from './MarkdownPreview'
+import {sessionStore,useDocumentSession} from './session-state'
 import './chat.css'
 
 export function ChatPanel({documentId,onPage,onNote}:{documentId:string;onPage(page:number):void;onNote(id:string):void}){
- const [question,setQuestion]=useState(''),[messages,setMessages]=useState<ChatMessage[]>([]),[notice,setNotice]=useState('')
+ const session=useDocumentSession(documentId),question=session.chatQuestion
+ const setQuestion=(value:string|((current:string)=>string))=>{const current=sessionStore().document(documentId).chatQuestion;sessionStore().updateDocument(documentId,{chatQuestion:typeof value==='function'?value(current):value})}
+ const [messages,setMessages]=useState<ChatMessage[]>([]),[notice,setNotice]=useState('')
  const job=useAiTask('chat',documentId)
  useEffect(()=>{let active=true,loading=false
   const refresh=async()=>{if(loading)return;loading=true;try{const result=await window.yorw.chat.list(documentId);if(active&&result.ok)setMessages(result.value.items)}catch{if(active)setNotice('暂时无法加载对话。')}finally{loading=false}}
@@ -15,7 +18,7 @@ export function ChatPanel({documentId,onPage,onNote}:{documentId:string;onPage(p
  const running=job.running||messages.some(message=>message.status==='running')
  async function note(id:string){try{const result=await window.yorw.chat.note(id);if(result.ok){setNotice('已保存到笔记。');onNote(result.value.id)}else setNotice(aiError(result.code))}catch{setNotice('保存失败，请重试。')}}
  async function cancel(id:string){try{await window.yorw.chat.cancel(id)}catch{setNotice('取消未完成，请重试。')}}
- async function send(){const submitted=question;setNotice('');if(await job.start(submitted))setQuestion(current=>current===submitted?'':current)}
+ async function send(){const submitted=question;setNotice('');if(await job.start(submitted)){if(sessionStore().document(documentId).chatQuestion===submitted)sessionStore().updateDocument(documentId,{chatQuestion:''})}}
  return <div className="chat-panel">
   <form onSubmit={event=>{event.preventDefault();void send()}}>
    <label>研究问题<textarea aria-label="研究问题" placeholder="向当前文献提问，也可以继续追问" maxLength={4000} value={question} onChange={event=>setQuestion(event.target.value)}/></label>

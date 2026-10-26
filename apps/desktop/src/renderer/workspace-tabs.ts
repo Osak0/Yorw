@@ -1,3 +1,5 @@
+import type { WorkspaceLayoutTab } from '../shared/status'
+
 export type WorkspaceModule = 'Storage' | 'Garden'
 
 export type WorkspaceTab = {
@@ -26,4 +28,27 @@ export function moduleForTab(tab: WorkspaceTab): WorkspaceModule {
 
 export function tabKindLabel(tab: WorkspaceTab): string {
   return tab.kind === 'document' ? '文献' : '专题'
+}
+
+/** Restores saved pages against the current workspace and reports pages that no longer exist. */
+export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, string>, topics: Map<string, string>): { tabs: WorkspaceTab[]; skipped: number } {
+  const tabs: WorkspaceTab[] = []
+  for (const item of items) {
+    if (item.kind === 'document') {
+      const title = documents.get(item.id)
+      if (title !== undefined) tabs.push(documentTab(item.id, title))
+    } else {
+      const title = topics.get(item.id)
+      if (title !== undefined) tabs.push(topicTab(item.id, title))
+    }
+  }
+  return { tabs, skipped: items.length - tabs.length }
+}
+
+/** Closing a background tab keeps the active page; closing the active tab picks its neighbour. */
+export function nextActiveKeyAfterClose(tabs: WorkspaceTab[], closingKey: string, activeKey: string | null): string | null {
+  if (activeKey !== closingKey) return activeKey
+  const index = tabs.findIndex(tab => tab.key === closingKey)
+  if (index < 0) return activeKey
+  return tabs[index + 1]?.key ?? tabs[index - 1]?.key ?? null
 }

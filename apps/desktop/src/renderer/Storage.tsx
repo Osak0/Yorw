@@ -22,7 +22,7 @@ function Editor({ document, onClose, onSaved }: {document: DocumentRecord; onClo
   }
   return <section aria-label="编辑文献元数据"><h2>编辑元数据</h2><p>未知信息可留空；保存后标记为人工编辑，不补造作者或年份。</p><fieldset disabled={busy}><label>标题<input value={title} maxLength={1000} onChange={e => setTitle(e.target.value)} /></label><label>作者（每行一位）<textarea value={authors} onChange={e => setAuthors(e.target.value)} /></label><label>年份<input value={year} onChange={e => setYear(e.target.value)} inputMode="numeric" /></label><div className="actions"><button onClick={() => void save()}>保存</button><button onClick={onClose}>取消编辑</button></div></fieldset><p role="status">{message}</p></section>
 }
-export function Storage({ activeDocumentId, onOpenDocument, onShowLibrary }: {activeDocumentId: string | null; onOpenDocument(document: DocumentRecord): void; onShowLibrary(): void}) {
+export function Storage({ activeDocumentId, onOpenDocument, onShowLibrary, onTitles }: {activeDocumentId: string | null; onOpenDocument(document: DocumentRecord): void; onShowLibrary(): void; onTitles(documents: DocumentRecord[]): void}) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [loaded, setLoaded] = useState(false)
   const [message, setMessage] = useState('正在加载文献…')
@@ -31,12 +31,12 @@ export function Storage({ activeDocumentId, onOpenDocument, onShowLibrary }: {ac
   useEffect(() => {
     let active = true
     async function load() {
-      try { const result = await window.yorw.documents.list(); if (active && result.ok) { setDocuments(result.value.items); setLoaded(true); setMessage(previous => previous === '正在加载文献…' ? '' : previous) } else if (active && !result.ok) setMessage(explain(result.code)) }
+      try { const result = await window.yorw.documents.list(); if (active && result.ok) { setDocuments(result.value.items); onTitles(result.value.items); setLoaded(true); setMessage(previous => previous === '正在加载文献…' ? '' : previous) } else if (active && !result.ok) setMessage(explain(result.code)) }
       catch { if (active) setMessage('文献列表加载失败，请重试。') }
     }
     void load(); const timer = setInterval(load, 1200)
     return () => { active = false; clearInterval(timer) }
-  }, [])
+  }, [onTitles])
   const reading = activeDocumentId ? documents.find(document => document.id === activeDocumentId) ?? null : null
   function closeReading() {
     void window.yorw.documents.list().then(result => { if (result.ok) setDocuments(result.value.items) })

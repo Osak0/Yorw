@@ -48,10 +48,11 @@ function TopicEditor({topic,draft,topics}:{topic:Topic;draft:WikiDraft;topics:To
  </article>
 }
 
-export function Garden({activeTopicId,onOpenTopic}:{activeTopicId:string|null;onOpenTopic(topic:Topic):void}){
+export function Garden({activeTopicId,onOpenTopic,onTitles}:{activeTopicId:string|null;onOpenTopic(topic:Topic):void;onTitles(topics:Topic[]):void}){
  const book=gardenBook(),state=useSyncExternalStore(book.subscribe,book.getSnapshot)
  const [title,setTitle]=useState(''),[parent,setParent]=useState(''),[creating,setCreating]=useState(false),[notice,setNotice]=useState(''),[createId,setCreateId]=useState(()=>crypto.randomUUID())
  useEffect(()=>{void book.refresh()},[book])
+ useEffect(()=>{onTitles(state.topics)},[onTitles,state.topics])
  useEffect(()=>{if(activeTopicId&&state.selected!==activeTopicId)void book.select(activeTopicId)},[activeTopicId,state.selected,book])
  async function create(){setCreating(true);try{const created=await book.create(title,parent||null,createId);setTitle('');setCreateId(crypto.randomUUID());setNotice('专题已创建，初始空白修订已保存。');onOpenTopic(created)}catch(e){setNotice(e instanceof Error?e.message:'创建失败，请重试。')}finally{setCreating(false)}}
  function tree(parentId:string|null,seen=new Set<string>()):React.ReactNode{return <ul>{state.topics.filter(t=>t.parent_id===parentId).map(t=>seen.has(t.id)?null:<li key={t.id}><button data-topic-id={t.id} aria-current={activeTopicId===t.id?'true':undefined} onClick={()=>onOpenTopic(t)}>{t.title}{state.drafts[t.id]&&wikiDirty(state.drafts[t.id])?' ●':''}</button>{tree(t.id,new Set([...seen,t.id]))}</li>)}</ul>}

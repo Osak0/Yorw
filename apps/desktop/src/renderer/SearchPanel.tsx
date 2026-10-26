@@ -1,10 +1,13 @@
-import React,{useState} from 'react'
+import React from 'react'
 import type {SearchHit} from '../shared/status'
 import {useAiTask} from './ai-task'
+import {sessionStore,useDocumentSession} from './session-state'
 import './search.css'
 
 export function SearchPanel({documentId,onPage}:{documentId:string;onPage?:(page:number)=>void}){
- const [query,setQuery]=useState(''),job=useAiTask('search',documentId)
+ const session=useDocumentSession(documentId),query=session.searchQuery
+ const setQuery=(value:string)=>sessionStore().updateDocument(documentId,{searchQuery:value})
+ const job=useAiTask('search',documentId)
  const result=job.task?.status==='succeeded'?job.task.result:null
  const hits=(result?.items??[]) as SearchHit[]
  return <div className="search-panel">

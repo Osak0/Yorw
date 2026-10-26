@@ -12,9 +12,10 @@ import { Chat } from './chat'
 import { Garden } from './garden'
 import { Suggestions } from './suggestions'
 import { Workspace } from './workspace'
+import { Layout } from './layout'
 import { Intelligence } from './intelligence'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
-import {runWorkspaceTabsSmoke} from './workspace-tabs-smoke'
+import {runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
 let quitting = false
@@ -43,12 +44,15 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['INVALID_CITATION','SUGGESTION_DECIDED','SUGGESTION_NOT_READY','INVALID_EXPORT_SELECTION','EXPORT_TOO_LARGE','EXPORT_UNAVAILABLE','EXPORT_DESTINATION_PROTECTED','SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = error instanceof Error && ['INVALID_CITATION','SUGGESTION_DECIDED','SUGGESTION_NOT_READY','INVALID_EXPORT_SELECTION','EXPORT_TOO_LARGE','EXPORT_UNAVAILABLE','EXPORT_DESTINATION_PROTECTED','SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'INVALID_LAYOUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
       return { ok: false, code }
     }
   }
   const suggestions = new Suggestions(backend,providers)
   const intelligence = new Intelligence(backend,providers)
+  const layout = new Layout(readerSmoke ? smokeReport! : app.getPath('userData'))
+  ipcMain.handle('layout:load',providerAction(()=>layout.load()))
+  ipcMain.handle('layout:save',providerAction(input=>layout.save(input)))
   ipcMain.handle('ai:preferences',providerAction(()=>intelligence.preferences()))
   ipcMain.handle('ai:savePreferences',providerAction(input=>intelligence.savePreferences(input)))
   ipcMain.handle('ai:run',providerAction(input=>intelligence.run(input)))
@@ -118,7 +122,7 @@ else app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
-      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')) {
+      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([fixture]), 'Reader fixture.pdf')
@@ -155,17 +159,39 @@ else app.whenReady().then(async () => {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
       }
       await new Promise(resolve => setTimeout(resolve, 400))
+      if (readerSmoke && process.argv.includes('--tabs-smoke')) {
+        const second = await readFile(join(reportDir, 'fixture2.pdf'))
+        const upload = new FormData()
+        upload.append('file', new Blob([second]), 'SyntheticStudyB.pdf')
+        await backend.request('/v1/documents/import', 'POST', upload)
+        const deadline = Date.now() + 15000
+        while (Date.now() < deadline) {
+          const documents = await backend.request('/v1/documents')
+          if (documents.items.some((item: { original_name: string }) => item.original_name === 'SyntheticStudyB.pdf')) break
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
       const tabProof = readerSmoke && process.argv.includes('--tabs-smoke') ? await runWorkspaceTabsSmoke(window) : null
+      const tabResumeProof = readerSmoke && process.argv.includes('--tabs-resume-smoke') ? await runWorkspaceTabsResumeSmoke(window) : null
+      const tabCloseProof = readerSmoke && process.argv.includes('--tabs-close-smoke') ? await runWorkspaceTabsCloseSmoke(window) : null
+      if (tabCloseProof) {
+        const documents = await backend.request('/v1/documents')
+        const reader = documents.items.find((item: { title?: string }) => item.title === 'Reader fixture')
+        const notes = reader ? await backend.request(`/v1/notes?document_id=${reader.id}`) : { items: [] }
+        if (!notes.items.some((note: { body_md: string }) => note.body_md.includes('Unsaved note draft'))) throw new Error('CLOSE_SAVE_NOTE_MISSING')
+      }
       let faultObserved=false
+      const tabFaultProof = readerSmoke && process.argv.includes('--tabs-fault-smoke') ? await runWorkspaceTabsFaultSmoke(window,backend) : null
+      if(tabFaultProof)faultObserved=true
       if(readerSmoke&&process.argv.includes('--ai-workflow-smoke'))faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,process.argv.includes('--ai-fault-smoke'))
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
-      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof }, null, 2))
+      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, tabCloseProof, tabFaultProof }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
-      if (readerSmoke) {
+      if (readerSmoke && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
         const layouts = []
         for (const [width, height] of [[1440,1024],[1024,768]]) {
           window.setContentSize(width, height)

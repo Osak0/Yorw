@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { addWorkspaceTab, documentTab, moduleForTab, tabKindLabel, topicTab } from '../src/renderer/workspace-tabs'
+import { addWorkspaceTab, documentTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, topicTab } from '../src/renderer/workspace-tabs'
 
 const id = '12345678-1234-1234-1234-123456789abc'
 
@@ -18,4 +18,30 @@ test('opening the same page again keeps one tab and preserves the existing posit
   const second = documentTab(id, 'Renamed paper')
   const tabs = addWorkspaceTab(addWorkspaceTab([], first), second)
   expect(tabs).toEqual([first])
+})
+
+test('restoring skips pages that no longer exist and reports the count', () => {
+  const missing = '99999999-9999-4999-8999-999999999999'
+  const documents = new Map([[id, 'Paper']])
+  const topics = new Map([[id, 'Topic']])
+  const restored = restoreTabs([
+    { kind: 'document', id },
+    { kind: 'document', id: missing },
+    { kind: 'topic', id },
+    { kind: 'topic', id: missing }
+  ], documents, topics)
+  expect(restored.tabs.map(tab => tab.title)).toEqual(['Paper', 'Topic'])
+  expect(restored.skipped).toBe(2)
+})
+
+test('closing the active tab selects the next tab, then the previous, then home', () => {
+  const first = documentTab(id, 'First')
+  const second = topicTab(id, 'Second')
+  const third = documentTab('33333333-3333-4333-8333-333333333333', 'Third')
+  const tabs = [first, second, third]
+  expect(nextActiveKeyAfterClose(tabs, second.key, second.key)).toBe(third.key)
+  expect(nextActiveKeyAfterClose(tabs, third.key, third.key)).toBe(second.key)
+  expect(nextActiveKeyAfterClose(tabs, first.key, second.key)).toBe(second.key)
+  expect(nextActiveKeyAfterClose([first], first.key, first.key)).toBeNull()
+  expect(nextActiveKeyAfterClose(tabs, 'missing', 'missing')).toBe('missing')
 })

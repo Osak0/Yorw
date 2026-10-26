@@ -3,6 +3,7 @@ import type {Suggestion,SourceRef} from '../shared/status'
 import {MarkdownPreview} from './MarkdownPreview'
 import {useAiTask,aiError} from './ai-task'
 import {generationError} from './generation-status'
+import {sessionStore,useTopicSession} from './session-state'
 import './suggestions.css'
 
 const labels={document:'论文原文',note:'用户笔记',message:'模型对话',wiki:'已有 Wiki'}
@@ -14,7 +15,9 @@ export function Sources({sources}:{sources:SourceRef[]}){
  </details>)}</div>
 }
 export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview}:{topicId:string;baseRevisionId:string;dirty:boolean;onReview(suggestion:Suggestion):void}){
- const [instruction,setInstruction]=useState(''),[history,setHistory]=useState<Suggestion[]>([]),[notice,setNotice]=useState('')
+ const session=useTopicSession(topicId),instruction=session.aiInstruction
+ const setInstruction=(value:string)=>sessionStore().updateTopic(topicId,{aiInstruction:value})
+ const [history,setHistory]=useState<Suggestion[]>([]),[notice,setNotice]=useState('')
  const job=useAiTask('draft',topicId),opened=useRef('')
  useEffect(()=>{let active=true,loading=false
   const refresh=async()=>{if(loading)return;loading=true;try{const result=await window.yorw.suggestions.list(topicId);if(active&&result.ok)setHistory(result.value.items)}catch{if(active)setNotice('暂时无法加载草稿。')}finally{loading=false}}

@@ -3,6 +3,7 @@ import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } fr
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import type { DocumentRecord } from '../shared/status'
+import { sessionStore, useDocumentSession } from './session-state'
 import './reader.css'
 
 GlobalWorkerOptions.workerSrc = workerUrl
@@ -11,10 +12,11 @@ const errorMessage = (code: string) => ({ DOCUMENT_FILE_MISSING: '受管 PDF 副
 
 export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSearch, searchOpen, onChat, chatOpen, jump }: {document: DocumentRecord; onClose(): void; onNotes(): void; notesOpen: boolean; onSearch(): void; searchOpen: boolean; onChat(): void; chatOpen:boolean; jump?:{page:number;sequence:number}}) {
   useEffect(()=>{if(jump)go(jump.page)},[jump])
+  const session = useDocumentSession(record.id)
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
-  const [page, setPage] = useState(1)
-  const [input, setInput] = useState('1')
-  const [zoom, setZoom] = useState<number | 'fit'>('fit')
+  const [page, setPage] = useState(session.page ?? 1)
+  const [input, setInput] = useState(String(session.page ?? 1))
+  const [zoom, setZoom] = useState<number | 'fit'>(session.zoom)
   const [width, setWidth] = useState(800)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -28,6 +30,8 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
   const pageElement = useRef<HTMLDivElement>(null)
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve())
   const saveSequence = useRef(0)
+  useEffect(() => { if (pdf) sessionStore().updateDocument(record.id, { page }) }, [pdf, page, record.id])
+  useEffect(() => { sessionStore().updateDocument(record.id, { zoom }) }, [zoom, record.id])
   useEffect(() => {
     const element = viewport.current!
     const observer = new ResizeObserver(entries => { if (entries[0].contentRect.width > 0) setWidth(entries[0].contentRect.width) })
@@ -47,7 +51,7 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
         task.onPassword = () => { if (active) { setError('此 PDF 需要密码，本步不提供解密。请返回并导入可读取的副本。'); setLoading(false) }; void task?.destroy() }
         const loaded = await task.promise
         if (!active) return
-        const initial = Math.max(1, Math.min(record.last_page || 1, loaded.numPages))
+        const initial = Math.max(1, Math.min(session.page ?? record.last_page ?? 1, loaded.numPages))
         setPage(initial); setInput(String(initial)); setPdf(loaded)
       } catch (error) {
         if (active) { setError(error instanceof Error && !['InvalidPDFException', 'MissingPDFException', 'UnknownErrorException'].includes(error.name) && error.message.startsWith('受管') ? error.message : 'PDF 无法打开，可能已损坏、加密或缺少受管副本。可重试或返回文献库。'); setLoading(false) }
