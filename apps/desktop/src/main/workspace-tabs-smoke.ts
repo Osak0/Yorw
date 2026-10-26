@@ -436,6 +436,135 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   return result
 }
 
+/** Streams a long answer through the real chat layout and verifies scroll, stop, retry and note actions. */
+export async function runWorkspaceChatSmoke(window: BrowserWindow, providers: Providers): Promise<unknown> {
+  const calls: Array<{ path: string; body: unknown }> = []
+  const server = createServer((req, res) => {
+    let raw = ''
+    req.on('data', part => raw += part)
+    req.on('end', () => {
+      const body = JSON.parse(raw)
+      calls.push({ path: req.url ?? '', body })
+      if (req.url?.endsWith('/embeddings')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ data: body.input.map((_text: string, index: number) => ({ index, embedding: [1, 0] })) }))
+        return
+      }
+      const system = body.messages[0].content, data = JSON.parse(body.messages[1].content)
+      if (system.includes('筛选器') || system.includes('改写')) {
+        const text = system.includes('筛选器')
+          ? JSON.stringify({ items: JSON.parse(data.question).candidates.map((item: { id: string }) => ({ id: item.id, sentence: 0 })) })
+          : JSON.stringify({ query: 'English evidence' })
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+        res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n')
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      const chunks = ['Long answer [S1]. ', ...Array.from({ length: 60 }, (_value, index) => `Segment ${index + 1} keeps the response growing. `)]
+      let index = 0
+      const timer = setInterval(() => {
+        if (res.writableEnded) return
+        if (index < chunks.length) {
+          res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: chunks[index] } }] }) + '\n\n')
+          index++
+        } else {
+          clearInterval(timer)
+          res.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n')
+          res.end()
+        }
+      }, 100)
+      res.on('close', () => clearInterval(timer))
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+    for (const kind of ['chat', 'embedding'] as const) {
+      const old = (await providers.list()).find(config => config.kind === kind)
+      await providers.save({ kind, version: old?.version ?? 0, base_url: url, model: 'local-tabs-chat', key: `${kind}-tabs-chat-key` })
+    }
+    const result = await window.webContents.executeJavaScript(`(async()=>{
+      const waitFor=async(predicate,label)=>{const end=Date.now()+30000;while(Date.now()<end){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('CHAT_SMOKE_TIMEOUT_'+label)}
+      const button=text=>[...document.querySelectorAll('button')].find(element=>element.textContent===text)
+      const messages=()=>document.querySelectorAll('.chat-message')
+      const setValue=(element,value)=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(element,value);element.dispatchEvent(new Event('input',{bubbles:true}))}
+      const inside=element=>{const r=element.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth}
+      await waitFor(()=>document.querySelectorAll('.workspace-tab').length===4,'RESTORE')
+      await waitFor(()=>document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'),'READER')
+      button('问答').click()
+      await waitFor(()=>document.querySelector('.chat-panel [aria-label="研究问题"]'),'CHAT')
+      const input=document.querySelector('.chat-panel [aria-label="研究问题"]'),history=document.querySelector('.chat-history')
+      const inputBelowHistory=input.getBoundingClientRect().top>=history.getBoundingClientRect().bottom-1
+      setValue(input,'Explain the evidence')
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))
+      await waitFor(()=>messages().length===1,'MESSAGE')
+      await waitFor(()=>document.querySelector('.chat-answer .markdown-preview')?.textContent.length>1000,'STREAM')
+      const firstLength=document.querySelector('.chat-answer .markdown-preview')?.textContent.length??0
+      await waitFor(()=>document.querySelector('.chat-answer .markdown-preview')?.textContent.length>firstLength,'STREAM_GROWTH')
+      const secondLength=document.querySelector('.chat-answer .markdown-preview')?.textContent.length??0
+      history.scrollTop=0
+      history.dispatchEvent(new Event('scroll',{bubbles:true}))
+      await waitFor(()=>document.querySelector('.chat-latest'),'LATEST')
+      const latestVisible=!!document.querySelector('.chat-latest')
+      document.querySelector('.chat-latest').click()
+      await waitFor(()=>!document.querySelector('.chat-latest'),'LATEST_CLICK')
+      const latestDismissed=!document.querySelector('.chat-latest')
+      await waitFor(()=>button('停止'),'STOP')
+      button('停止').click()
+      await waitFor(()=>!button('停止'),'STOPPED')
+      const partial=document.querySelector('.chat-answer .markdown-preview')?.textContent.length??0
+      const stoppedCount=messages().length
+      await waitFor(()=>button('重新回答'),'RETRY')
+      button('重新回答').click()
+      await waitFor(()=>messages().length===2,'RETRY_MESSAGE')
+      await waitFor(()=>messages()[1]?.querySelector('.markdown-preview')?.textContent.length>50,'RETRY_STREAM')
+      await waitFor(()=>!button('停止'),'RETRY_DONE')
+      const preview=document.querySelector('.chat-answer .markdown-preview')
+      const previewStyle=preview?getComputedStyle(preview):null
+      const answerOverflow=previewStyle?.overflowY??null
+      const answerMaxHeight=previewStyle?.maxHeight??null
+      const retryLength=messages()[1]?.querySelector('.markdown-preview')?.textContent.length??0
+      const retriedMessages=messages().length
+      const imeStartCount=messages().length
+      setValue(input,'IME question')
+      input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,isComposing:true}))
+      await new Promise(resolve=>setTimeout(resolve,300))
+      const imeBlocked=messages().length===imeStartCount
+      input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}))
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))
+      await waitFor(()=>messages().length===imeStartCount+1,'IME_SEND')
+      const imeSent=messages().length===imeStartCount+1
+      const imeMessages=messages().length
+      const inputVisible=inside(input)
+      await waitFor(()=>button('保存到笔记'),'NOTE_BUTTON')
+      button('保存到笔记').click()
+      await waitFor(()=>document.querySelector('.notes-panel'),'NOTE_OPEN')
+      return {
+        inputBelowHistory,
+        streamed:secondLength>firstLength,
+        latestVisible,
+        latestDismissed,
+        partialLength:partial,
+        stoppedMessageCount:stoppedCount,
+        retriedMessages,
+        retryLength,
+        imeBlocked,
+        imeSent,
+        imeMessages,
+        answerOverflow,
+        answerMaxHeight,
+        inputVisible,
+        noteOpened:!!document.querySelector('.notes-panel')
+      }
+    })()`)
+    return { ...(result as Record<string, unknown>), modelRequests: calls.length }
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  }
+}
+
 /** Checks a restored search tool tab can render and return to the reader. */
 export async function runWorkspaceTabsToolResumeSmoke(window: BrowserWindow): Promise<unknown> {
   return window.webContents.executeJavaScript(`(async()=>{
