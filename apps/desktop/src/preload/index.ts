@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('yorw', Object.freeze({
+  ai:Object.freeze({preferences:()=>ipcRenderer.invoke('ai:preferences'),savePreferences:(input:unknown)=>ipcRenderer.invoke('ai:savePreferences',input),run:(input:unknown)=>ipcRenderer.invoke('ai:run',input),get:(id:unknown)=>ipcRenderer.invoke('ai:get',id),latest:(input:unknown)=>ipcRenderer.invoke('ai:latest',input),cancel:(id:unknown)=>ipcRenderer.invoke('ai:cancel',id)}),
   workspace:Object.freeze({info:()=>ipcRenderer.invoke('workspace:info'),catalog:()=>ipcRenderer.invoke('workspace:catalog'),create:(input:unknown)=>ipcRenderer.invoke('workspace:create',input),save:(id:unknown)=>ipcRenderer.invoke('workspace:save',id)}),
   getStatus: () => ipcRenderer.invoke('app:getStatus'),
   suggestions:Object.freeze({catalog:()=>ipcRenderer.invoke('suggestions:catalog'),preview:(input:unknown)=>ipcRenderer.invoke('suggestions:preview',input),generate:(input:unknown)=>ipcRenderer.invoke('suggestions:generate',input),list:(id:unknown)=>ipcRenderer.invoke('suggestions:list',id),cancel:(id:unknown)=>ipcRenderer.invoke('suggestions:cancel',id)}),

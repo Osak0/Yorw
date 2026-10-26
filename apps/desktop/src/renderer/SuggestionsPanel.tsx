@@ -1,37 +1,50 @@
-import React,{useEffect,useState} from 'react'
-import type {MaterialChoice,MaterialInput,MaterialPreview,SuggestionInput,ProviderConfig,Suggestion,Evidence,SourceRef} from '../shared/status'
+import React,{useEffect,useRef,useState} from 'react'
+import type {Suggestion,SourceRef} from '../shared/status'
 import {MarkdownPreview} from './MarkdownPreview'
+import {useAiTask,aiError} from './ai-task'
+import {generationError} from './generation-status'
 import './suggestions.css'
-const labels={document:'论文原文',note:'用户笔记',message:'模型对话'}
-const explain=(code:string)=>({MATERIAL_CHANGED:'材料或原文已变化，请刷新列表、重新选择并预览。',REVISION_CONFLICT:'专题已有新修订，请先载入或保存最新基线。',MATERIAL_TOO_LARGE_OR_EMPTY:'材料为空或单项超过 8,000 字，请改选较短笔记/对话或更少论文片段。',CONTEXT_TOO_LARGE:'所选材料合计超过 24,000 字，或已保存正文超过 20,000 字，请缩减范围。',INVALID_CITATION:'模型没有给出合法的本轮引用，保留输出供核查，不标记为成功。',CONFIG_CHANGED:'聊天配置已变化，请重新预览和确认。',KEY_MISSING:'聊天密钥未就绪，请在 House 配置。',CONFIG_MISSING:'请先在 House 配置聊天服务。',SUGGESTION_RUNNING:'该专题已有生成任务，请等待或取消。',CANCELLED:'已取消，已发出的请求仍可能计费。',INTERRUPTED:'上次生成被中断，不会自动重发。',RATE_LIMITED:'服务限流，请稍后重新确认生成。',AUTH_FAILED:'鉴权失败，请检查 House 配置。'}[code]??`操作状态：${code}`)
-export function Sources({sources}:{sources:SourceRef[]}){return <div className="suggestion-sources">{sources.map(s=><details key={s.source_id}><summary>[{s.source_id}] {labels[s.kind]} · {s.evidence.length?'附原文证据':'仅观点/推断'}{s.available===false?' · 来源版本失效':''}</summary><pre>{s.excerpt}</pre><small>材料 {s.source_object_id} · 版本 {s.source_version}</small>{s.evidence.map((e,i)=><div key={i}><p>{e.document_title} · 物理页 {e.physical_page} · 抽取 v{e.extraction_version}</p><pre>{e.quote}</pre></div>)}</details>)}</div>}
 
+const labels={document:'论文原文',note:'用户笔记',message:'模型对话',wiki:'已有 Wiki'}
+export function Sources({sources}:{sources:SourceRef[]}){
+ return <div className="suggestion-sources">{sources.map((source,index)=><details key={source.source_id??index}>
+  <summary>[{source.source_id??'S'+(index+1)}] {source.title??source.evidence?.[0]?.document_title??labels[source.kind]??'来源'}{source.available===false?' · 来源已变化':''}</summary><small>{labels[source.kind]??'来源'}</small>
+  <p className="source-excerpt">{source.excerpt}</p>
+  {source.evidence?.map((e,i)=><div key={i}><p>{e.document_title} · 第 {e.physical_page} 页</p><p className="source-excerpt">{e.quote}</p></div>)}
+ </details>)}</div>
+}
 export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview}:{topicId:string;baseRevisionId:string;dirty:boolean;onReview(suggestion:Suggestion):void}){
- const [catalog,setCatalog]=useState<MaterialChoice[]>([]),[materials,setMaterials]=useState<MaterialInput[]>([]),[instruction,setInstruction]=useState('根据所选材料整理当前专题，区分原文事实、个人观点、模型推断与待验证问题。')
- const [documentId,setDocumentId]=useState(''),[query,setQuery]=useState(''),[semantic,setSemantic]=useState(false),[minimum,setMinimum]=useState('0.5'),[hits,setHits]=useState<Evidence[]>([])
- const [preview,setPreview]=useState<MaterialPreview|null>(null),[consent,setConsent]=useState(false),[requestId,setRequestId]=useState(()=>crypto.randomUUID())
- const [prepared,setPrepared]=useState<SuggestionInput|null>(null)
- const [chat,setChat]=useState<ProviderConfig|null>(null),[embedding,setEmbedding]=useState<ProviderConfig|null>(null),[history,setHistory]=useState<Suggestion[]>([]),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
- const invalidate=()=>{setPrepared(null);setPreview(null);setConsent(false);setRequestId(crypto.randomUUID())}
- const refresh=async()=>{const result=await window.yorw.suggestions.catalog();if(result.ok)setCatalog(result.value.items);else setNotice(explain(result.code))}
- useEffect(()=>{void refresh().catch(()=>setNotice('材料列表加载失败。'))},[topicId])
- useEffect(()=>{invalidate()},[baseRevisionId])
- useEffect(()=>{setConsent(false)},[chat?.version])
- useEffect(()=>{let active=true;const load=async()=>{try{const [items,configs]=await Promise.all([window.yorw.suggestions.list(topicId),window.yorw.providers.list()]);if(!active)return;if(items.ok)setHistory(items.value.items);else setNotice(explain(items.code));if(configs.ok){setChat(configs.value.find(c=>c.kind==='chat')??null);setEmbedding(configs.value.find(c=>c.kind==='embedding')??null)}}catch{if(active)setNotice('本地服务不可用，请保留当前选择后重试。')}};void load();const timer=setInterval(load,1000);return()=>{active=false;clearInterval(timer)}},[topicId])
- const input=()=>({topic_id:topicId,base_revision_id:baseRevisionId,instruction,materials})
- async function search(){setBusy(true);try{const result=await window.yorw.search.query({id:documentId,query,semantic,config_version:embedding?.version??0,min_similarity:semantic?Number(minimum):0.5});if(result.ok){setHits(result.value.items);setNotice(result.value.reason?`论文检索已降级为关键词（${result.value.reason}）`:result.value.items.length?'勾选要加入材料的原文片段。':'未找到片段，请修改检索条件。')}else setNotice(explain(result.code))}catch{setNotice('原文检索失败。')}finally{setBusy(false)}}
- function toggle(choice:MaterialChoice,checked:boolean){invalidate();setMaterials(v=>checked?[...v,{kind:choice.kind,id:choice.id,version:choice.version,segment_ids:[]}]:v.filter(m=>m.kind!==choice.kind||m.id!==choice.id))}
- function toggleSegment(hit:Evidence,checked:boolean){invalidate();setMaterials(v=>{const old=v.find(m=>m.kind==='document'&&m.id===hit.document_id);const ids=checked?[...old?.segment_ids??[],hit.segment_id]:(old?.segment_ids??[]).filter(id=>id!==hit.segment_id);const rest=v.filter(m=>m.kind!=='document'||m.id!==hit.document_id);return ids.length?[...rest,{kind:'document',id:hit.document_id,version:String(hit.extraction_version),segment_ids:ids}]:rest})}
- async function prepare(){const snapshot=input();setPrepared(null);setBusy(true);setConsent(false);setPreview(null);try{const result=await window.yorw.suggestions.preview(snapshot);if(result.ok){setPreview(result.value);setPrepared(snapshot);setRequestId(crypto.randomUUID());setNotice('请展开核查全部材料及原文，再确认发送。')}else setNotice(explain(result.code))}catch{setNotice('预览失败，不会发送模型请求。')}finally{setBusy(false)}}
- async function generate(){if(!chat||!preview||!consent||!prepared||JSON.stringify(prepared)!==JSON.stringify(input()))return;setBusy(true);try{const result=await window.yorw.suggestions.generate({...prepared,config_version:chat.version,request_id:requestId});if(result.ok){setHistory(v=>[...v.filter(s=>s.id!==result.value.id),result.value]);setConsent(false);setNotice('已提交独立建议草稿；正文不会被覆盖。')}else setNotice(explain(result.code))}catch{setNotice('提交状态不确定，请先查看历史；再次提交沿用同一请求标识以防重复。')}finally{setBusy(false)}}
- async function cancel(id:string){try{const result=await window.yorw.suggestions.cancel(id);setNotice(result.ok?'已停止接收后续输出；在途请求仍可能计费。':explain(result.code))}catch{setNotice('取消失败，请重试。')}}
- const running=history.some(s=>s.status==='running'),paper=materials.find(m=>m.kind==='document'&&m.id===documentId)
- return <section className="wiki-suggestions"><h3>选择材料与生成建议</h3><p>只生成独立草稿，不改写专题正文。论文按所选片段发送，笔记/对话按完整已保存内容发送；后两者不自动成为论文事实。</p>{dirty&&<p>当前正文有未保存草稿，本次只发送已保存的专题修订。</p>}
- <button disabled={busy} onClick={()=>void refresh().catch(()=>setNotice('材料刷新失败。'))}>刷新材料列表</button><label>生成要求<textarea aria-label="Wiki 生成要求" maxLength={2000} value={instruction} onChange={e=>{setInstruction(e.target.value);invalidate()}}/></label>
- <details><summary>添加论文原文片段</summary><label>论文<select aria-label="选材论文" value={documentId} onChange={e=>{setDocumentId(e.target.value);setHits([])}}><option value="">选择论文</option>{catalog.filter(c=>c.kind==='document').map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label><label>检索条件<input aria-label="选材检索条件" value={query} maxLength={1000} onChange={e=>setQuery(e.target.value)}/></label><label><input type="checkbox" checked={semantic} onChange={e=>setSemantic(e.target.checked)}/>启用语义检索（发送本次检索条件至 embedding 服务）</label>{semantic&&<><p>{embedding?`${embedding.model} · ${embedding.base_url}`:'无 embedding 配置，将明确降级为关键词。'}</p><label>最低相似度<input type="number" min="0" max="1" step="any" value={minimum} onChange={e=>setMinimum(e.target.value)}/></label></>}<button disabled={busy||!documentId||!query.trim()||(semantic&&(!minimum.trim()||!Number.isFinite(Number(minimum))||Number(minimum)<0||Number(minimum)>1))} onClick={()=>void search()}>检索选材片段</button>{hits.map(h=><label key={h.segment_id} className="material-choice"><input type="checkbox" checked={paper?.segment_ids.includes(h.segment_id)??false} disabled={(!paper&&materials.length>=8)||((paper?.segment_ids.length??0)>=8&&!paper?.segment_ids.includes(h.segment_id))} onChange={e=>toggleSegment(h,e.target.checked)}/>物理页 {h.physical_page}<pre>{h.text}</pre></label>)}</details>
- <details><summary>添加已保存笔记或已完成对话</summary>{catalog.filter(c=>c.kind!=='document').map(c=>{const checked=materials.some(m=>m.kind===c.kind&&m.id===c.id);return <label key={c.kind+c.id}><input type="checkbox" checked={checked} disabled={!checked&&materials.length>=8} onChange={e=>toggle(c,e.target.checked)}/>{labels[c.kind]}：{c.label}</label>})}</details>
- <p>已选 {materials.length}/8 条材料（每项最多 8,000 字、总计 24,000 字）；列表每类展示最近 200 项。</p>{materials.map(m=><p key={m.kind+m.id}>{labels[m.kind]} · {catalog.find(c=>c.kind===m.kind&&c.id===m.id)?.label??m.id}{m.kind==='document'?` · ${m.segment_ids.length}/8 个片段`:''}<button onClick={()=>{setMaterials(v=>v.filter(x=>x!==m));invalidate()}}>移除此材料</button></p>)}
- <button disabled={busy||!materials.length||!instruction.trim()} onClick={()=>void prepare()}>预览发送材料</button>{preview&&<div className="material-preview"><details><summary>将发送的已保存专题正文（{preview.base_body_md.length} 字）</summary><pre>{preview.base_body_md||'空白初始正文'}</pre></details><Sources sources={preview.sources}/>{prepared&&JSON.stringify(prepared)!==JSON.stringify(input())&&<p>选择或生成要求已变化，请重新预览发送材料。</p>}<p>聊天服务：{chat?`${chat.model} · ${chat.base_url}`:'请先在 House 配置聊天服务'}</p><label><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>确认发送生成要求、上述已保存专题正文和全部预览材料及其原文证据到该聊天服务，可能计费。</label><button disabled={busy||running||!chat||!consent||!prepared||JSON.stringify(prepared)!==JSON.stringify(input())} onClick={()=>void generate()}>生成建议草稿</button></div>}
- <p role="status">{notice}</p><h3>建议草稿历史</h3>{!history.length&&<p>尚无建议草稿。</p>}{history.map(s=><details key={s.id} className="suggestion-record" open={s.status==='running'?true:undefined}><summary>{s.status==='completed'?'草稿已完成':s.status==='running'?'生成中':s.status==='cancelled'?'已取消':s.status==='interrupted'?'已中断':'生成失败'} · {s.created_at}</summary><p>{s.instruction}</p><p>{s.provider.model} · 基础修订 {s.base_revision_id}</p>{s.stale&&<p>专题已出现新修订，本草稿基于旧正文。</p>}{s.error_code&&<p>{explain(s.error_code)}</p>}{s.sources.some(x=>!x.available)&&<p>材料版本已有变化；快照保留，不能当作当前来源。</p>}{s.status==='running'&&<button onClick={()=>void cancel(s.id)}>取消草稿生成</button>}<MarkdownPreview body={s.body_md||'*尚无输出。*'}/>{s.decision?<p>已{s.decision.action==='accept'?'采纳':'拒绝'}{s.decision.revision_id?` · 修订 ${s.decision.revision_id}`:''}</p>:s.status==='completed'?<button onClick={()=>onReview(s)}>比较与处理建议</button>:<p>独立草稿，完成后可比较确认。</p>}<Sources sources={s.sources}/></details>)}
+ const [instruction,setInstruction]=useState(''),[history,setHistory]=useState<Suggestion[]>([]),[notice,setNotice]=useState('')
+ const job=useAiTask('draft',topicId),opened=useRef('')
+ useEffect(()=>{let active=true,loading=false
+  const refresh=async()=>{if(loading)return;loading=true;try{const result=await window.yorw.suggestions.list(topicId);if(active&&result.ok)setHistory(result.value.items)}catch{if(active)setNotice('暂时无法加载草稿。')}finally{loading=false}}
+  setHistory([]);opened.current='';void refresh();const timer=setInterval(refresh,700);return()=>{active=false;clearInterval(timer)}
+ },[topicId])
+ useEffect(()=>{
+  const id=job.task?.result?.suggestion_id
+  const draft=history.find(item=>item.id===id)
+  if(draft&&!draft.decision&&(draft.status==='completed'||draft.recoverable)&&opened.current!==draft.id){opened.current=draft.id;onReview(draft)}
+ },[history,job.task?.result?.suggestion_id,onReview])
+ const running=job.running||history.some(item=>item.status==='running')
+ const streaming=history.find(item=>item.id===job.task?.result?.suggestion_id&&item.status==='running')
+ async function cancel(item:Suggestion){try{await window.yorw.suggestions.cancel(item.id)}catch{setNotice('取消未完成，请重试。')}}
+ return <section className="wiki-suggestions"><h3>AI 草稿</h3>
+  <form onSubmit={event=>{event.preventDefault();setNotice('');void job.start(instruction,baseRevisionId)}}>
+   <label>生成要求<textarea aria-label="Wiki 生成要求" placeholder="例如：整理这些研究对视觉证据依赖的结论和仍待验证的问题" maxLength={2000} value={instruction} onChange={event=>setInstruction(event.target.value)}/></label>
+   <button className="primary" disabled={running||!instruction.trim()}>生成草稿</button>
+   {job.running&&<button type="button" onClick={()=>void job.cancel()}>取消</button>}
+  </form>
+  {dirty&&<p>当前正文有未保存修改，本次会参考已保存的版本。</p>}
+  <p role="status">{notice||job.notice}</p>
+  {streaming&&<section className="draft-stream" aria-label="正在生成的草稿"><MarkdownPreview body={streaming.body_md||'*正在生成…*'}/><button onClick={()=>void cancel(streaming)}>取消生成</button></section>}
+  <details className="draft-history"><summary>草稿历史（{history.length}）</summary>
+   {[...history].reverse().map(item=><article key={item.id} className="suggestion-record">
+    <h4>{item.instruction}</h4><p>{item.status==='running'?'正在生成…':item.status==='completed'?'草稿已完成':item.recoverable?'草稿未完成':item.status==='cancelled'?'已取消':'生成未完成'}</p>
+    {item.error_code&&<p>{aiError(item.error_code)||generationError(item.error_code)}</p>}
+    {item.status==='running'&&<button onClick={()=>void cancel(item)}>取消生成</button>}
+    {item.decision?<p>已{item.decision.action==='accept'?'保存':'忽略'}</p>:(item.status==='completed'||item.recoverable)&&<button onClick={()=>onReview(item)}>编辑草稿</button>}
+    <details><summary>查看内容与来源</summary><MarkdownPreview body={item.body_md||'*尚无内容。*'}/><Sources sources={item.sources}/></details>
+   </article>)}
+  </details>
  </section>
 }

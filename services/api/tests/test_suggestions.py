@@ -9,6 +9,7 @@ from yorw_api.garden import Garden,CreateTopic,SaveBody
 from yorw_api.notes import NewNote,NoteBody
 from yorw_api.search import Search
 from yorw_api.suggestions import Suggestions,Material,Preview,Generate
+from yorw_api.providers import ProbeError
 from test_library import library
 from test_search import document
 
@@ -147,7 +148,102 @@ def test_step10_topics_and_revisions_survive_schema8_upgrade(tmp_path):
     saved=garden.save(first['topic']['id'],SaveBody(body_md='Retained Wiki 正文',base_revision_id=first['revision']['id']))
     old.close();updated=Database(workspace)
     try:
-        assert updated.version==9 and Garden(updated).get(first['topic']['id'])==saved
+        assert updated.version==11 and Garden(updated).get(first['topic']['id'])==saved
         assert updated.connection.execute('SELECT count(*) FROM suggestions').fetchone()[0]==0
         assert updated.connection.execute('PRAGMA foreign_key_check').fetchall()==[]
     finally:updated.close()
+
+
+@pytest.mark.parametrize('second_ending', ['stop', 'length', 'empty', 'disconnect'])
+def test_truncated_draft_continues_only_once_with_same_sources(service, monkeypatch, second_ending):
+    _, topic, value = setup(service)
+    calls = []
+    original = service.garden.get(topic)
+
+    def response(config, key, question, sources, **options):
+        calls.append((question, sources, options))
+        assert options['max_tokens'] == 8192
+        assert key == 'secret'
+        if len(calls) == 1:
+            yield 'First part [S1].'
+            options['state'].finish_reason = 'length'
+            raise ProbeError('OUTPUT_TRUNCATED')
+        assert options['continuation'] == 'First part [S1].'
+        assert question == calls[0][0] and sources == calls[0][1]
+        if second_ending != 'empty':
+            yield ' Continued [S1].'
+        options['state'].finish_reason = 'length' if second_ending == 'length' else 'stop'
+        if second_ending == 'length':
+            raise ProbeError('OUTPUT_TRUNCATED')
+        if second_ending == 'disconnect':
+            raise ProbeError('STREAM_INTERRUPTED')
+
+    monkeypatch.setattr('yorw_api.suggestions.stream', response)
+    item = settle(service, service.generate(topic, value, 'secret'))
+    assert len(calls) == 2
+    assert item['status'] == {'stop': 'completed', 'length': 'partial'}.get(second_ending, 'failed')
+    assert item['body_md'] == 'First part [S1].' + ('' if second_ending == 'empty' else ' Continued [S1].')
+    assert item['recoverable'] == (second_ending != 'stop')
+    assert item['provider']['generation']['continuations'] == 1
+    assert item['provider']['generation']['finish_reasons'][0] == 'length'
+    assert service.garden.get(topic) == original
+    assert service.generate(topic, value, 'secret')['id'] == item['id'] and len(calls) == 2
+    assert service.library.task(item['task_id'])['status'] == ('succeeded' if second_ending == 'stop' else 'failed')
+    assert 'secret' not in json.dumps(item)
+
+
+@pytest.mark.parametrize('ending', ['CONTENT_FILTERED', 'UPSTREAM_RESOURCE_UNAVAILABLE',
+                                   'UPSTREAM_ABORTED', 'STREAM_INTERRUPTED'])
+def test_other_failures_keep_output_without_an_automatic_paid_retry(service, monkeypatch, ending):
+    _, topic, value = setup(service)
+    calls = []
+
+    def response(*args, **options):
+        calls.append(True)
+        yield 'Saved partial [S1].'
+        raise ProbeError(ending)
+
+    monkeypatch.setattr('yorw_api.suggestions.stream', response)
+    item = settle(service, service.generate(topic, value, 'secret'))
+    assert item['status'] == 'failed' and item['error_code'] == ending
+    assert item['recoverable'] and item['body_md'] == 'Saved partial [S1].'
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('change', ['cancel', 'config', 'material'])
+def test_invalidation_at_truncation_prevents_continuation(service, monkeypatch, change):
+    doc, topic, value = setup(service)
+    calls = []
+
+    def response(*args, **options):
+        calls.append(True)
+        yield 'Saved partial [S1].'
+        identity = service.list(topic)['items'][0]['id']
+        if change == 'cancel':
+            service.cancel(identity)
+        else:
+            with service.db.write() as conn:
+                if change == 'config':
+                    conn.execute("UPDATE provider_configs SET version=2 WHERE kind='chat'")
+                else:
+                    conn.execute("UPDATE documents SET deleted_at='now' WHERE id=?", (doc,))
+        options['state'].finish_reason = 'length'
+        raise ProbeError('OUTPUT_TRUNCATED')
+
+    monkeypatch.setattr('yorw_api.suggestions.stream', response)
+    item = settle(service, service.generate(topic, value, 'secret'))
+    assert len(calls) == 1 and item['status'] == ('cancelled' if change == 'cancel' else 'failed')
+    assert item['body_md'] == 'Saved partial [S1].'
+
+
+def test_queued_cancel_before_worker_starts_does_not_leave_a_running_task(service, monkeypatch):
+    _, topic, value = setup(service)
+    jobs = []
+    monkeypatch.setattr(service.pool, 'submit', lambda *args: jobs.append(args))
+    item = service.generate(topic, value, 'secret')
+    service.cancel(item['id'])
+    function, *args = jobs[0]
+    function(*args)
+    result = service.get(item['id'])
+    assert result['status'] == 'cancelled' and not result['recoverable']
+    assert service.library.task(item['task_id'])['status'] == 'cancelled'

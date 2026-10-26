@@ -12,7 +12,7 @@ function descendants(topics:Topic[],id:string){const found=new Set([id]);let cha
 
 function TopicEditor({topic,draft,topics}:{topic:Topic;draft:WikiDraft;topics:Topic[]}){
  const book=gardenBook()
- const [suggestionsOpen,setSuggestionsOpen]=useState(false)
+ const [suggestionsOpen,setSuggestionsOpen]=useState(true)
  const [restoring,setRestoring]=useState<{target:Revision;current:TopicView;requestId:string}|null>(null)
  const [title,setTitle]=useState(topic.title),[parent,setParent]=useState(topic.parent_id??''),[version,setVersion]=useState(topic.version)
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[preview,setPreview]=useState(false)
@@ -33,6 +33,8 @@ function TopicEditor({topic,draft,topics}:{topic:Topic;draft:WikiDraft;topics:To
  async function restore(){if(!restoring)return;try{await book.restore(topic.id,restoring.target.id,{base_revision_id:restoring.current.revision.id,request_id:restoring.requestId});setRestoring(null);await loadHistory();setNotice('已回退为新修订，原历史保留。')}catch(e){setNotice(error(e))}}
  const old=history?.find(r=>r.id===chosen)
  return <article className="garden-editor" aria-label="专题编辑"><h2>{topic.title}</h2>
+  <button onClick={()=>setSuggestionsOpen(v=>!v)}>{suggestionsOpen?'收起 AI 草稿':'AI 草稿'}</button>{suggestionsOpen&&<SuggestionsPanel topicId={topic.id} baseRevisionId={draft.base} dirty={wikiDirty(draft)} onReview={s=>void review(s)}/>}
+  <WikiReview topicId={topic.id}/>
   <details className="topic-metadata"><summary>专题名称与父级</summary><label>名称<input aria-label="专题名称" disabled={busy} maxLength={120} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>父级<select aria-label="专题父级" disabled={busy} value={parent} onChange={e=>setParent(e.target.value)}><option value="">根目录</option>{topics.filter(t=>!excluded.has(t.id)).map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select></label><button disabled={busy||!title.trim()} onClick={()=>void metadata()}>保存目录信息</button><button disabled={busy} onClick={()=>void loadDirectory()}>载入当前目录信息</button><small>目录变更需单独保存；不能移入自身或后代。</small></details>
   <p role="status" className="garden-feedback">{notice}</p><div className="garden-edit-toolbar"><button aria-pressed={!preview} onClick={()=>setPreview(false)}>编辑正文</button><button aria-pressed={preview} onClick={()=>setPreview(true)}>预览正文</button><button className="primary" disabled={draft.saving||draft.conflict||!wikiDirty(draft)||draft.body.length>200000} onClick={()=>void book.save(topic.id)}>保存修订</button></div>
   <p role="status" className="wiki-status">{draft.saving?'正在保存修订…':draft.message}{wikiDirty(draft)&&' · 有未保存正文（本次会话保留）'} · {draft.body.length.toLocaleString()} / 200,000</p>
@@ -42,9 +44,7 @@ function TopicEditor({topic,draft,topics}:{topic:Topic;draft:WikiDraft;topics:To
   {draft.conflict&&<div className="note-conflict"><p>保存基线已变化，当前草稿没有被覆盖。</p><button onClick={()=>void compare()}>比较最新修订</button>{remote&&<><p>最新修订 {remote.revision.ordinal}</p><pre>{remote.revision.body_md}</pre><button onClick={()=>{book.acceptLatest(remote,true);setRemote(null)}}>保留草稿，基于最新继续</button></>}</div>}
   <div className="garden-history"><button disabled={busy} onClick={()=>void loadHistory()}>查看修订历史</button>{history&&<><label>历史修订<select aria-label="历史修订" value={chosen} onChange={e=>setChosen(e.target.value)}>{history.map(r=><option key={r.id} value={r.id}>修订 {r.ordinal} · {r.origin} · {r.created_at}</option>)}</select></label>{old&&<><p>只读快照；查看历史不会覆盖当前草稿。回退会创建新修订并恢复该版本的来源快照。</p><MarkdownPreview body={old.body_md||'*空白初始修订。*'}/><Sources sources={old.sources as import('../shared/status').SourceRef[]}/><button disabled={draft.saving||wikiDirty(draft)} onClick={()=>void prepareRestore(old)}>比较并回退此修订</button></>}</>}</div>
   {restoring&&<section className="wiki-review" aria-label="回退确认"><h3>确认回退</h3><p>当前修订 {restoring.current.revision.ordinal} → 复制历史修订 {restoring.target.ordinal} 为新修订；历史及来源快照保留，失效来源不会恢复为可用。</p><div className="wiki-compare"><div><h4>当前已保存正文</h4><pre>{restoring.current.revision.body_md||'空白正文'}</pre></div><div><h4>将恢复的正文</h4><pre>{restoring.target.body_md||'空白正文'}</pre></div></div><button className="primary" disabled={draft.saving||wikiDirty(draft)||draft.base!==restoring.current.revision.id} onClick={()=>void restore()}>确认回退为新修订</button><button disabled={draft.saving} onClick={()=>setRestoring(null)}>取消回退</button></section>}
-  <WikiReview topicId={topic.id}/>
-  <button onClick={()=>setSuggestionsOpen(v=>!v)}>{suggestionsOpen?'收起材料与 AI 草稿':'材料与 AI 草稿'}</button>{suggestionsOpen&&<SuggestionsPanel topicId={topic.id} baseRevisionId={draft.base} dirty={wikiDirty(draft)} onReview={s=>void review(s)}/>}
-  <p className="notes-footnote">Ctrl+S 保存正文为新修订；草稿尚无崩溃恢复能力。人工内容不会自动获得论文来源，AI 草稿在材料面板中独立生成，比较确认后才能采纳或回退；建议编辑在本次会话保留，关闭前请确认保存。</p>
+  <p className="notes-footnote">Ctrl+S 保存正文。AI 草稿可编辑后追加或替换，保存的修订可在历史中回退。</p>
  </article>
 }
 

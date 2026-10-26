@@ -112,8 +112,48 @@ def test_schema8_upgrade_preserves_existing_suggestions_and_revisions(tmp_path):
         conn.execute("INSERT INTO suggestions(id,topic_id,base_revision_id,base_body_md,instruction,body_md,sources_json,materials_json,request_json,provider_snapshot_json,prompt_version,status,request_id,task_id,created_at) VALUES(?,?,?,'','instruction','Retained draft [S1]','[]','[]','{}','{}','v1','completed',?,?,'time')",(sid,topic['topic']['id'],topic['revision']['id'],str(uuid4()),task))
     old.close();updated=Database(workspace)
     try:
-        assert updated.version==9 and Garden(updated).get(topic['topic']['id'])==topic
+        assert updated.version==11 and Garden(updated).get(topic['topic']['id'])==topic
         assert updated.connection.execute('SELECT body_md FROM suggestions WHERE id=?',(sid,)).fetchone()[0]=='Retained draft [S1]'
         assert updated.connection.execute('SELECT count(*) FROM wiki_decisions').fetchone()[0]==0
         assert updated.connection.execute('PRAGMA foreign_key_check').fetchall()==[]
     finally:updated.close()
+
+
+@pytest.mark.parametrize('status,code', [('partial', 'OUTPUT_TRUNCATED'), ('failed', 'OUTPUT_TRUNCATED'),
+                                       ('failed', 'STREAM_INTERRUPTED'), ('interrupted', 'INTERRUPTED'),
+                                       ('cancelled', 'CANCELLED')])
+def test_repair_partial_and_legacy_failed_drafts_preserves_original_record(service, monkeypatch, status, code):
+    _, topic, item, review = generated(service, monkeypatch)
+    with service.db.write() as conn:
+        conn.execute('UPDATE suggestions SET status=?,error_code=? WHERE id=?', (status, code, item['id']))
+    assert service.get(item['id'])['recoverable']
+    original_sources = service.db.connection.execute('SELECT sources_json FROM suggestions WHERE id=?', (item['id'],)).fetchone()[0]
+    request = Accept(request_id=uuid4(), base_revision_id=item['base_revision_id'], body_md='Manually completed [S1].')
+    accepted = review.decide(item['id'], request, True)
+    assert accepted['view']['revision']['body_md'] == request.body_md
+    saved_sources = service.db.connection.execute('SELECT sources_json FROM revisions WHERE id=?', (accepted['view']['revision']['id'],)).fetchone()[0]
+    assert saved_sources == original_sources
+    retained = service.get(item['id'])
+    assert retained['status'] == status and retained['error_code'] == code and retained['body_md'] == item['body_md']
+    assert review.decide(item['id'], request, True) == accepted
+    assert len(service.garden.history(topic)['items']) == 2
+
+
+@pytest.mark.parametrize('guard', ['empty', 'running', 'source', 'base', 'invalid'])
+def test_partial_recovery_keeps_all_save_guards(service, monkeypatch, guard):
+    doc, topic, item, review = generated(service, monkeypatch)
+    with service.db.write() as conn:
+        conn.execute("UPDATE suggestions SET status='partial',error_code='OUTPUT_TRUNCATED' WHERE id=?", (item['id'],))
+        if guard == 'empty':
+            conn.execute("UPDATE suggestions SET body_md='' WHERE id=?", (item['id'],))
+        if guard == 'running':
+            conn.execute("UPDATE suggestions SET status='running' WHERE id=?", (item['id'],))
+        if guard == 'source':
+            conn.execute("UPDATE documents SET deleted_at='now' WHERE id=?", (doc,))
+    if guard == 'base':
+        service.garden.save(topic, SaveBody(base_revision_id=item['base_revision_id'], body_md='New revision'))
+    before = service.garden.get(topic)
+    with pytest.raises(HTTPException):
+        review.decide(item['id'], Accept(request_id=uuid4(), base_revision_id=item['base_revision_id'],
+                                        body_md='Edited [S999]' if guard == 'invalid' else 'Edited [S1]'), True)
+    assert service.garden.get(topic) == before

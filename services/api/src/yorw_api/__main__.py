@@ -28,11 +28,14 @@ def create_app(token: str, database: Database) -> FastAPI:
     chat = Chat(search)
     from .suggestions import Suggestions,router as suggestions_router
     suggestions = Suggestions(search,chat)
+    from .ai_workflows import Workflows, router as workflows_router
+    workflows = Workflows(suggestions)
     @asynccontextmanager
     async def lifespan(app):
         try:
             yield
         finally:
+            workflows.close()
             suggestions.close()
             chat.close()
             search.close()
@@ -76,6 +79,7 @@ def create_app(token: str, database: Database) -> FastAPI:
     from .exports import router as exports_router
     app.include_router(review_router(suggestions))
     app.include_router(exports_router(database))
+    app.include_router(workflows_router(workflows))
     return app
 
 

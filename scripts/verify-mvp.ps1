@@ -26,11 +26,26 @@ try {
         $mvpChild.WaitForExit()
         if ($mvpChild.ExitCode -ne 0) { throw "MVP verification failed in $mode; see report files." }
     }
-    $mvpState = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $mvpRestart = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-restart.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $mvpFault = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-fault.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $mvpDesktop = Get-Content -LiteralPath (Join-Path $mvpReport 'desktop-smoke.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not $mvpRestart.saved_wiki -or -not $mvpRestart.saved_note -or $mvpRestart.pending_status -ne 'interrupted' -or -not $mvpFault.service_exit_detected -or $mvpDesktop.nodeExposed -or $mvpDesktop.status.state -ne 'ready') { throw 'Missing workflow/recovery proof' }
+    if (Test-Path -LiteralPath (Join-Path $mvpReport 'ai-state.json')) {
+        $mvpState = Get-Content -LiteralPath (Join-Path $mvpReport 'ai-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $mvpRestart = Get-Content -LiteralPath (Join-Path $mvpReport 'ai-restart.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $mvpFlow = Get-Content -LiteralPath (Join-Path $mvpReport 'ai-workflow-smoke.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($mvpFlow.result -ne 'passed' -or -not $mvpFlow.appendRenumbered -or -not $mvpFlow.replace -or -not $mvpFlow.rollback -or -not $mvpFlow.crossDocumentScope -or $mvpFlow.textDocuments -ne 5 -or $mvpFlow.negativeDocuments -ne 3 -or -not $mvpRestart.wiki -or -not $mvpRestart.note -or $mvpRestart.pendingStatus -ne 'interrupted') { throw 'Missing v0.2 workflow/recovery proof' }
+        $mvpSchema = 11
+        $mvpPending = $mvpRestart.pendingStatus
+        $mvpKinds = @($mvpState.source_kinds)
+    } else {
+        # Keep the original v0.1 release's embedded smoke protocol reproducible.
+        $mvpState = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $mvpRestart = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-restart.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $mvpFault = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-fault.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $mvpRestart.saved_wiki -or -not $mvpRestart.saved_note -or $mvpRestart.pending_status -ne 'interrupted' -or -not $mvpFault.service_exit_detected) { throw 'Missing v0.1 workflow/recovery proof' }
+        $mvpSchema = 9
+        $mvpPending = $mvpRestart.pending_status
+        $mvpKinds = @($mvpRestart.source_kinds)
+    }
+    if ($mvpDesktop.nodeExposed -or $mvpDesktop.status.state -ne 'ready') { throw 'Desktop isolation/restart failed' }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $mvpArchive = [IO.Compression.ZipFile]::OpenRead($mvpState.export_path)
     try {
@@ -40,7 +55,7 @@ try {
         try { if ($mvpReader.ReadToEnd() -cne $mvpState.body_md) { throw 'Export differs from saved Wiki' } }
         finally { $mvpReader.Dispose() }
     } finally { $mvpArchive.Dispose() }
-    $mvpSummary = [ordered]@{ result='passed'; executable_sha256=(Get-FileHash -LiteralPath $mvpExe -Algorithm SHA256).Hash; version=(Get-Item -LiteralPath $mvpExe).VersionInfo.ProductVersion; schema_version=9; runtime_path_restricted=$true; clean_windows_verified=$false; text_documents=5; negative_documents=3; source_kinds=@($mvpRestart.source_kinds); pending_status=$mvpRestart.pending_status; duration_seconds=[math]::Round($mvpTimer.Elapsed.TotalSeconds,2) }
+    $mvpSummary = [ordered]@{ result='passed'; executable_sha256=(Get-FileHash -LiteralPath $mvpExe -Algorithm SHA256).Hash; version=(Get-Item -LiteralPath $mvpExe).VersionInfo.ProductVersion; schema_version=$mvpSchema; runtime_path_restricted=$true; clean_windows_verified=$false; text_documents=5; negative_documents=3; source_kinds=$mvpKinds; pending_status=$mvpPending; duration_seconds=[math]::Round($mvpTimer.Elapsed.TotalSeconds,2) }
     $mvpSummary | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $mvpReport 'verification.json') -Encoding UTF8
     Write-Output "MVP workflow and recovery passed. Evidence: $mvpReport"
 } finally {

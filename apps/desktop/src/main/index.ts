@@ -14,6 +14,9 @@ import { Suggestions } from './suggestions'
 import { Workspace } from './workspace'
 import { runSuggestionsSmoke } from './suggestions-smoke'
 import { runReviewExportSmoke } from './review-export-smoke'
+import { runDraftRecoverySmoke } from './draft-recovery-smoke'
+import { Intelligence } from './intelligence'
+import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
 import { runGardenSmoke } from './garden-smoke'
 import { runChatSmoke } from './chat-smoke'
 import { runNotesSmoke } from './notes-smoke'
@@ -36,7 +39,7 @@ else app.whenReady().then(async () => {
   backend = app.isPackaged
     ? new Backend(join(process.resourcesPath, 'backend/yorw-api/yorw-api.exe'), [], process.resourcesPath, workspacePath)
     : new Backend(join(root, 'services/api/.venv/Scripts/python.exe'), ['-m', 'yorw_api'], join(root, 'services/api/src'), workspacePath)
-  const window = new BrowserWindow({ show: !process.argv.includes('--yorw-smoke'), width: 1200, height: 800, minWidth: 900, minHeight: 640, title: '知栖 Yorw', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true, nodeIntegration: false } })
+  const window = new BrowserWindow({ show: !process.argv.includes('--yorw-smoke'), width: 1200, height: 800, minWidth: 900, minHeight: 640, title: '知栖 Yorw', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true, nodeIntegration: false, offscreen: !!smokeProfile } })
   if (readerSmoke) window.webContents.on('render-process-gone', (_event, details) => { void writeFile(join(smokeReport!, 'renderer-exit.json'), JSON.stringify(details)) })
   const devUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL
   const allowed = (url: string) => devUrl ? url === devUrl || url === devUrl + '/' : url === pathToFileURL(join(__dirname, '../renderer/index.html')).href
@@ -54,6 +57,13 @@ else app.whenReady().then(async () => {
     }
   }
   const suggestions = new Suggestions(backend,providers)
+  const intelligence = new Intelligence(backend,providers)
+  ipcMain.handle('ai:preferences',providerAction(()=>intelligence.preferences()))
+  ipcMain.handle('ai:savePreferences',providerAction(input=>intelligence.savePreferences(input)))
+  ipcMain.handle('ai:run',providerAction(input=>intelligence.run(input)))
+  ipcMain.handle('ai:get',providerAction(input=>intelligence.get(input)))
+  ipcMain.handle('ai:latest',providerAction(input=>intelligence.latest(input)))
+  ipcMain.handle('ai:cancel',providerAction(input=>intelligence.cancel(input)))
   ipcMain.handle('suggestions:catalog',providerAction(()=>suggestions.catalog()))
   ipcMain.handle('suggestions:preview',providerAction(input=>suggestions.preview(input)))
   ipcMain.handle('suggestions:generate',providerAction(input=>suggestions.generate(input)))
@@ -121,7 +131,7 @@ else app.whenReady().then(async () => {
       let readerProof: unknown = null
       let notesProof: unknown = null
       let searchProof: unknown = null
-      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')) {
+      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([fixture]), 'Reader fixture.pdf')
@@ -164,7 +174,10 @@ else app.whenReady().then(async () => {
       if(readerSmoke && process.argv.includes('--garden-smoke')) await runGardenSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--suggestions-smoke')) await runSuggestionsSmoke(window,backend,providers,reportDir)
       if(readerSmoke && process.argv.includes('--review-export-smoke')) await runReviewExportSmoke(window,backend,providers,reportDir)
+      if(readerSmoke && process.argv.includes('--draft-recovery-smoke')) await runDraftRecoverySmoke(window,backend,providers,reportDir)
       let faultObserved=false
+      if(readerSmoke&&process.argv.includes('--ai-workflow-smoke'))faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,process.argv.includes('--ai-fault-smoke'))
+      if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runMvpSmoke(window,backend,providers,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeMvpSmoke(window,backend,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
