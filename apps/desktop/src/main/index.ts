@@ -12,16 +12,8 @@ import { Chat } from './chat'
 import { Garden } from './garden'
 import { Suggestions } from './suggestions'
 import { Workspace } from './workspace'
-import { runSuggestionsSmoke } from './suggestions-smoke'
-import { runReviewExportSmoke } from './review-export-smoke'
-import { runDraftRecoverySmoke } from './draft-recovery-smoke'
 import { Intelligence } from './intelligence'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
-import { runGardenSmoke } from './garden-smoke'
-import { runChatSmoke } from './chat-smoke'
-import { runNotesSmoke } from './notes-smoke'
-import { runSearchSmoke } from './search-smoke'
-import { runMvpSmoke, resumeMvpSmoke } from './mvp-smoke'
 
 let backend: Backend
 let quitting = false
@@ -33,8 +25,6 @@ else app.whenReady().then(async () => {
   const root = resolve(__dirname, '../../../..')
   const smokeReport = process.argv.find(arg => arg.startsWith('--report-dir='))?.slice(13)
   const readerSmoke = process.argv.includes('--yorw-smoke') && process.argv.includes('--reader-smoke') && !!smokeReport
-  const notesSmoke = readerSmoke && process.argv.includes('--notes-smoke')
-  let preventedUnloads = 0
   const workspacePath = readerSmoke ? join(smokeReport!, 'workspace') : join(app.getPath('userData'), 'workspace')
   backend = app.isPackaged
     ? new Backend(join(process.resourcesPath, 'backend/yorw-api/yorw-api.exe'), [], process.resourcesPath, workspacePath)
@@ -112,8 +102,6 @@ else app.whenReady().then(async () => {
   ipcMain.handle('providers:test', providerAction(input => providers.test(input)))
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-prevent-unload', event => {
-    // Native smoke automatically chooses "continue editing" in its isolated workspace.
-    if (notesSmoke || process.argv.includes('--garden-smoke')) { preventedUnloads++; return }
     const choice = dialog.showMessageBoxSync(window, { type: 'warning', title: '内容尚未保存', message: '有未保存的笔记、专题正文或正在保存的内容。', detail: '继续编辑以保存；放弃后关闭或重新加载会丢失本次草稿。', buttons: ['继续编辑', '放弃草稿并继续'], defaultId: 0, cancelId: 0, noLink: true })
     if (choice === 1) event.preventDefault()
   })
@@ -129,8 +117,6 @@ else app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
-      let notesProof: unknown = null
-      let searchProof: unknown = null
       if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
@@ -167,22 +153,15 @@ else app.whenReady().then(async () => {
       } else if(!readerSmoke) {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
       }
-      if (notesSmoke) notesProof = await runNotesSmoke(window, backend, reportDir, () => preventedUnloads)
-      if (readerSmoke && process.argv.includes('--search-smoke')) searchProof = await runSearchSmoke(window, reportDir)
       await new Promise(resolve => setTimeout(resolve, 400))
-      if(readerSmoke && process.argv.includes('--chat-smoke')) await runChatSmoke(window,providers,reportDir)
-      if(readerSmoke && process.argv.includes('--garden-smoke')) await runGardenSmoke(window,backend,reportDir)
-      if(readerSmoke && process.argv.includes('--suggestions-smoke')) await runSuggestionsSmoke(window,backend,providers,reportDir)
-      if(readerSmoke && process.argv.includes('--review-export-smoke')) await runReviewExportSmoke(window,backend,providers,reportDir)
-      if(readerSmoke && process.argv.includes('--draft-recovery-smoke')) await runDraftRecoverySmoke(window,backend,providers,reportDir)
       let faultObserved=false
       if(readerSmoke&&process.argv.includes('--ai-workflow-smoke'))faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,process.argv.includes('--ai-fault-smoke'))
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
-      if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runMvpSmoke(window,backend,providers,reportDir)
-      if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeMvpSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
+      if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
-      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, notesProof, searchProof }, null, 2))
+      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
       if (readerSmoke) {
         const layouts = []
