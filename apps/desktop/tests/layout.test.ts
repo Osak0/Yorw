@@ -60,6 +60,28 @@ test('tool tabs are valid Storage pages and persist as the active page', async (
   })
 })
 
+test('Garden AI and history tabs persist as Garden pages', async () => {
+  await withDirectory(async directory => {
+    const store = new Layout(directory)
+    const gardenLayout: WorkspaceLayout = {
+      version: 1,
+      module: 'Garden',
+      tabs: [
+        { kind: 'topic', id: topicId, title: 'Topic' },
+        { kind: 'ai', id: topicId, title: 'Topic' },
+        { kind: 'history', id: topicId, title: 'Topic' }
+      ],
+      activeKey: `ai:${topicId}`,
+      storageKey: null,
+      gardenKey: `history:${topicId}`,
+      directoryCollapsed: true
+    }
+    await store.save(gardenLayout)
+    await expect(store.load()).resolves.toEqual({ layout: gardenLayout })
+    await expect(store.save({ ...gardenLayout, module: 'Storage' })).rejects.toThrow('INVALID_LAYOUT')
+  })
+})
+
 test('corrupt or structurally invalid layouts report invalid instead of loading', async () => {
   await withDirectory(async directory => {
     const store = new Layout(directory)

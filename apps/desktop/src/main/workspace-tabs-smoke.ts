@@ -40,11 +40,12 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
 
     nav('Garden').click()
     await waitFor(() => document.querySelector('.garden-content')?.textContent.includes('专题目录'), 'GARDEN_HOME_A')
+    button('新建').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_FORM_A')
     setValue(control('input[aria-label="新专题名称"]'), 'Topic Alpha')
     await waitFor(() => !button('创建专题').disabled, 'CREATE_ALPHA')
     button('创建专题').click()
-    await waitFor(() => document.querySelector('.garden-editor h2')?.textContent.includes('Topic Alpha'), 'ALPHA_OPEN')
-    setValue(control('[aria-label="Wiki 生成要求"]'), 'alpha instruction')
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'), 'ALPHA_OPEN')
 
     documentTab().click()
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'DOC_A_BACK')
@@ -53,17 +54,17 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
     const documentASelected = documentTab().getAttribute('aria-selected') === 'true'
 
     alphaTab().click()
-    await waitFor(() => document.querySelector('.garden-editor h2')?.textContent.includes('Topic Alpha'), 'ALPHA_BACK')
-    const topicAInstruction = control('[aria-label="Wiki 生成要求"]').value
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'), 'ALPHA_BACK')
     const topicASelected = alphaTab().getAttribute('aria-selected') === 'true'
 
     nav('Garden').click()
     await waitFor(() => document.querySelector('.garden-content')?.textContent.includes('专题目录'), 'GARDEN_HOME_B')
+    button('新建').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_FORM_B')
     setValue(control('input[aria-label="新专题名称"]'), 'Topic Beta')
     await waitFor(() => !button('创建专题').disabled, 'CREATE_BETA')
     button('创建专题').click()
-    await waitFor(() => document.querySelector('.garden-editor h2')?.textContent.includes('Topic Beta'), 'BETA_OPEN')
-    setValue(control('[aria-label="Wiki 生成要求"]'), 'beta instruction')
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta'), 'BETA_OPEN')
     setValue(control('input[aria-label="专题名称"]'), 'Topic Beta Renamed')
     await waitFor(() => !button('保存目录信息').disabled, 'META_ENABLED')
     button('保存目录信息').click()
@@ -71,11 +72,9 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
     const topicTitleUpdated = tabs().some(tab => tab.textContent.includes('Topic Beta Renamed'))
 
     alphaTab().click()
-    await waitFor(() => document.querySelector('.garden-editor h2')?.textContent.includes('Topic Alpha'), 'ALPHA_AGAIN')
-    const topicAInstructionBack = control('[aria-label="Wiki 生成要求"]').value
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'), 'ALPHA_AGAIN')
     betaTab().click()
-    await waitFor(() => document.querySelector('.garden-editor h2')?.textContent.includes('Topic Beta'), 'BETA_AGAIN')
-    const topicBInstruction = control('[aria-label="Wiki 生成要求"]').value
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta'), 'BETA_AGAIN')
     const topicBSelected = betaTab().getAttribute('aria-selected') === 'true'
 
     nav('Storage').click()
@@ -161,9 +160,6 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
       documentAQuery,
       documentAPage,
       documentASelected,
-      topicAInstruction,
-      topicAInstructionBack,
-      topicBInstruction,
       topicTitleUpdated,
       toolHosts,
       documentBQuery,
@@ -206,19 +202,19 @@ export async function runWorkspaceTabsCloseSmoke(window: BrowserWindow): Promise
     await waitFor(()=>document.querySelector('.close-dialog'),'SAVE_DIALOG')
     button('保存并关闭').click()
     await waitFor(()=>tabs().length===3,'SAVED_CLOSE')
-    await waitFor(()=>document.querySelector('.garden-editor h2')?.textContent.includes('Topic Alpha'),'NEXT_TOPIC')
+    await waitFor(()=>document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'),'NEXT_TOPIC')
     return {tabs:tabs().length,active:document.querySelector('.workspace-tab[aria-selected="true"]')?.textContent??'',dialogGone:!document.querySelector('.close-dialog')}
   })()`)
   await window.webContents.executeJavaScript(`(async()=>{${helpers}
     item('Topic Beta').querySelector('.workspace-tab').click()
-    await waitFor(()=>document.querySelector('.garden-editor h2')?.textContent.includes('Topic Beta'),'BETA_EDITOR')
-    document.querySelector('.garden-editor .cm-content').focus()
+    await waitFor(()=>document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta'),'BETA_EDITOR')
+    document.querySelector('.topic-body-view .cm-content').focus()
   })()`)
   await window.webContents.insertText('Unsaved wiki draft ')
   const closedOthers = await window.webContents.executeJavaScript(`(async()=>{${helpers}
     await waitFor(()=>item('Topic Beta')?.querySelector('.workspace-tab-dirty'),'DIRTY_WIKI')
     item('Topic Alpha').querySelector('.workspace-tab').click()
-    await waitFor(()=>document.querySelector('.garden-editor h2')?.textContent.includes('Topic Alpha'),'ALPHA_ACTIVE')
+    await waitFor(()=>document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'),'ALPHA_ACTIVE')
     button('关闭其他').click()
     await waitFor(()=>document.querySelector('.close-dialog')?.textContent.includes('Topic Beta'),'OTHERS_DIALOG')
     button('取消').click()
@@ -364,11 +360,12 @@ export async function runWorkspaceCitationSmoke(window: BrowserWindow, providers
 export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: string): Promise<unknown> {
   const ui = (code: string) => window.webContents.executeJavaScript(`(async()=>{
     const wait=async(predicate,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('LAYOUT_SMOKE_TIMEOUT_'+label)}
+    const button=text=>[...document.querySelectorAll('button')].find(element=>element.textContent===text)
     ${code}
   })()`)
   const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
   const sizes: Array<[number, number]> = [[1280, 720], [1440, 900]]
-  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown; tool?: unknown[] } = { chat: [], garden: [] }
+  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown; tool?: unknown[]; directoryCollapsed?: unknown; toolBack?: unknown } = { chat: [], garden: [] }
   await ui(`document.querySelector('.chat-toggle').click();await wait(()=>document.querySelector('[aria-label="研究问题"]'),'CHAT')`)
   for (const [width, height] of sizes) {
     window.setContentSize(width, height)
@@ -382,7 +379,13 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
     result.chat.push(check)
     await writeFile(join(reportDir, `chat-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
   }
-  await ui(`document.querySelector('.module-nav button:nth-child(2)').click();await wait(()=>document.querySelector('[data-topic-id]'),'GARDEN');document.querySelector('[data-topic-id]').click();await wait(()=>document.querySelector('.garden-editor'),'EDITOR')`)
+  await ui(`document.querySelector('.module-nav button:nth-child(2)').click();await wait(()=>document.querySelector('[data-topic-id]'),'GARDEN');document.querySelector('[data-topic-id]').click();await wait(()=>document.querySelector('.topic-body-view'),'EDITOR')`)
+  const normalContentWidth = await window.webContents.executeJavaScript(`document.querySelector('.garden-content')?.getBoundingClientRect().width??0`)
+  await ui(`button('收起目录').click();await wait(()=>!document.querySelector('.garden-directory'),'COLLAPSE')`)
+  const collapsed = await window.webContents.executeJavaScript(`(() => { const content=document.querySelector('.garden-content'); return { directoryGone: !document.querySelector('.garden-directory'), expandVisible: document.querySelector('.garden-content-bar button')?.textContent === '展开目录', contentWidth: content?.getBoundingClientRect().width ?? 0 } })()`)
+  await writeFile(join(reportDir, 'garden-collapsed.png'), (await window.webContents.capturePage()).toPNG())
+  await ui(`button('展开目录').click();await wait(()=>document.querySelector('.garden-directory'),'EXPAND')`)
+  result.directoryCollapsed = { ...collapsed, normalContentWidth, wider: collapsed.contentWidth > normalContentWidth }
   for (const [width, height] of sizes) {
     window.setContentSize(width, height)
     await pause(800)
@@ -391,7 +394,7 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
       const workspace = document.querySelector('.garden-workspace')
       const directory = document.querySelector('.garden-directory')
       const content = document.querySelector('.garden-content')
-      return { width: innerWidth, height: innerHeight, workspaceVisible: !!workspace && inside(workspace), directoryVisible: !!directory && inside(directory), contentVisible: !!content && inside(content), editor: !!document.querySelector('.garden-editor'), horizontalOverflow: document.documentElement.scrollWidth > innerWidth }
+      return { width: innerWidth, height: innerHeight, workspaceVisible: !!workspace && inside(workspace), directoryVisible: !!directory && inside(directory), contentVisible: !!content && inside(content), editor: !!document.querySelector('.topic-body-view'), horizontalOverflow: document.documentElement.scrollWidth > innerWidth }
     })()`)
     result.garden.push(check)
     await writeFile(join(reportDir, `garden-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
@@ -426,13 +429,22 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
     ;(result.tool as unknown[]).push(check)
     await writeFile(join(reportDir, `tool-chat-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
   }
-  await ui(`[...document.querySelectorAll('button')].find(button=>button.textContent==='返回阅读侧栏').click();await wait(()=>document.querySelector('.notes-sidebar .chat-panel'),'TOOL_BACK')`)
+  const toolBack = await window.webContents.executeJavaScript(`(async()=>{
+    const back=[...document.querySelectorAll('button')].find(element=>element.textContent==='返回阅读侧栏')
+    if(!back)return {button:false}
+    back.click()
+    await new Promise(resolve=>setTimeout(resolve,500))
+    return {button:true,sidebar:!!document.querySelector('.notes-sidebar'),chat:!!document.querySelector('.notes-sidebar .chat-panel'),reader:!!document.querySelector('.reader-feedback'),active:document.querySelector('.workspace-tab[aria-selected="true"]')?.textContent??''}
+  })()`)
+  result.toolBack = toolBack
+  if (!(toolBack as any).chat) throw new Error('TOOL_BACK_FAILED:'+JSON.stringify(toolBack))
   await writeFile(join(reportDir, 'layout-panels.json'), JSON.stringify(result, null, 2))
   const chatOk = result.chat.every((item: any) => item.inputVisible && item.panelVisible && !item.horizontalOverflow)
   const gardenOk = result.garden.every((item: any) => item.workspaceVisible && item.directoryVisible && item.contentVisible && item.editor && !item.horizontalOverflow)
   const narrowOk = (result.narrow as any).overlayVisible && (result.narrow as any).inputVisible && !(result.narrow as any).horizontalOverflow && focusReturned
   const toolOk = (result.tool as any[]).every(item => item.toolVisible && item.headerVisible && item.bodyVisible && item.inputVisible && !item.horizontalOverflow)
-  if (!chatOk || !gardenOk || !narrowOk || !toolOk) throw new Error('PANEL_LAYOUT_FAILED')
+  const directoryOk = (result.directoryCollapsed as any).directoryGone && (result.directoryCollapsed as any).expandVisible && (result.directoryCollapsed as any).wider
+  if (!chatOk || !gardenOk || !narrowOk || !toolOk || !directoryOk) throw new Error('PANEL_LAYOUT_FAILED')
   return result
 }
 

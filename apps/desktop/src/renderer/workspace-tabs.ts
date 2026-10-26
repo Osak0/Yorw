@@ -2,7 +2,9 @@ import type { WorkspaceLayoutTab } from '../shared/status'
 
 export type WorkspaceModule = 'Storage' | 'Garden'
 export type StorageTool = 'notes' | 'search' | 'chat'
-export type WorkspaceTabKind = 'document' | 'topic' | StorageTool
+export type GardenTool = 'ai' | 'history'
+export type WorkspaceTabKind = 'document' | 'topic' | StorageTool | GardenTool
+const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat']
 
 export type WorkspaceTab = {
   key: string
@@ -27,8 +29,12 @@ export function toolTab(tool: StorageTool, id: string, title: string): Workspace
   return makeTab(tool, id, title)
 }
 
+export function gardenToolTab(tool: GardenTool, id: string, title: string): WorkspaceTab {
+  return makeTab(tool, id, title)
+}
+
 export function isStorageTab(tab: WorkspaceTab): boolean {
-  return tab.kind !== 'topic'
+  return STORAGE_KINDS.includes(tab.kind)
 }
 
 /** 同一页面类型与实体只保留一个标签；重复打开由调用方激活已有项。 */
@@ -37,24 +43,20 @@ export function addWorkspaceTab(tabs: WorkspaceTab[], tab: WorkspaceTab): Worksp
 }
 
 export function moduleForTab(tab: WorkspaceTab): WorkspaceModule {
-  return tab.kind === 'topic' ? 'Garden' : 'Storage'
+  return isStorageTab(tab) ? 'Storage' : 'Garden'
 }
 
 export function tabKindLabel(tab: WorkspaceTab): string {
-  return { document: '文献', topic: '专题', notes: '笔记', search: '检索', chat: '问答' }[tab.kind]
+  return { document: '文献', topic: '专题', notes: '笔记', search: '检索', chat: '问答', ai: 'AI 优化', history: '修订历史' }[tab.kind]
 }
 
 /** Restores saved pages against the current workspace and reports pages that no longer exist. */
 export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, string>, topics: Map<string, string>): { tabs: WorkspaceTab[]; skipped: number } {
   const tabs: WorkspaceTab[] = []
   for (const item of items) {
-    if (item.kind === 'topic') {
-      const title = topics.get(item.id)
-      if (title !== undefined) tabs.push(topicTab(item.id, title))
-    } else {
-      const title = documents.get(item.id)
-      if (title !== undefined) tabs.push(makeTab(item.kind, item.id, title))
-    }
+    const garden = !STORAGE_KINDS.includes(item.kind)
+    const title = (garden ? topics : documents).get(item.id)
+    if (title !== undefined) tabs.push(makeTab(item.kind, item.id, title))
   }
   return { tabs, skipped: items.length - tabs.length }
 }

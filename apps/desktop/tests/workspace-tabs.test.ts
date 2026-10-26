@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { addWorkspaceTab, documentTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, toolTab, topicTab } from '../src/renderer/workspace-tabs'
+import { addWorkspaceTab, documentTab, gardenToolTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, toolTab, topicTab } from '../src/renderer/workspace-tabs'
 
 const id = '12345678-1234-1234-1234-123456789abc'
 
@@ -16,6 +16,12 @@ test('document and topic tabs are keyed by page type and entity', () => {
     expect(tab.key).toBe(`${tool}:${id}`)
     expect(moduleForTab(tab)).toBe('Storage')
     expect(tabKindLabel(tab)).toBe({ notes: '笔记', search: '检索', chat: '问答' }[tool])
+  }
+  for (const tool of ['ai', 'history'] as const) {
+    const tab = gardenToolTab(tool, id, 'Topic')
+    expect(tab.key).toBe(`${tool}:${id}`)
+    expect(moduleForTab(tab)).toBe('Garden')
+    expect(tabKindLabel(tab)).toBe({ ai: 'AI 优化', history: '修订历史' }[tool])
   }
 })
 
@@ -34,11 +40,13 @@ test('restoring skips pages that no longer exist and reports the count', () => {
     { kind: 'document', id },
     { kind: 'notes', id },
     { kind: 'search', id },
-    { kind: 'document', id: missing },
     { kind: 'topic', id },
+    { kind: 'ai', id },
+    { kind: 'history', id },
+    { kind: 'document', id: missing },
     { kind: 'topic', id: missing }
   ], documents, topics)
-  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'topic:Topic'])
+  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic'])
   expect(restored.skipped).toBe(2)
 })
 
