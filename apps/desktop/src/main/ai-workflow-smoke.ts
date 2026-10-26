@@ -130,7 +130,7 @@ export async function runAiWorkflowSmoke(window:BrowserWindow,backend:Backend,pr
    if(!state.pending_id)throw new Error('INFLIGHT_DRAFT_NOT_CREATED')
    if(!backend.processId)throw new Error('BACKEND_PROCESS_MISSING')
    process.kill(backend.processId)
-   await ui(window,`await wait(()=>document.querySelector('main').textContent.includes('本地服务已退出'))`)
+   await ui(window,`await wait(()=>document.querySelector('.app-status.failed')?.textContent.includes('本地服务已退出')||document.body.textContent.includes('本地服务已退出'))`)
   }
   await writeFile(join(reportDir,'ai-state.json'),JSON.stringify(state,null,2))
   return fault
