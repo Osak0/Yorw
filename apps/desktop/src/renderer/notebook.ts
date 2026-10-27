@@ -23,6 +23,14 @@ export class Notebook {
     this.publish({ notes: this.snapshot.notes.map(note => note.id === id ? { ...note, ...change } : note) })
   }
   hasUnsaved() { return this.snapshot.notes.some(note => dirty(note) || note.saving) }
+  async saveAll() {
+    for (const note of this.snapshot.notes) {
+      if ((dirty(note) || note.saving) && !note.conflict) await this.save(note.id)
+    }
+  }
+  discardAll() {
+    for (const note of this.snapshot.notes) if (dirty(note) && !note.saving) this.discard(note.id)
+  }
   async importSaved(id: string) {
     await this.load()
     const result = await this.bridge.list(this.documentId)
@@ -94,3 +102,4 @@ export function notebookFor(documentId: string) {
 }
 export function hasUnsavedNotes() { return [...notebooks.values()].some(notebook => notebook.hasUnsaved()) }
 export function documentHasUnsavedNotes(id: string) { return notebooks.get(id)?.hasUnsaved() ?? false }
+export function unsavedDocumentIds() { return [...notebooks.values()].filter(notebook => notebook.hasUnsaved()).map(notebook => notebook.documentId) }

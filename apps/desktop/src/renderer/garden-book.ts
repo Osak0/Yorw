@@ -14,6 +14,11 @@ export class GardenBook {
  private patch(id:string,update:Partial<WikiDraft>){const draft=this.state.drafts[id];if(draft)this.publish({drafts:{...this.state.drafts,[id]:{...draft,...update}}})}
  private topic(value:Topic){const topics=this.state.topics.filter(item=>item.id!==value.id);this.publish({topics:[...topics,value]})}
  hasUnsaved(){return Object.values(this.state.drafts).some(d=>wikiDirty(d)||d.saving)||Object.values(this.state.reviews).some(r=>r.body!==r.suggestion.body_md)}
+ hasUnsavedDraft(id:string){const d=this.state.drafts[id];return !!d&&(wikiDirty(d)||d.saving)}
+ hasUnsavedReview(id:string){const r=this.state.reviews[id];return !!r&&r.body!==r.suggestion.body_md}
+ hasUnsavedTopic(id:string){return this.hasUnsavedDraft(id)||this.hasUnsavedReview(id)}
+ discardTopic(id:string){const d=this.state.drafts[id];if(d)this.patch(id,{body:d.savedBody,conflict:false,message:''});this.review(id,null)}
+ discardReview(id:string){this.review(id,null)}
  review(id:string,value:ReviewDraft|null){const reviews={...this.state.reviews};if(value)reviews[id]=value;else delete reviews[id];this.publish({reviews})}
  editReview(id:string,body:string){const r=this.state.reviews[id];if(r)this.review(id,{...r,body,requestId:crypto.randomUUID()})}
  async decide(id:string,action:'accept'|'reject',review:ReviewDraft,apply_mode?:'append'|'replace'){
@@ -46,3 +51,14 @@ export class GardenBook {
 let book:GardenBook|undefined
 export function gardenBook(){return book??=new GardenBook(window.yorw.garden)}
 export function hasUnsavedGarden(){return book?.hasUnsaved()??false}
+export function unsavedTopicIds(){
+ const current=book
+ if(!current)return []
+ const state=current.getSnapshot()
+ return [...new Set([...Object.keys(state.drafts),...Object.keys(state.reviews)])].filter(id=>current.hasUnsavedTopic(id))
+}
+export function unsavedReviewTopicIds(){
+ const current=book
+ if(!current)return []
+ return Object.keys(current.getSnapshot().reviews).filter(id=>current.hasUnsavedReview(id))
+}

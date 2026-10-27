@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-适用 v0.2.0 / schema 11。这里描述现役代码；环境和复现命令见[开发指南](development.md)，历史取舍见[开发记录](history/v0.2.0.md)。
+适用 v0.2.0 数据合同与 v0.2.1 阶段 A 工作区界面 / schema 11。这里描述现役代码；环境和复现命令见[开发指南](development.md)，历史取舍见 [v0.2.0](history/v0.2.0.md) 与 [v0.2.1 阶段 A](history/v0.2.1-stage-a.md)。
 
 ## 模块与通信
 
@@ -10,9 +10,9 @@ React renderer → 受限 preload IPC → Electron main → 本地 FastAPI → S
 
 | 位置 | 实际职责 |
 | --- | --- |
-| `apps/desktop/src/main/` | 窗口、原生对话框、safeStorage 密钥、Python 生命周期、业务 IPC 校验与转发。 |
-| `apps/desktop/src/preload/`、`src/shared/` | 固定桥接操作和手写 TypeScript 合同；变更时与 Python DTO 同步。 |
-| `apps/desktop/src/renderer/` | Storage/Garden/House、PDF.js、CodeMirror、Markdown 预览及会话内草稿。 |
+| `apps/desktop/src/main/` | 窗口、原生对话框、safeStorage 密钥、Python 生命周期、业务 IPC、工作区布局校验/写入与转发。 |
+| `apps/desktop/src/preload/`、`src/shared/` | 固定桥接操作和手写 TypeScript 合同（含 `layout:load/save`）；变更时与 Python DTO 同步。 |
+| `apps/desktop/src/renderer/` | Storage/Garden/House、工作标签与布局、PDF.js、CodeMirror、Markdown 预览、按实体会话状态。 |
 | `services/api/src/yorw_api/` | 按业务文件组织 FastAPI/Pydantic、有限并发任务、模型协议和持久化。未建立早期规划中的空 `api/services/prompts` 分层。 |
 | `storage/`、`migrations/` | 受管路径、SQLite 事务、完整性检查和顺序迁移。 |
 | 两侧 `tests/`、`scripts/` | 自动化回归、构建、自编写样例生成及完整桌面复现。 |
@@ -20,6 +20,16 @@ React renderer → 受限 preload IPC → Electron main → 本地 FastAPI → S
 main 启动 Python 时通过 stdin 传入工作区与会话令牌；后端监听 127.0.0.1 动态端口，HTTP 使用 Bearer 会话认证。健康握手成功才进入 ready。renderer 保持 contextIsolation/sandbox，关闭 Node 集成，IPC 检查来源窗口、mainFrame 和 URL；不开放任意路径、HTTP 或命令执行。
 
 开发使用独立的 `Yorw-development` profile；正式运行使用 Electron userData。实际路径由 House 显示。工作区含 `yorw.sqlite3`、`documents/<uuid>.pdf`、`tmp/`、`logs/`、`backups/`；main 另管 `secrets/`，密钥不进数据库或普通日志。测试 profile 和数据位于报告目录，不使用真实用户库。
+
+## 工作区界面、标签与布局
+
+`workspace-tabs.ts` 定义工作标签：`document`、`topic`、Storage 工具（`notes`/`search`/`chat`）和 Garden 工具（`ai`/`history`）。标签键为“类型:实体 ID”，文献与专题工具共用所属实体 ID；`moduleForTab` 决定归属 Storage 或 Garden。App 持有标签数组、激活键、当前模块和各模块最后活动键；模块导航清空当前激活键进入首页，标签栏激活标签时同步模块。布局恢复按当前文献/专题列表校验实体，跳过不存在的页面并提示；损坏布局回到 Storage 首页。
+
+侧栏与标签是同一份状态的两种宿主。Storage 的阅读标签渲染 PDF 与侧栏；工具标签渲染独立的 `DocumentTool`。任一时刻只挂载一个宿主，工具输入/结果/编辑草稿按文献保存在 `session-state.ts`（页码、缩放、侧栏模式/宽度、检索与问答输入）或既有 `Notebook`/`GardenBook`。从侧栏“展开为标签”关闭侧栏宿主并激活工具标签；工具“返回阅读侧栏”移除工具标签、激活文献阅读标签并打开对应侧栏。工具标签中的来源跳转通过一次性 pending jump 激活目标文献的阅读标签，PDF 加载完成后定位物理页，不覆盖其他文献。
+
+Garden 正文、AI 优化和修订历史是所属专题的三个标签。正文页只保留标题/父级路径、折叠的名称与父级入口、编辑/预览/保存/AI 优化/修订历史工具栏和主编辑器；AI 优化复用 `SuggestionsPanel` 与 `WikiReview`，修订历史复用既有 revision/source 比较和回退合同。目录收起状态与专题工具共享标签模型。AI 选材、草稿截断恢复、来源检查、修订校验和人工采纳语义没有因界面拆分改变。
+
+主进程 `Layout` 将界面状态写入 `userData/workspace-layout.json`（不进入 SQLite）：版本 1，最多 50 个标签、标题最多 500 字符、文件上限 64 KiB；校验页面类型、UUID、唯一键、激活项与模块一致、Storage/Garden 键归属、侧栏宽度 320–480 和目录折叠布尔值，未知字段在写入时丢弃。写入使用临时文件加 rename，并串行化；文件不含正文、密钥、聊天输入或任务结果。读取失败、版本/结构损坏或校验不通过时回退 Storage 首页。布局是界面便利状态，不是业务备份。schema 仍为 11，本阶段没有迁移。
 
 ## 数据所有权与一致性
 

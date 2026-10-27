@@ -39,7 +39,20 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 
 样例与报告目录必须尚不存在，保护历史证据。生成器提供 5 份自编写文字 PDF 和加密/空文本/损坏 3 份负例。验证脚本清理运行时环境覆盖，限制 PATH 为 Windows 目录，在隔离 profile 中运行检索跳页、连续问答、笔记、自动选材、追加/替换/回退、导出和服务中断/重启。
 
-现役原生烟测仅保留 `ai-workflow-smoke.ts` 与 main 中的启动/阅读探针；脚本使用 `--mvp-smoke`、`--mvp-resume-smoke` 兼容入口，仍可读取 v0.1.0 旧制品的报告协议。旧阶段专用 `--notes-smoke`、`--search-smoke`、`--chat-smoke`、`--garden-smoke`、`--suggestions-smoke`、`--review-export-smoke`、`--draft-recovery-smoke` 不再维护；复现旧版时检出对应历史提交，不在当前界面运行旧选择器。
+现役原生烟测保留 `ai-workflow-smoke.ts`、`workspace-tabs-smoke.ts` 与 main 中的启动/阅读探针；脚本使用 `--mvp-smoke`、`--mvp-resume-smoke` 兼容入口，仍可读取 v0.1.0 旧制品的报告协议。旧阶段专用 `--notes-smoke`、`--search-smoke`、`--chat-smoke`、`--garden-smoke`、`--suggestions-smoke`、`--review-export-smoke`、`--draft-recovery-smoke` 不再维护；复现旧版时检出对应历史提交，不在当前界面运行旧选择器。
+
+v0.2.1 阶段 A 的界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用隔离的绝对 `--report-dir`、自编写 PDF 和本地 loopback 模型/SSE 夹具：
+
+- `--tabs-smoke`：打开同一/不同文献和专题、展开和返回三个 Storage 工具、共享检索输入、标签去重、标题更新与键盘语义。
+- `--tabs-resume-smoke`：恢复标签顺序、激活项、页码和侧栏模式。
+- `--tabs-close-smoke`：未保存笔记的取消/保存关闭、关闭其他逐项确认与最终关闭。
+- `--tabs-fault-smoke`：后端退出时保存失败保持标签打开。
+- `--tabs-citation-smoke`：工具标签中的来源跳转到正确阅读标签和物理页；关闭阅读标签后可重新创建。
+- `--tabs-chat-smoke`：长回答流式增长、自动跟随/回到最新、停止、重新回答、输入法组合输入和保存笔记。
+- `--tabs-tool-resume-smoke`：工具标签重启恢复并返回阅读。
+- `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
+
+这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
 
 ## 如何解读结果
 
@@ -67,3 +80,5 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 2026-10-26 整理核验：Markdown 从 30 份收敛为 12 份，22 份原始记录合并为 3 份历史归档；每条记录保留原路径和 SHA256，可与基线 Git 内容核对。删除的手工体验清单没有执行结果，不作为质量证据保留；源代码测试、JSON 夹具、现役样例生成器与完整流程烟测继续维护。仓库整理不修改平台生成记忆，旧分支及忽略目录内的发布包/原始证据也不清场。
 
 本轮通过类型检查、29 项桌面测试、生产构建、118 条本地文档链接和 15 项忽略规则检查。另在 `release/repository-cleanup-check/` 创建独立检查包，使用新生成的样例完成受限 PATH 下的完整流程与故障恢复（32.38 秒，schema 11）；报告位于 `.cache/repository-cleanup-proof/verification.json`。Python 业务、迁移及依赖没有改动，本轮未重跑完整后端回归，154 项属于 v0.2.0 历史交付证据。新检查包不是公开发布制品，不替代原验收包。
+
+2026-10-27 v0.2.1 阶段 A（步骤 1–6）核验：`pnpm typecheck`、`pnpm test`（16 文件 / 41 项）、`pnpm build` 通过；重新构建冻结后端后完整 pytest 154 项通过（87.01 秒，无跳过）。开发 Electron 烟测覆盖标签、工具宿主、引用跳转、底部问答、Garden 三视图、目录收起、重启和关闭保护；阅读布局在 1440×1024、1024×768、1280×720、1440×900 均无导航/工具栏溢出或页面横向滚动，125% 设备缩放通过。`pnpm build:backend` 后打包 `release/v0.2.1-stage-a-review/win-unpacked`，使用新自编写夹具在受限 PATH 下完成完整流程与恢复，37.61 秒、schema 11；报告 `.cache/stage-a-packaged-20261027/verification.json`。真实模型逐题质量、独立干净 Windows、安装器和公开发布仍未验证；本阶段分支未合并 main、未发布，包版本仍为 0.2.0.0。
