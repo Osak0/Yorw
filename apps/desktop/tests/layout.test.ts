@@ -18,7 +18,8 @@ const layout: WorkspaceLayout = {
   storageKey: `document:${documentId}`,
   gardenKey: `topic:${topicId}`,
   sidebar: { mode: 'search', width: 400 },
-  directoryCollapsed: false
+  directoryCollapsed: false,
+  storageDirectoryCollapsed: true
 }
 
 async function withDirectory(run: (directory: string) => Promise<void>) {
@@ -48,7 +49,8 @@ test('tool tabs are valid Storage pages and persist as the active page', async (
         { kind: 'document', id: documentId, title: 'Paper' },
         { kind: 'notes', id: documentId, title: 'Paper' },
         { kind: 'chat', id: documentId, title: 'Paper' },
-        { kind: 'resource', id: documentId, title: 'Paper' }
+        { kind: 'resource', id: documentId, title: 'Paper' },
+        { kind: 'metadata', id: documentId, title: 'Paper' }
       ],
       activeKey: `notes:${documentId}`,
       storageKey: `notes:${documentId}`,

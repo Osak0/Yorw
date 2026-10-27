@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { DocumentRecord, DocumentResource, DocumentSummary, Topic } from '../shared/status'
-import { MetadataEditor } from './MetadataEditor'
 import './resources.css'
 
 const explain = (code: string) => ({
@@ -119,8 +118,9 @@ export function DocumentResourceSections({ resource, topics, notice, busy, candi
   </div>
 }
 
-export function DocumentResourceView({ document, onOpenNotes, onOpenSearch, onOpenChat, onOpenTopic, onNavigate }: {
+export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, onOpenSearch, onOpenChat, onOpenTopic, onNavigate }: {
   document: DocumentRecord
+  onEditMetadata(): void
   onOpenNotes(): void
   onOpenSearch(): void
   onOpenChat(): void
@@ -131,7 +131,6 @@ export function DocumentResourceView({ document, onOpenNotes, onOpenSearch, onOp
   const [topics, setTopics] = useState<Topic[]>([])
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
-  const [editing, setEditing] = useState(false)
   const [candidateQuery, setCandidateQuery] = useState('')
   const [candidateDescription, setCandidateDescription] = useState('')
   const [candidates, setCandidates] = useState<Candidate[]>([])
@@ -178,10 +177,9 @@ export function DocumentResourceView({ document, onOpenNotes, onOpenSearch, onOp
   }
   if (!resource) return <div className="document-resource-view" aria-label="文献资料"><p role="status">正在加载文献资料…</p><p role="status">{notice}</p></div>
   return <>
-    {editing && <MetadataEditor key={resource.document.id} document={resource.document} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load() }} />}
     <DocumentResourceSections resource={resource} topics={topics} notice={notice} busy={busy} candidates={candidates}
       candidateQuery={candidateQuery} candidateDescription={candidateDescription}
-      onEditMetadata={() => setEditing(true)}
+      onEditMetadata={onEditMetadata}
       onAddTopic={topicId => void action(() => window.yorw.resources.addDocumentTopic({ document_id: document.id, topic_id: topicId }), '已关联专题。')}
       onRemoveTopic={topicId => void action(() => window.yorw.resources.removeDocumentTopic({ document_id: document.id, topic_id: topicId }), '已解除专题关联；笔记和正文保持不变。')}
       onSearchCandidates={() => void searchCandidates()}

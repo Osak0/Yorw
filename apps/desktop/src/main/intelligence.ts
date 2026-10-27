@@ -21,7 +21,9 @@ export class Intelligence{
  }
  async run(input:AiInput){
   if(!input||!['search','chat','draft'].includes(input.kind)||typeof input.text!=='string'||!input.text.trim()||input.text.length>(input.kind==='draft'?2000:4000))throw new Error('INVALID_INPUT')
-  const body={kind:input.kind,text:input.text.trim(),target_id:uuid(input.target_id),request_id:uuid(input.request_id),...(input.kind==='draft'?{base_revision_id:uuid(input.base_revision_id)}:{})}
+  if(input.scope!==undefined&&!['topic','workspace'].includes(input.scope))throw new Error('INVALID_INPUT')
+  if(input.kind!=='draft'&&input.scope!==undefined)throw new Error('INVALID_INPUT')
+  const body={kind:input.kind,text:input.text.trim(),target_id:uuid(input.target_id),request_id:uuid(input.request_id),...(input.kind==='draft'?{base_revision_id:uuid(input.base_revision_id),...(input.scope?{scope:input.scope}:{})}:{})}
   const preference=await this.preferences()
   const [chat,embedding]=await Promise.all([
    this.providers.chatCredentials(),

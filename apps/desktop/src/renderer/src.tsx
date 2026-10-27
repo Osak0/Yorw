@@ -5,6 +5,7 @@ import './style.css'
 import { Garden } from './Garden'
 import { gardenBook, hasUnsavedGarden, unsavedReviewTopicIds, unsavedTopicIds, wikiDirty } from './garden-book'
 import { House } from './House'
+import { clearMetadataDraft } from './MetadataEditor'
 import { Storage } from './Storage'
 import { documentHasUnsavedNotes, hasUnsavedNotes, notebookFor, unsavedDocumentIds } from './notebook'
 import { sessionStore } from './session-state'
@@ -28,6 +29,7 @@ function App() {
   const [unsaved, setUnsaved] = useState<{ documents: Set<string>; topics: Set<string>; reviews: Set<string> }>(() => ({ documents: new Set(), topics: new Set(), reviews: new Set() }))
   const [layoutRevision, setLayoutRevision] = useState(0)
   const [directoryCollapsed, setDirectoryCollapsed] = useState(false)
+  const [storageDirectoryCollapsed, setStorageDirectoryCollapsed] = useState(false)
   const [pendingJump, setPendingJump] = useState<{ documentId: string; page: number; sequence: number } | null>(null)
   const jumpSequence = useRef(0)
   const restored = useRef(false)
@@ -104,6 +106,7 @@ function App() {
         setGardenKey(layout.gardenKey && restoredTabs.some(tab => tab.key === layout.gardenKey && !isStorageTab(tab)) ? layout.gardenKey : null)
         setModule(activeTab ? moduleForTab(activeTab) : layout.module)
         setDirectoryCollapsed(layout.directoryCollapsed ?? false)
+        setStorageDirectoryCollapsed(layout.storageDirectoryCollapsed ?? false)
         if (layout.sidebar) sessionStore().applySidebarPreference(layout.sidebar)
       } catch {
         setLayoutNotice('无法读取上次的工作标签布局，已从 Storage 开始。')
@@ -122,14 +125,15 @@ function App() {
       storageKey: storageKey && tabs.some(tab => tab.key === storageKey && isStorageTab(tab)) ? storageKey : null,
       gardenKey: gardenKey && tabs.some(tab => tab.key === gardenKey && !isStorageTab(tab)) ? gardenKey : null,
       sidebar: sessionStore().sidebarPreferenceFor(storageDocumentId),
-      directoryCollapsed
+      directoryCollapsed,
+      storageDirectoryCollapsed
     }
     let active = true
     void window.yorw.layout.save(layout).then(result => {
       if (active && !result.ok && !saveNotice.current) { saveNotice.current = true; setLayoutNotice('工作标签布局未能保存。') }
     })
     return () => { active = false }
-  }, [layoutReady, module, tabs, activeKey, storageKey, gardenKey, layoutRevision, storageDocumentId, directoryCollapsed])
+  }, [layoutReady, module, tabs, activeKey, storageKey, gardenKey, layoutRevision, storageDocumentId, directoryCollapsed, storageDirectoryCollapsed])
   useEffect(() => {
     const update = () => {
       const preference = sessionStore().sidebarPreferenceFor(storageDocumentId)
@@ -219,6 +223,7 @@ function App() {
     return true
   }
   function discardTab(tab: WorkspaceTab) {
+    if (tab.kind === 'metadata') clearMetadataDraft(tab.id)
     if (tab.kind === 'document' || tab.kind === 'notes') notebookFor(tab.id).discardAll()
     else if (tab.kind === 'topic') gardenBook().discardTopic(tab.id)
     else if (tab.kind === 'ai') gardenBook().discardReview(tab.id)
@@ -230,7 +235,15 @@ function App() {
     setActiveKey(key)
     setStorageKey(key)
     setModule('Storage')
-    if (tool !== 'resource') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
+    if (tool !== 'resource' && tool !== 'metadata') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
+  }
+  function closeMetadataTab(document: DocumentRecord) {
+    clearMetadataDraft(document.id)
+    const key = `metadata:${document.id}`
+    setTabs(previous => previous.filter(tab => tab.key !== key))
+    setActiveKey(null)
+    setStorageKey(null)
+    setModule('Storage')
   }
   function collapseTool(document: DocumentRecord, tool: StorageTool) {
     const title = document.title || document.original_name
@@ -239,7 +252,7 @@ function App() {
     setActiveKey(documentKey)
     setStorageKey(documentKey)
     setModule('Storage')
-    if (tool !== 'resource') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
+    if (tool !== 'resource' && tool !== 'metadata') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
   }
   function expandGardenTool(topic: Topic, tool: GardenTool) {
     const key = `${tool}:${topic.id}`
@@ -349,7 +362,7 @@ function App() {
     {layoutNotice && <p role="status" className="app-notice">{layoutNotice}<button onClick={() => setLayoutNotice('')}>关闭提示</button></p>}
     {status.state !== 'ready' && <p role="status" className={`app-status ${status.state}`}>{status.message}</p>}
     {(status.state === 'ready' || started) && (layoutReady ? <main className="app-main">
-      <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab && isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab && isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} activeTool={storageTool} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onOpenTool={(tool, document) => expandTool(document, tool)} onCollapseTool={(tool, document) => collapseTool(document, tool)} onNavigate={(document, page) => openDocumentAt(document, page)} onShowNotes={document => expandTool(document, 'notes')} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} pendingJump={pendingJump} onJumpApplied={clearJump} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
+      <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab && isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab && isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} activeTool={storageTool} storageDirectoryCollapsed={storageDirectoryCollapsed} onToggleStorageDirectory={() => setStorageDirectoryCollapsed(value => !value)} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onOpenTool={(tool, document) => expandTool(document, tool)} onCollapseTool={(tool, document) => collapseTool(document, tool)} onCloseMetadata={closeMetadataTab} onNavigate={(document, page) => openDocumentAt(document, page)} onShowNotes={document => expandTool(document, 'notes')} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} pendingJump={pendingJump} onJumpApplied={clearJump} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
       <div className="module-view" id="garden-panel" role={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Garden'}><Garden activeTopicId={gardenTopicId} activeTool={gardenTool} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} onOpenTool={(tool, topic) => expandGardenTool(topic, tool)} onCollapseTool={(tool, topic) => collapseGardenTool(topic, tool)} directoryCollapsed={directoryCollapsed} onToggleDirectory={() => setDirectoryCollapsed(value => !value)} onTitles={updateTopicTitles} /></div>
       <div className="module-view house-view" hidden={module !== 'House'}><House active={module === 'House'} /></div>
     </main> : <p className="app-status" role="status">正在恢复工作标签…</p>)}

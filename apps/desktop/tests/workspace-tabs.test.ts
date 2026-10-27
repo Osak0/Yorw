@@ -11,11 +11,11 @@ test('document and topic tabs are keyed by page type and entity', () => {
   expect(moduleForTab(topic)).toBe('Garden')
   expect(tabKindLabel(document)).toBe('文献')
   expect(tabKindLabel(topic)).toBe('专题')
-  for (const tool of ['notes', 'search', 'chat', 'resource'] as const) {
+  for (const tool of ['notes', 'search', 'chat', 'resource', 'metadata'] as const) {
     const tab = toolTab(tool, id, 'Paper')
     expect(tab.key).toBe(`${tool}:${id}`)
     expect(moduleForTab(tab)).toBe('Storage')
-    expect(tabKindLabel(tab)).toBe({ notes: '笔记', search: '检索', chat: '问答', resource: '文献资料' }[tool])
+    expect(tabKindLabel(tab)).toBe({ notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献' }[tool])
   }
   for (const tool of ['ai', 'history', 'materials'] as const) {
     const tab = gardenToolTab(tool, id, 'Topic')
@@ -41,6 +41,7 @@ test('restoring skips pages that no longer exist and reports the count', () => {
     { kind: 'notes', id },
     { kind: 'search', id },
     { kind: 'resource', id },
+    { kind: 'metadata', id },
     { kind: 'topic', id },
     { kind: 'ai', id },
     { kind: 'history', id },
@@ -48,7 +49,7 @@ test('restoring skips pages that no longer exist and reports the count', () => {
     { kind: 'document', id: missing },
     { kind: 'topic', id: missing }
   ], documents, topics)
-  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'resource:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic', 'materials:Topic'])
+  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'resource:Paper', 'metadata:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic', 'materials:Topic'])
   expect(restored.skipped).toBe(2)
 })
 

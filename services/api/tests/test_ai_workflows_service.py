@@ -5,6 +5,8 @@ from threading import Thread
 from uuid import uuid4
 import json
 import time
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -54,12 +56,11 @@ def ai_provider():
         server.server_close()
 
 
-def submit(request, kind, target, text, base=None):
+def submit(request, kind, target, text, base=None, scope=None):
     headers = {'X-Chat-Key': 'chat-fixture-key', 'X-Embedding-Key': 'embedding-fixture-key',
                'X-Chat-Version': '1', 'X-Embedding-Version': '1'}
     # The public fixture request helper keeps the session token private; wrap a
     # single method to supply the workflow's two distinct credential headers.
-    import urllib.request
     original = urllib.request.urlopen
     def urlopen(value, *args, **kwargs):
         for name, value_ in headers.items():
@@ -69,6 +70,8 @@ def submit(request, kind, target, text, base=None):
     payload = {'kind': kind, 'target_id': target, 'text': text, 'request_id': str(uuid4())}
     if base:
         payload['base_revision_id'] = base
+    if scope:
+        payload['scope'] = scope
     with patch('urllib.request.urlopen', urlopen):
         task = request('/v1/ai/tasks', 'POST', payload)
     for _ in range(300):
@@ -78,6 +81,21 @@ def submit(request, kind, target, text, base=None):
             return task, payload
         time.sleep(.02)
     pytest.fail('workflow timed out')
+
+
+def request_error(request, path, method, payload):
+    headers = {'X-Chat-Key': 'chat-fixture-key', 'X-Embedding-Key': 'embedding-fixture-key',
+               'X-Chat-Version': '1', 'X-Embedding-Version': '1'}
+    original = urllib.request.urlopen
+    def urlopen(value, *args, **kwargs):
+        for name, value_ in headers.items():
+            value.add_header(name, value_)
+        return original(value, *args, **kwargs)
+    from unittest.mock import patch
+    with patch('urllib.request.urlopen', urlopen):
+        with pytest.raises(urllib.error.HTTPError) as error:
+            request(path, method, payload)
+    return error.value.code, json.load(error.value)
 
 
 def wait_stream(request, path, identity):
@@ -114,13 +132,13 @@ def test_one_submit_search_followup_draft_append_export_and_restart(frozen, tmp_
             request(f"/v1/topics/{other['topic']['id']}/revisions", 'POST', {'base_revision_id': other['revision']['id'], 'body_md': 'Prior English evidence synthesis.'})
             topic = request('/v1/topics', 'POST', {'id': str(uuid4()), 'title': 'English synthesis', 'parent_id': None})
             tid = topic['topic']['id']
-            generated, _ = submit(request, 'draft', tid, 'Summarize English evidence', topic['revision']['id'])
+            generated, _ = submit(request, 'draft', tid, 'Summarize English evidence', topic['revision']['id'], scope='workspace')
             draft = wait_stream(request, f'/v1/topics/{tid}/suggestions', generated['result']['suggestion_id'])
             assert {source['kind'] for source in draft['sources']} == {'document', 'note', 'wiki'}
             assert all(source['source_object_id'] != tid for source in draft['sources'])
             decision = {'request_id': str(uuid4()), 'base_revision_id': topic['revision']['id'], 'body_md': draft['body_md'], 'apply_mode': 'append'}
             accepted = request('/v1/suggestions/' + draft['id'] + '/accept', 'POST', decision)['view']
-            generated2, _ = submit(request, 'draft', tid, 'Summarize English evidence again', accepted['revision']['id'])
+            generated2, _ = submit(request, 'draft', tid, 'Summarize English evidence again', accepted['revision']['id'], scope='workspace')
             draft2 = wait_stream(request, f'/v1/topics/{tid}/suggestions', generated2['result']['suggestion_id'])
             merged = request('/v1/suggestions/' + draft2['id'] + '/accept', 'POST', {'request_id': str(uuid4()), 'base_revision_id': accepted['revision']['id'], 'body_md': 'Append [S1].', 'apply_mode': 'append'})['view']
             assert merged['revision']['body_md'].startswith(accepted['revision']['body_md'])
@@ -135,3 +153,36 @@ def test_one_submit_search_followup_draft_append_export_and_restart(frozen, tmp_
             assert request('/v1/topics/' + tid) == merged
             assert request('/v1/ai/tasks/' + generated2['id'])['status'] == 'succeeded'
             assert len(calls) == count
+
+
+@pytest.mark.parametrize('frozen', [False, True])
+def test_http_scope_empty_and_changed_errors_are_specific(frozen, tmp_path):
+    if frozen and not (ROOT / 'dist/yorw-api/yorw-api.exe').exists():
+        pytest.skip('Build backend first')
+    with ai_provider() as (url, _):
+        with running(frozen, tmp_path / 'workspace') as (request, upload):
+            topic = request('/v1/topics', 'POST', {
+                'id': str(uuid4()), 'title': 'Scoped HTTP topic', 'parent_id': None})
+            tid, base = topic['topic']['id'], topic['revision']['id']
+            code, error = request_error(request, '/v1/ai/tasks', 'POST', {
+                'kind': 'draft', 'target_id': tid, 'text': 'lung', 'base_revision_id': base,
+                'request_id': str(uuid4()), 'scope': 'topic'})
+            assert code == 409 and error['error']['code'] == 'NO_SCOPED_MATERIALS'
+
+            doc = upload(pdf_bytes())
+            for kind in ('chat', 'embedding'):
+                request('/v1/providers/' + kind, 'PUT', {
+                    'base_url': url, 'model': 'fixture', 'version': 0})
+            request(f'/v1/documents/{doc}/topics/{tid}', 'PUT')
+            generated, _ = submit(request, 'draft', tid, 'Summarize English evidence', base)
+            draft = wait_stream(request, f'/v1/topics/{tid}/suggestions',
+                                generated['result']['suggestion_id'])
+            assert draft['scope']['mode'] == 'topic' and draft['scope_changed'] is False
+
+            request('/v1/notes', 'POST', {
+                'id': str(uuid4()), 'document_id': doc, 'body_md': 'A note changes the scope.'})
+            code, error = request_error(
+                request, '/v1/suggestions/' + draft['id'] + '/accept', 'POST', {
+                    'request_id': str(uuid4()), 'base_revision_id': base,
+                    'body_md': draft['body_md'], 'apply_mode': 'append'})
+            assert code == 409 and error['error']['code'] == 'SCOPE_CHANGED'

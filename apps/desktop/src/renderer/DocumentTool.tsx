@@ -7,18 +7,19 @@ import { DocumentResourceView } from './DocumentResource'
 import { notebookFor } from './notebook'
 import type { StorageTool } from './workspace-tabs'
 
-export function DocumentTool({ document, tool, onOpenDocument, onCollapse, onNavigate, onShowNotes, onOpenSearch, onOpenChat, onOpenTopic }: {
+export function DocumentTool({ document, tool, onOpenDocument, onCollapse, onEditMetadata, onNavigate, onShowNotes, onOpenSearch, onOpenChat, onOpenTopic }: {
   document: DocumentRecord
   tool: StorageTool
   onOpenDocument(): void
   onCollapse(): void
+  onEditMetadata(): void
   onNavigate(page: number): void
   onShowNotes(): void
   onOpenSearch(): void
   onOpenChat(): void
   onOpenTopic(topic: Topic): void
 }) {
-  const label = { notes: '笔记', search: '检索', chat: '问答', resource: '文献资料' }[tool]
+  const label = { notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献' }[tool]
   const title = document.title || document.original_name
   return <div className="document-tool-view" aria-label={`${label} · ${title}`}>
     <div className="document-tool-header">
@@ -29,7 +30,7 @@ export function DocumentTool({ document, tool, onOpenDocument, onCollapse, onNav
       {tool === 'notes' && <NotesPanel documentId={document.id} />}
       {tool === 'search' && <SearchPanel documentId={document.id} onPage={onNavigate} />}
       {tool === 'chat' && <ChatPanel documentId={document.id} onPage={onNavigate} onNote={id => { void notebookFor(document.id).importSaved(id).then(onShowNotes).catch(() => window.alert('笔记已保存，加载失败；请重新打开文献。')) }} />}
-      {tool === 'resource' && <DocumentResourceView key={document.id} document={document} onOpenNotes={onShowNotes} onOpenSearch={onOpenSearch} onOpenChat={onOpenChat} onOpenTopic={onOpenTopic} onNavigate={onNavigate} />}
+      {tool === 'resource' && <DocumentResourceView key={document.id} document={document} onEditMetadata={onEditMetadata} onOpenNotes={onShowNotes} onOpenSearch={onOpenSearch} onOpenChat={onOpenChat} onOpenTopic={onOpenTopic} onNavigate={onNavigate} />}
     </div>
   </div>
 }

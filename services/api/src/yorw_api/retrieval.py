@@ -122,10 +122,22 @@ class Retriever:
         with self.db.lock:
             return source_status(self.db, [source])[0]
 
-    def _catalog(self, document_id=None, exclude_topic=None):
+    @staticmethod
+    def _placeholders(values):
+        return ','.join('?' for _ in values)
+
+    def _catalog(self, document_id=None, exclude_topic=None, scope=None):
         records = []
-        where = ' AND id=?' if document_id else ''
-        for doc in self.library.rows("SELECT * FROM documents WHERE deleted_at IS NULL AND extraction_status IN ('ready','partial')" + where, (document_id,) if document_id else ()):
+        scoped = scope if scope and scope.get('mode') == 'topic' else None
+        base = "SELECT * FROM documents WHERE deleted_at IS NULL AND extraction_status IN ('ready','partial')"
+        if document_id:
+            documents = self.library.rows(base + ' AND id=?', (document_id,))
+        elif scoped is not None:
+            identities = scoped.get('document_ids', [])
+            documents = self.library.rows(base + f' AND id IN ({self._placeholders(identities)})', identities) if identities else []
+        else:
+            documents = self.library.rows(base)
+        for doc in documents:
             title = doc['title'] or doc['original_name']
             parts = []
             for chunk in self.library.rows('SELECT * FROM chunks WHERE document_id=? AND extraction_version=? ORDER BY ordinal', (doc['id'], doc['extraction_version'])):
@@ -139,13 +151,27 @@ class Retriever:
             records.append(('document', doc['id'], f"{doc['extraction_version']}:{doc['version']}", title, parts))
         if document_id:
             return records
-        notes = self.library.rows('SELECT n.*,d.title,d.original_name FROM notes n JOIN documents d ON d.id=n.document_id WHERE d.deleted_at IS NULL')
+        if scoped is not None:
+            identities = scoped.get('note_ids', [])
+            notes = self.library.rows(
+                'SELECT n.*,d.title,d.original_name FROM notes n JOIN documents d ON d.id=n.document_id '
+                f'WHERE d.deleted_at IS NULL AND n.id IN ({self._placeholders(identities)})', identities) if identities else []
+        else:
+            notes = self.library.rows('SELECT n.*,d.title,d.original_name FROM notes n JOIN documents d ON d.id=n.document_id WHERE d.deleted_at IS NULL')
         for note in notes:
             source = {'kind': 'note', 'source_object_id': note['id'], 'source_version': str(note['version']),
                       'evidence': json.loads(note['sources_json'])}
             title = (note['body_md'].splitlines() or ['笔记'])[0].lstrip('# ')[:100] or '笔记'
             records.append(('note', note['id'], str(note['version']), title, self._written_parts(note['body_md'], source)))
-        for row in self.library.rows('SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t JOIN revisions r ON r.id=t.current_revision_id'):
+        if scoped is not None:
+            identities = scoped.get('wiki_topic_ids', [])
+            topics = self.library.rows(
+                'SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t '
+                f'JOIN revisions r ON r.id=t.current_revision_id WHERE t.id IN ({self._placeholders(identities)})',
+                identities) if identities else []
+        else:
+            topics = self.library.rows('SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t JOIN revisions r ON r.id=t.current_revision_id')
+        for row in topics:
             if row['id'] == exclude_topic:
                 continue
             source = {'kind': 'wiki', 'source_object_id': row['id'], 'source_version': row['revision_id'],
@@ -165,10 +191,10 @@ class Retriever:
                 evidence.extend(ref.get('evidence', []))
         return [(body[start:end], {**source, 'excerpt': body[start:end], 'evidence': evidence}) for start, end in spans(body)]
 
-    def prepare(self, document_id, exclude_topic, check):
+    def prepare(self, document_id, exclude_topic, check, scope=None):
         check('PREPARING')
         with self.db.lock:
-            records = self._catalog(document_id, exclude_topic)
+            records = self._catalog(document_id, exclude_topic, scope)
         keys = []
         for kind, identity, version, title, parts in records:
             check('PREPARING')
@@ -208,12 +234,12 @@ class Retriever:
             row['source']['title'] = row['title']
         return [row for row in rows if self.available(row['source'])['available']]
 
-    def retrieve(self, query, *, document_id=None, exclude_topic=None, limit=5,
+    def retrieve(self, query, *, document_id=None, exclude_topic=None, limit=5, scope=None,
                  semantic=True, embedding_config=None, embedding_key='', chat_config=None, chat_key='', check=lambda phase: None):
         while not self.index_lock.acquire(timeout=.1):
             check('PREPARING')
         try:
-            rows = self.prepare(document_id, exclude_topic, check)
+            rows = self.prepare(document_id, exclude_topic, check, scope=scope)
             reason = None
             vectors = {}
             if semantic:

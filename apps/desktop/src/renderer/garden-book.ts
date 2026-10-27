@@ -3,7 +3,7 @@ export interface ReviewDraft {suggestion:Suggestion;current:TopicView;body:strin
 export interface WikiDraft {id:string;body:string;savedBody:string;base:string;saving:boolean;conflict:boolean;message:string}
 interface Snapshot {topics:Topic[];selected:string;drafts:Record<string,WikiDraft>;reviews:Record<string,ReviewDraft>;loading:boolean;error:string}
 export const wikiDirty=(draft:WikiDraft)=>draft.body!==draft.savedBody
-const explain=(code:string)=>({INVALID_CITATION:'请保留至少一个有效的本轮 S 引用，不能引用未提供的编号。',MATERIAL_CHANGED:'材料已变化，请重新选材生成；比较草稿仍保留。',SUGGESTION_DECIDED:'此建议已处理，请重新打开历史核对。',SUGGESTION_NOT_READY:'请等待生成结束；已有部分内容的草稿可在结束后编辑补全。',REQUEST_CONFLICT:'请求内容已变化，请重新比较后确认。',REVISION_CONFLICT:'正文已有新修订，草稿已保留。请比较最新版本后决定。',TOPIC_CONFLICT:'目录已更新，请刷新目录后重试；输入仍保留。',TOPIC_CYCLE:'不能将专题移动到自身或其后代。',TOPIC_NOT_FOUND:'专题不存在，请刷新目录。',BACKEND_NOT_READY:'本地服务不可用，草稿已保留。',INVALID_INPUT:'输入无效或正文超过 200,000 字。'}[code]??`操作失败（${code}），草稿已保留。`)
+const explain=(code:string)=>({INVALID_CITATION:'请保留至少一个有效的本轮 S 引用，不能引用未提供的编号。',MATERIAL_CHANGED:'材料已变化，请重新选材生成；比较草稿仍保留。',SCOPE_CHANGED:'专题材料范围已变化，请重新生成或核对来源后再采纳。',SUGGESTION_DECIDED:'此建议已处理，请重新打开历史核对。',SUGGESTION_NOT_READY:'请等待生成结束；已有部分内容的草稿可在结束后编辑补全。',REQUEST_CONFLICT:'请求内容已变化，请重新比较后确认。',REVISION_CONFLICT:'正文已有新修订，草稿已保留。请比较最新版本后决定。',TOPIC_CONFLICT:'目录已更新，请刷新目录后重试；输入仍保留。',TOPIC_CYCLE:'不能将专题移动到自身或其后代。',TOPIC_NOT_FOUND:'专题不存在，请刷新目录。',BACKEND_NOT_READY:'本地服务不可用，草稿已保留。',INVALID_INPUT:'输入无效或正文超过 200,000 字。'}[code]??`操作失败（${code}），草稿已保留。`)
 export class GardenBook {
  private state:Snapshot={topics:[],selected:'',drafts:{},reviews:{},loading:false,error:''}
  private listeners=new Set<()=>void>()
@@ -20,6 +20,13 @@ export class GardenBook {
  discardTopic(id:string){const d=this.state.drafts[id];if(d)this.patch(id,{body:d.savedBody,conflict:false,message:''});this.review(id,null)}
  discardReview(id:string){this.review(id,null)}
  review(id:string,value:ReviewDraft|null){const reviews={...this.state.reviews};if(value)reviews[id]=value;else delete reviews[id];this.publish({reviews})}
+ refreshReview(id:string,suggestion:Suggestion){
+  const review=this.state.reviews[id]
+  if(!review||review.suggestion.id!==suggestion.id)return
+  if(review.suggestion.status===suggestion.status&&review.suggestion.scope_changed===suggestion.scope_changed&&review.suggestion.decision===suggestion.decision&&JSON.stringify(review.suggestion.sources)===JSON.stringify(suggestion.sources))return
+  const body=review.body===review.suggestion.body_md?suggestion.body_md:review.body
+  this.review(id,{...review,suggestion,body})
+ }
  editReview(id:string,body:string){const r=this.state.reviews[id];if(r)this.review(id,{...r,body,requestId:crypto.randomUUID()})}
  async decide(id:string,action:'accept'|'reject',review:ReviewDraft,apply_mode?:'append'|'replace'){
   const input={id:review.suggestion.id,request_id:review.requestId,base_revision_id:review.current.revision.id}

@@ -12,12 +12,15 @@ test('document inputs, position and zoom stay isolated per document', () => {
   expect(store.document(b)).toMatchObject({ page: 7, zoom: 'fit', searchQuery: 'beta', chatQuestion: '' })
 })
 
-test('topic AI instructions stay isolated per topic', () => {
+test('topic AI instructions and material scope stay isolated per topic', () => {
   const store = sessionStore()
+  expect(store.topic(a).aiScope).toBe('topic')
   store.updateTopic(a, { aiInstruction: 'summarize evidence' })
-  store.updateTopic(b, { aiInstruction: 'compare limitations' })
+  store.updateTopic(b, { aiInstruction: 'compare limitations', aiScope: 'workspace' })
   expect(store.topic(a).aiInstruction).toBe('summarize evidence')
+  expect(store.topic(a).aiScope).toBe('topic')
   expect(store.topic(b).aiInstruction).toBe('compare limitations')
+  expect(store.topic(b).aiScope).toBe('workspace')
 })
 
 test('sidebar preference applies to new sessions without changing existing ones', () => {

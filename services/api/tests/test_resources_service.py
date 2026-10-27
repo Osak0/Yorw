@@ -31,6 +31,7 @@ def test_stage_b_http_metadata_relations_materials_and_history(frozen, tmp_path)
         assert request('/v1/health')['schema_version'] == 15
         first = upload_document(upload, 'first')
         second = upload_document(upload, 'second')
+        preserved = upload_document(upload, 'preserved')
         request('/v1/documents/' + second, 'PATCH', {
             'version': 1, 'title': 'Second paper', 'authors': [], 'year': None})
 
@@ -41,6 +42,15 @@ def test_stage_b_http_metadata_relations_materials_and_history(frozen, tmp_path)
         assert updated['summary_md'] == '人工总结' and updated['summary_source'] == 'manual'
         assert updated['summary_updated_at']
         assert request('/v1/documents/' + first)['tags'] == ['RAG', '检索增强']
+
+        tagged_only = request('/v1/documents/' + preserved, 'PATCH', {
+            'version': 1, 'tags': ['只整理标签']})
+        assert tagged_only['title'] == 'Fixture title'
+        assert tagged_only['authors'] == ['Fixture Author']
+        assert tagged_only['tags'] == ['只整理标签']
+        assert tagged_only['metadata_source']['tags'] == 'user'
+        assert tagged_only['metadata_source']['title'] == 'pdf'
+        assert tagged_only['metadata_source']['authors'] == 'pdf'
 
         candidates = request('/v1/documents/' + first + '/related-candidates?query=second')
         assert [item['id'] for item in candidates['items']] == [second]

@@ -14,9 +14,10 @@ export function Sources({sources}:{sources:SourceRef[]}){
   {source.evidence?.map((e,i)=><div key={i}><p>{e.document_title} · 第 {e.physical_page} 页</p><p className="source-excerpt">{e.quote}</p></div>)}
  </details>)}</div>
 }
-export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview}:{topicId:string;baseRevisionId:string;dirty:boolean;onReview(suggestion:Suggestion):void}){
- const session=useTopicSession(topicId),instruction=session.aiInstruction
+export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview,onReviewUpdate}:{topicId:string;baseRevisionId:string;dirty:boolean;onReview(suggestion:Suggestion):void;onReviewUpdate?(suggestion:Suggestion):void}){
+ const session=useTopicSession(topicId),instruction=session.aiInstruction,scope=session.aiScope
  const setInstruction=(value:string)=>sessionStore().updateTopic(topicId,{aiInstruction:value})
+ const setScope=(value:'topic'|'workspace')=>sessionStore().updateTopic(topicId,{aiScope:value})
  const [history,setHistory]=useState<Suggestion[]>([]),[notice,setNotice]=useState('')
  const job=useAiTask('draft',topicId),opened=useRef('')
  useEffect(()=>{let active=true,loading=false
@@ -28,12 +29,18 @@ export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview}:{topicI
   const draft=history.find(item=>item.id===id)
   if(draft&&!draft.decision&&(draft.status==='completed'||draft.recoverable)&&opened.current!==draft.id){opened.current=draft.id;onReview(draft)}
  },[history,job.task?.result?.suggestion_id,onReview])
+ useEffect(()=>{
+  const current=history.find(item=>item.id===opened.current)
+  if(current&&onReviewUpdate)onReviewUpdate(current)
+ },[history,onReviewUpdate])
  const running=job.running||history.some(item=>item.status==='running')
  const streaming=history.find(item=>item.id===job.task?.result?.suggestion_id&&item.status==='running')
  async function cancel(item:Suggestion){try{await window.yorw.suggestions.cancel(item.id)}catch{setNotice('取消未完成，请重试。')}}
  return <section className="wiki-suggestions"><h3>AI 草稿</h3>
-  <form onSubmit={event=>{event.preventDefault();setNotice('');void job.start(instruction,baseRevisionId)}}>
+  <form onSubmit={event=>{event.preventDefault();setNotice('');void job.start(instruction,baseRevisionId,scope)}}>
    <label>生成要求<textarea aria-label="Wiki 生成要求" placeholder="例如：整理这些研究对视觉证据依赖的结论和仍待验证的问题" maxLength={2000} value={instruction} onChange={event=>setInstruction(event.target.value)}/></label>
+   <label>材料范围<select aria-label="AI 材料范围" value={scope} disabled={running} onChange={event=>setScope(event.target.value as 'topic'|'workspace')}><option value="topic">当前专题及子专题</option><option value="workspace">全工作区</option></select></label>
+   <p className="scope-hint">{scope==='topic'?'使用本专题及子专题关联的文献、笔记和子专题 Wiki；当前正文只作编辑背景。':'使用整个工作区的已保存文献、笔记和 Wiki。'}</p>
    <button className="primary" disabled={running||!instruction.trim()}>生成草稿</button>
    {job.running&&<button type="button" onClick={()=>void job.cancel()}>取消</button>}
   </form>

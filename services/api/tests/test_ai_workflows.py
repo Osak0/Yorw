@@ -8,9 +8,10 @@ import pytest
 from fastapi import HTTPException
 
 from yorw_api.ai_workflows import Workflows, WorkflowInput, Preferences
-from yorw_api.garden import CreateTopic, SaveBody
+from yorw_api.garden import CreateTopic, SaveBody, UpdateTopic
 from yorw_api.notes import NewNote, NoteBody
 from yorw_api.providers import ProbeError
+from yorw_api.resources import DocumentResources
 from yorw_api.retrieval import spans, excerpt, query_terms
 from yorw_api.search_history import SearchHistory
 from yorw_api.wiki_review import WikiReview, Accept, Decision
@@ -40,9 +41,151 @@ def local(workflow):
     return workflow.save_preferences(Preferences(semantic_enabled=False, version=prefs['version']))
 
 
-def run(workflow, kind, target, text, base=None, **keys):
-    value = WorkflowInput(kind=kind, target_id=target, text=text, base_revision_id=base, request_id=uuid4())
+def run(workflow, kind, target, text, base=None, scope=None, **keys):
+    value = WorkflowInput(kind=kind, target_id=target, text=text, base_revision_id=base, request_id=uuid4(), scope=scope)
     return value, settle(workflow, workflow.start(value, **keys))
+
+
+def wait_draft(workflow, task):
+    identity = task['result']['suggestion_id']
+    for _ in range(400):
+        item = workflow.suggestions.get(identity)
+        if item['status'] != 'running':
+            return item
+        time.sleep(.01)
+    pytest.fail('draft did not settle')
+
+
+def scope_fixture(workflow):
+    _, target, _ = setup(workflow.suggestions)
+    child = workflow.suggestions.garden.create(CreateTopic(id=uuid4(), title='Child scope', parent_id=target))['topic']
+    unrelated = workflow.suggestions.garden.create(CreateTopic(id=uuid4(), title='Unrelated scope'))['topic']
+    linked_doc = document(workflow.suggestions.search, ['Linked lung evidence for the topic scope.'])
+    unrelated_doc = document(workflow.suggestions.search, ['Unrelated lung distractor outside the topic scope.'])
+    resources = DocumentResources(workflow.library)
+    resources.add_document_topic(linked_doc, target)
+    resources.add_document_topic(unrelated_doc, unrelated['id'])
+    workflow.suggestions.notes.create(NewNote(id=uuid4(), document_id=linked_doc, body_md='Linked lung note.'))
+    workflow.suggestions.notes.create(NewNote(id=uuid4(), document_id=unrelated_doc, body_md='Unrelated lung note.'))
+    child_view = workflow.suggestions.garden.get(child['id'])
+    workflow.suggestions.garden.save(child['id'], SaveBody(
+        base_revision_id=child_view['revision']['id'], body_md='Child lung wiki.'))
+    current = workflow.suggestions.garden.get(target)
+    saved = workflow.suggestions.garden.save(target, SaveBody(
+        base_revision_id=current['revision']['id'], body_md='Current lung background.'))
+    return target, child['id'], unrelated['id'], linked_doc, unrelated_doc, saved
+
+
+def test_topic_scope_defaults_and_workspace_is_explicit(workflow, monkeypatch):
+    target, _, _, linked_doc, unrelated_doc, saved = scope_fixture(workflow)
+    local(workflow)
+    captured = []
+    def response(config, key, question, sources, **options):
+        captured.append(sources)
+        yield 'Scoped draft [S1].'
+    monkeypatch.setattr('yorw_api.suggestions.stream', response)
+
+    _, default_task = run(workflow, 'draft', target, 'lung', saved['revision']['id'], chat_key='secret', chat_version=1)
+    assert default_task['status'] == 'succeeded', default_task
+    default_draft = wait_draft(workflow, default_task)
+    default_text = '\n'.join(source['text'] for source in captured[0])
+    assert 'Linked lung evidence' in default_text
+    assert 'Linked lung note' in default_text
+    assert 'Child lung wiki' in default_text
+    assert 'Unrelated lung distractor' not in default_text
+    assert 'Unrelated lung note' not in default_text
+    assert 'Current lung background' not in default_text
+    assert default_draft['scope']['mode'] == 'topic' and default_draft['scope_changed'] is False
+
+    _, workspace_task = run(workflow, 'draft', target, 'lung', saved['revision']['id'], scope='workspace', chat_key='secret', chat_version=1)
+    assert workspace_task['status'] == 'succeeded', workspace_task
+    workspace_draft = wait_draft(workflow, workspace_task)
+    workspace_text = '\n'.join(source['text'] for source in captured[-1])
+    assert 'Unrelated lung distractor' in workspace_text
+    assert 'Unrelated lung note' in workspace_text
+    assert 'Current lung background' not in workspace_text
+    assert workspace_draft['scope']['mode'] == 'workspace' and workspace_draft['scope_changed'] is False
+
+
+def test_empty_topic_scope_fails_without_falling_back_or_calling_the_model(workflow, monkeypatch):
+    _, target, _ = setup(workflow.suggestions)
+    local(workflow)
+    def forbidden(*args, **kwargs):
+        pytest.fail('empty topic scope must not call the model')
+    monkeypatch.setattr('yorw_api.suggestions.stream', forbidden)
+    base = workflow.suggestions.garden.get(target)['revision']['id']
+    with pytest.raises(HTTPException) as error:
+        workflow.start(WorkflowInput(kind='draft', target_id=target, text='lung', base_revision_id=base,
+                                     request_id=uuid4(), scope='topic'), chat_key='secret', chat_version=1)
+    assert error.value.detail == 'NO_SCOPED_MATERIALS'
+    assert workflow.suggestions.list(target)['items'] == []
+
+
+def test_empty_child_wiki_does_not_count_as_usable_material(workflow, monkeypatch):
+    _, target, _ = setup(workflow.suggestions)
+    workflow.suggestions.garden.create(CreateTopic(id=uuid4(), title='Empty child', parent_id=target))
+    local(workflow)
+    def forbidden(*args, **kwargs):
+        pytest.fail('empty descendant wiki must not count as usable material')
+    monkeypatch.setattr('yorw_api.suggestions.stream', forbidden)
+    base = workflow.suggestions.garden.get(target)['revision']['id']
+    with pytest.raises(HTTPException) as error:
+        workflow.start(WorkflowInput(kind='draft', target_id=target, text='lung', base_revision_id=base,
+                                     request_id=uuid4(), scope='topic'), chat_key='secret', chat_version=1)
+    assert error.value.detail == 'NO_SCOPED_MATERIALS'
+    assert workflow.suggestions.list(target)['items'] == []
+
+
+def test_scope_tracks_descendant_documents_notes_unlink_and_topic_move(workflow):
+    target, child_id, _, _, _, _ = scope_fixture(workflow)
+    resources = DocumentResources(workflow.library)
+    child_doc = document(workflow.suggestions.search, ['Child descendant lung evidence.'])
+    child_note = workflow.suggestions.notes.create(NewNote(
+        id=uuid4(), document_id=child_doc, body_md='Child descendant lung note.'))
+    resources.add_document_topic(child_doc, child_id)
+
+    scope = workflow.suggestions.scope(target, 'topic')
+    assert child_id in scope['wiki_topic_ids']
+    assert child_doc in scope['document_ids'] and child_note['id'] in scope['note_ids']
+
+    resources.remove_document_topic(child_doc, child_id)
+    unlinked = workflow.suggestions.scope(target, 'topic')
+    assert child_doc not in unlinked['document_ids'] and child_note['id'] not in unlinked['note_ids']
+    assert unlinked['fingerprint'] != scope['fingerprint']
+
+    resources.add_document_topic(child_doc, child_id)
+    child = workflow.suggestions.garden.get(child_id)['topic']
+    workflow.suggestions.garden.update(child_id, UpdateTopic(
+        title=child['title'], parent_id=None, version=child['version']))
+    moved = workflow.suggestions.scope(target, 'topic')
+    assert child_id not in moved['wiki_topic_ids']
+    assert child_doc not in moved['document_ids'] and child_note['id'] not in moved['note_ids']
+    assert moved['fingerprint'] != scope['fingerprint']
+
+    child_now = workflow.suggestions.garden.get(child_id)['topic']
+    workflow.suggestions.garden.update(child_id, UpdateTopic(
+        title=child['title'], parent_id=target, version=child_now['version']))
+    restored = workflow.suggestions.scope(target, 'topic')
+    assert restored['fingerprint'] == scope['fingerprint']
+
+
+def test_scope_change_after_generation_keeps_draft_but_blocks_accept(workflow, monkeypatch):
+    target, _, _, linked_doc, _, saved = scope_fixture(workflow)
+    local(workflow)
+    monkeypatch.setattr('yorw_api.suggestions.stream', lambda *a, **k: iter(['Scoped result [S1].']))
+    _, task = run(workflow, 'draft', target, 'lung', saved['revision']['id'], chat_key='secret', chat_version=1)
+    draft = wait_draft(workflow, task)
+    assert draft['status'] == 'completed' and not draft['scope_changed']
+    workflow.suggestions.notes.create(NewNote(id=uuid4(), document_id=linked_doc, body_md='A new note changes the scope.'))
+    listed = workflow.suggestions.list(target)['items'][0]
+    assert listed['scope_changed'] is True
+    assert 'document_ids' not in listed['scope'] and 'note_ids' not in listed['scope']
+    review = WikiReview(workflow.suggestions)
+    with pytest.raises(HTTPException) as error:
+        review.decide(draft['id'], Accept(request_id=uuid4(), base_revision_id=saved['revision']['id'],
+                                          body_md='Scoped result [S1].'), True)
+    assert error.value.detail == 'SCOPE_CHANGED'
+    assert workflow.suggestions.get(draft['id'])['status'] == 'completed'
 
 
 def test_local_search_one_submit_short_original_snippet_and_scope(workflow):
@@ -232,7 +375,7 @@ def test_auto_draft_can_append_with_renumbered_citations_and_restore(workflow, m
     local(workflow)
     monkeypatch.setattr('yorw_api.suggestions.stream', lambda *a, **k: iter(['Original lung fact [S1].']))
     base = workflow.suggestions.garden.get(target)['revision']['id']
-    _, task = run(workflow, 'draft', target, 'lung evidence', base, chat_key='secret', chat_version=1)
+    _, task = run(workflow, 'draft', target, 'lung evidence', base, scope='workspace', chat_key='secret', chat_version=1)
     assert task['status'] == 'succeeded', task
     sid = task['result']['suggestion_id']
     for _ in range(200):
@@ -242,7 +385,7 @@ def test_auto_draft_can_append_with_renumbered_citations_and_restore(workflow, m
     assert draft['status'] == 'completed'
     review = WikiReview(workflow.suggestions)
     accepted = review.decide(sid, Accept(request_id=uuid4(), base_revision_id=base, body_md='First [S1].'), True)['view']
-    _, task2 = run(workflow, 'draft', target, 'lung evidence', accepted['revision']['id'], chat_key='secret', chat_version=1)
+    _, task2 = run(workflow, 'draft', target, 'lung evidence', accepted['revision']['id'], scope='workspace', chat_key='secret', chat_version=1)
     assert task2['status'] == 'succeeded', task2
     sid2 = task2['result']['suggestion_id']
     for _ in range(200):
@@ -308,7 +451,7 @@ def test_no_evidence_does_not_generate_unfounded_draft(workflow, monkeypatch):
         pytest.fail('no evidence: never generate a Wiki draft')
     monkeypatch.setattr('yorw_api.suggestions.stream', forbidden)
     base = workflow.suggestions.garden.get(topic)['revision']['id']
-    _, result = run(workflow, 'draft', topic, 'orbital astrophysics', base, chat_key='secret', chat_version=1)
+    _, result = run(workflow, 'draft', topic, 'orbital astrophysics', base, scope='workspace', chat_key='secret', chat_version=1)
     assert result['status'] == 'failed' and result['error']['code'] == 'NO_EVIDENCE'
     assert workflow.suggestions.list(topic)['items'] == []
 
@@ -351,7 +494,7 @@ def test_long_saved_wiki_is_automatically_bounded_without_changing_its_base(work
         prompts.append(json.loads(question))
         yield 'Lung fact [S1].'
     monkeypatch.setattr('yorw_api.suggestions.stream', response)
-    _, task = run(workflow, 'draft', topic, 'lung evidence', saved['revision']['id'], chat_key='secret', chat_version=1)
+    _, task = run(workflow, 'draft', topic, 'lung evidence', saved['revision']['id'], scope='workspace', chat_key='secret', chat_version=1)
     assert task['status'] == 'succeeded', task
     for _ in range(200):
         draft = workflow.suggestions.get(task['result']['suggestion_id'])
@@ -376,7 +519,7 @@ def test_failed_stream_handoff_never_starts_a_model_request(workflow, monkeypatc
     with workflow.db.write() as conn:
         conn.execute("CREATE TRIGGER fail_handoff BEFORE UPDATE OF status ON tasks WHEN new.kind IN ('ai_chat','ai_draft') AND new.status='succeeded' BEGIN SELECT RAISE(ABORT,'fixture failure'); END")
     base = workflow.suggestions.garden.get(topic)['revision']['id']
-    _, task = run(workflow, kind, topic if kind == 'draft' else doc, 'lung evidence', base if kind == 'draft' else None, chat_key='secret', chat_version=1)
+    _, task = run(workflow, kind, topic if kind == 'draft' else doc, 'lung evidence', base if kind == 'draft' else None, scope='workspace' if kind == 'draft' else None, chat_key='secret', chat_version=1)
     assert task['status'] == 'failed'
     children = workflow.suggestions.list(topic)['items'] if kind == 'draft' else workflow.chat.list(doc)['items']
     assert children and children[0]['status'] == 'cancelled'

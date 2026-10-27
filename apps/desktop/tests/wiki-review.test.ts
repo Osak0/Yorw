@@ -34,6 +34,26 @@ test('accept blocks dirty manual editor and preserves text entered during acknow
  expect(book.getSnapshot().reviews[id]).toBeUndefined()
 })
 
+test('scope changes are surfaced as a preserved-draft rejection',async()=>{
+ const {book,bridge}=setup();await book.select(id)
+ const review={suggestion,current:view(),body:suggestion.body_md,requestId:id};book.review(id,review)
+ vi.mocked(bridge.accept).mockResolvedValue({ok:false,code:'SCOPE_CHANGED'})
+ await expect(book.decide(id,'accept',review)).rejects.toThrow('专题材料范围已变化')
+ expect(book.getSnapshot().reviews[id]).toBe(review)
+})
+
+test('scope refresh updates an open review without discarding edited draft text',async()=>{
+ const {book}=setup();await book.select(id)
+ const review={suggestion,current:view(),body:suggestion.body_md,requestId:id};book.review(id,review);book.editReview(id,'Edited [S1]')
+ const changed={...suggestion,scope_changed:true,sources:[{kind:'document',excerpt:'changed',available:false}]} as unknown as Suggestion
+ book.refreshReview(id,changed)
+ const refreshed=book.getSnapshot().reviews[id]
+ expect(refreshed.suggestion.scope_changed).toBe(true)
+ expect(refreshed.suggestion.sources[0].available).toBe(false)
+ expect(refreshed.body).toBe('Edited [S1]')
+ expect(book.hasUnsaved()).toBe(true)
+})
+
 test('fixed decision routes reject renderer path and body injection',()=>{
  const request=vi.fn(),garden=new Garden({request} as unknown as Backend)
  garden.accept({id,request_id:id,base_revision_id:id,body_md:'Edited [S1]'})

@@ -62,10 +62,17 @@ export async function runAiWorkflowSmoke(window:BrowserWindow,backend:Backend,pr
   await snapshot(window,join(reportDir,'ai-chat.png'))
   const prior=await backend.request('/v1/topics','POST',{id:randomUUID(),title:'Prior English knowledge',parent_id:null})
   await backend.request(`/v1/topics/${prior.topic.id}/revisions`,'POST',{base_revision_id:prior.revision.id,body_md:'Prior English evidence synthesis.'})
-  await ui(window,`document.querySelector('nav button:nth-child(2)').click();await wait(()=>document.querySelector('.garden-directory'));button('新建').click();await wait(()=>document.querySelector('[aria-label="新专题名称"]'));input('[aria-label="新专题名称"]','AI English synthesis');await wait(()=>!button('创建专题').disabled);button('创建专题').click();await wait(()=>document.querySelector('.topic-body-view h2')?.textContent==='AI English synthesis');button('AI 优化').click();await wait(()=>document.querySelector('[aria-label="Wiki 生成要求"]'));input('[aria-label="Wiki 生成要求"]','Summarize English evidence and prior findings');await wait(()=>!button('生成草稿').disabled);button('生成草稿').click();await new Promise(resolve=>setTimeout(resolve,50));document.querySelector('nav button:nth-child(2)').click();await wait(()=>document.querySelector('.garden-directory'));button('刷新').click();await wait(()=>document.querySelector('[data-topic-id="${prior.topic.id}"]'));document.querySelector('[data-topic-id="${prior.topic.id}"]').click();await wait(()=>document.querySelector('.topic-body-view .cm-content'));if(document.querySelector('.topic-body-view .cm-content').getAttribute('contenteditable')==='false')throw new Error('PARALLEL_TOPIC_NOT_EDITABLE');const aiTab=[...document.querySelectorAll('.workspace-tab')].find(tab=>tab.textContent.includes('AI English synthesis')&&tab.querySelector('.workspace-tab-kind')?.textContent==='AI 优化');aiTab.click();await wait(()=>document.querySelector('[aria-label="确认后的正文"]'))`)
+  await ui(window,`document.querySelector('nav button:nth-child(2)').click();await wait(()=>document.querySelector('.garden-directory'));button('新建').click();await wait(()=>document.querySelector('[aria-label="新专题名称"]'));input('[aria-label="新专题名称"]','AI English synthesis');await wait(()=>!button('创建专题').disabled);button('创建专题').click();await wait(()=>document.querySelector('.topic-body-view h2')?.textContent==='AI English synthesis');button('AI 优化').click();await wait(()=>document.querySelector('[aria-label="AI 材料范围"]'));if(document.querySelector('[aria-label="AI 材料范围"]').value!=='topic')throw new Error('DEFAULT_SCOPE_NOT_TOPIC')`)
   const topic=(await backend.request('/v1/topics')).items.find((item:any)=>item.title==='AI English synthesis'),tid=topic.id
-  const initial=(await backend.request(`/v1/topics/${tid}/suggestions`)).items[0]
-  if(initial.sources.some((source:any)=>source.source_object_id===tid)||!['document','note','wiki'].every(kind=>initial.sources.some((source:any)=>source.kind===kind)))throw new Error('AUTO_MATERIAL_SCOPE_FAILED')
+  await backend.request(`/v1/documents/${doc.id}/topics/${tid}`,'PUT')
+  await ui(window,`document.querySelector('[aria-label="AI 材料范围"]').scrollIntoView({block:'center'})`)
+  await snapshot(window,join(reportDir,'ai-scope-panel.png'))
+  await ui(window,`input('[aria-label="Wiki 生成要求"]','Summarize topic evidence');await wait(()=>!button('生成草稿').disabled);button('生成草稿').click();await wait(()=>document.querySelector('[aria-label="确认后的正文"]'))`)
+  const topicDraft=(await backend.request(`/v1/topics/${tid}/suggestions`)).items.find((item:any)=>item.instruction==='Summarize topic evidence')
+  if(!topicDraft||topicDraft.scope?.mode!=='topic'||topicDraft.scope_changed!==false||!['document','note'].every(kind=>topicDraft.sources.some((source:any)=>source.kind===kind))||topicDraft.sources.some((source:any)=>source.kind==='wiki'||source.source_object_id===tid))throw new Error('DEFAULT_TOPIC_SCOPE_FAILED')
+  await ui(window,`button('关闭草稿').click();await wait(()=>!document.querySelector('[aria-label="确认后的正文"]'));const scope=document.querySelector('[aria-label="AI 材料范围"]');scope.value='workspace';scope.dispatchEvent(new Event('change',{bubbles:true}));await wait(()=>document.querySelector('.scope-hint')?.textContent.includes('整个工作区'));input('[aria-label="Wiki 生成要求"]','Summarize English evidence and prior findings');await wait(()=>!button('生成草稿').disabled);button('生成草稿').click();await wait(()=>document.querySelector('[aria-label="确认后的正文"]'));document.querySelector('nav button:nth-child(2)').click();await wait(()=>document.querySelector('.garden-directory'));button('刷新').click();await wait(()=>document.querySelector('[data-topic-id="${prior.topic.id}"]'));document.querySelector('[data-topic-id="${prior.topic.id}"]').click();await wait(()=>document.querySelector('.topic-body-view .cm-content'));if(document.querySelector('.topic-body-view .cm-content').getAttribute('contenteditable')==='false')throw new Error('PARALLEL_TOPIC_NOT_EDITABLE');const aiTab=[...document.querySelectorAll('.workspace-tab')].find(tab=>tab.textContent.includes('AI English synthesis')&&tab.querySelector('.workspace-tab-kind')?.textContent==='AI 优化');aiTab.click();await wait(()=>document.querySelector('[aria-label="确认后的正文"]'))`)
+  const initial=(await backend.request(`/v1/topics/${tid}/suggestions`)).items.find((item:any)=>item.instruction==='Summarize English evidence and prior findings')
+  if(!initial||initial.scope?.mode!=='workspace'||initial.scope_changed!==false||initial.sources.some((source:any)=>source.source_object_id===tid)||!['document','note','wiki'].every(kind=>initial.sources.some((source:any)=>source.kind===kind)))throw new Error('AUTO_MATERIAL_SCOPE_FAILED')
   if((await backend.request(`/v1/topics/${tid}`)).revision.body_md!=='')throw new Error('DRAFT_SILENTLY_SAVED')
   const layouts=[]
   for(const [width,height] of [[1440,1024],[1024,768]]){
@@ -100,14 +107,25 @@ export async function runAiWorkflowSmoke(window:BrowserWindow,backend:Backend,pr
   await snapshot(window,join(reportDir,'ai-house.png'))
   await ui(window,`document.querySelector('nav button:first-child').click();button('返回文献库').click();await wait(()=>button('导入 PDF'))`)
   const names=['SyntheticStudyA.pdf','SyntheticStudyB.pdf','SyntheticStudyC.pdf','SyntheticStudyD.pdf','negative/encrypted.pdf','negative/no-text.pdf','negative/broken.pdf','fixture.pdf']
-  for(const name of names){
-   dialog.showOpenDialog=(async()=>({canceled:false,filePaths:[join(reportDir,'fixtures',name)]})) as typeof open
-   await ui(window,`await wait(()=>!button('导入 PDF').disabled);button('导入 PDF').click();await new Promise(r=>setTimeout(r,200));await wait(()=>!button('导入 PDF').disabled)`)
-  }
+  dialog.showOpenDialog=(async()=>({canceled:false,filePaths:names.map(name=>join(reportDir,'fixtures',name))})) as typeof open
+  await ui(window,`await wait(()=>!button('导入 PDF').disabled);button('导入 PDF').click();await wait(()=>!button('导入 PDF').disabled)`)
   let documents:any[]=[]
   for(let i=0;i<200;i++){documents=(await backend.request('/v1/documents')).items;if(documents.length===8&&documents.every(item=>!['pending','running'].includes(item.extraction_status)))break;await pause(100)}
   if(documents.length!==8||documents.filter(item=>item.extraction_status==='ready').length!==5)throw new Error('AI_IMPORT_MATRIX_FAILED')
   if(documents.filter(item=>item.warning).map(item=>item.warning).sort().join(',')!==['ENCRYPTED_PDF','NO_TEXT_NO_OCR','PDF_PARSE_FAILED'].sort().join(','))throw new Error('AI_NEGATIVE_IMPORT_FAILED')
+ await pause(1500)
+ await snapshot(window,join(reportDir,'ai-import-results.png'))
+  const organized=await ui(window,`const item=[...document.querySelectorAll('.import-results li')].find(li=>li.querySelector('strong')?.textContent==='SyntheticStudyA.pdf');if(!item)throw new Error('ORGANIZER_ITEM_MISSING');[...item.querySelectorAll('button')].find(b=>b.textContent==='整理资料').click();await wait(()=>document.querySelector('[aria-label="编辑文献元数据"]'));const title=document.querySelector('[aria-label="文献标题"]').value,authors=document.querySelector('[aria-label="文献作者"]').value;input('[aria-label="关键词 / 标签"]','smoke-organized');[...document.querySelectorAll('[aria-label="编辑文献元数据"] button')].find(b=>b.textContent==='保存').click();await wait(()=>!document.querySelector('[aria-label="编辑文献元数据"]'));return {title,authors}`)
+  if(organized.title!=='Synthetic study A'||!organized.authors.includes('Yorw self-authored synthetic fixture'))throw new Error('ORGANIZER_STALE_METADATA')
+  let organizedDoc:any=null
+  for(let i=0;i<100;i++){organizedDoc=(await backend.request('/v1/documents')).items.find((item:any)=>item.original_name==='SyntheticStudyA.pdf');if(organizedDoc?.tags?.includes('smoke-organized'))break;await pause(100)}
+  if(!organizedDoc||organizedDoc.title!=='Synthetic study A'||organizedDoc.metadata_source?.title!=='pdf'||!organizedDoc.tags.includes('smoke-organized'))throw new Error('ORGANIZER_METADATA_OVERWRITTEN')
+  await ui(window,`const item=[...document.querySelectorAll('.import-results li')].find(li=>li.querySelector('strong')?.textContent==='SyntheticStudyA.pdf');if(!item)throw new Error('ORGANIZER_ITEM_MISSING');[...item.querySelectorAll('button')].find(b=>b.textContent==='整理资料').click();await wait(()=>document.querySelector('[aria-label="编辑文献元数据"]'));input('[aria-label="关键词 / 标签"]','smoke-organized-2')`)
+  await snapshot(window,join(reportDir,'ai-import-organizer.png'))
+  await ui(window,`[...document.querySelectorAll('[aria-label="编辑文献元数据"] button')].find(b=>b.textContent==='保存').click();await wait(()=>!document.querySelector('[aria-label="编辑文献元数据"]'))`)
+  let organizedAgain:any=null
+  for(let i=0;i<100;i++){organizedAgain=(await backend.request('/v1/documents')).items.find((item:any)=>item.original_name==='SyntheticStudyA.pdf');if(organizedAgain?.tags?.includes('smoke-organized-2'))break;await pause(100)}
+  if(!organizedAgain||organizedAgain.version<=organizedDoc.version||organizedAgain.title!=='Synthetic study A'||!organizedAgain.tags.includes('smoke-organized-2'))throw new Error('ORGANIZER_REOPEN_STALE')
   const other=documents.find(item=>item.original_name==='SyntheticStudyB.pdf')
   const searchDoc=async(target:string)=>{
    const result=await window.webContents.executeJavaScript(`window.yorw.ai.run(${JSON.stringify({kind:'search',target_id:target,text:'survival',request_id:randomUUID()})})`)
@@ -119,9 +137,9 @@ export async function runAiWorkflowSmoke(window:BrowserWindow,backend:Backend,pr
   if(JSON.stringify(calls).includes('workflow-key'))throw new Error('KEY_IN_MODEL_PAYLOAD')
   const note=(await backend.request(`/v1/notes?document_id=${doc.id}`)).items.find((item:any)=>item.id===first.note_id)
   const state={document_id:doc.id,message_id:first.id,note_id:first.note_id,topic_id:tid,revision_id:final.revision.id,body_md:final.revision.body_md,note_body:note.body_md,last_page:(await backend.request(`/v1/documents/${doc.id}`)).last_page,source_kinds:final.revision.sources.map((source:any)=>source.kind),export_path:output,pending_id:null as string|null}
-  await writeFile(join(reportDir,'ai-workflow-smoke.json'),JSON.stringify({result:'passed',search,followup:true,sourceKinds:initial.sources.map((source:any)=>source.kind),appendRenumbered:true,replace:true,rollback:true,settingsSaved:true,export:true,textDocuments:5,negativeDocuments:3,duplicateImport:true,crossDocumentScope:true,layouts,modelRequests:calls.length,cloudCalls:0},null,2))
+  await writeFile(join(reportDir,'ai-workflow-smoke.json'),JSON.stringify({result:'passed',search,followup:true,sourceKinds:initial.sources.map((source:any)=>source.kind),appendRenumbered:true,replace:true,rollback:true,settingsSaved:true,export:true,textDocuments:5,negativeDocuments:3,duplicateImport:true,crossDocumentScope:true,defaultTopicScope:true,batchImport:true,organizer:true,layouts,modelRequests:calls.length,cloudCalls:0},null,2))
   if(fault){
-   const args={kind:'draft',target_id:tid,text:'English interrupt-for-recovery',base_revision_id:final.revision.id,request_id:randomUUID()}
+   const args={kind:'draft',target_id:tid,text:'English interrupt-for-recovery',base_revision_id:final.revision.id,request_id:randomUUID(),scope:'workspace'}
    await window.webContents.executeJavaScript(`window.yorw.ai.run(${JSON.stringify(args)})`)
    for(let i=0;i<200;i++){
     const pending=(await backend.request(`/v1/topics/${tid}/suggestions`)).items.find((item:any)=>item.instruction==='English interrupt-for-recovery')

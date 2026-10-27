@@ -58,6 +58,69 @@ class Suggestions:
     def message_version(row):
         return sha256((row['body_md']+'\n'+row['sources_json']).encode()).hexdigest()
 
+    def scope(self, topic_id, mode='topic'):
+        """Resolve the material set used by a draft; fingerprint relation changes."""
+        self.garden.get(topic_id)
+        if mode == 'workspace':
+            return {'mode': 'workspace'}
+        if mode != 'topic':
+            raise HTTPException(422, detail='INVALID_INPUT')
+        with self.db.lock:
+            descendants = sorted({row['id'] for row in self.library.rows(
+                'WITH RECURSIVE descendants(id) AS ('
+                ' SELECT id FROM topics WHERE id=? UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT id FROM descendants', (topic_id,))})
+            documents = [row['id'] for row in self.library.rows(
+                'WITH RECURSIVE descendants(id) AS ('
+                ' SELECT id FROM topics WHERE id=? UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT DISTINCT dt.document_id AS id FROM document_topics dt '
+                'JOIN descendants ds ON ds.id=dt.topic_id '
+                'JOIN documents d ON d.id=dt.document_id '
+                'WHERE d.deleted_at IS NULL ORDER BY dt.document_id', (topic_id,))]
+            notes = [row['id'] for row in self.library.rows(
+                'WITH RECURSIVE descendants(id) AS ('
+                ' SELECT id FROM topics WHERE id=? UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT DISTINCT n.id FROM notes n '
+                'JOIN documents d ON d.id=n.document_id '
+                'JOIN document_topics dt ON dt.document_id=n.document_id '
+                'JOIN descendants ds ON ds.id=dt.topic_id '
+                'WHERE d.deleted_at IS NULL ORDER BY n.id', (topic_id,))]
+        payload = {'mode': 'topic', 'topic_id': topic_id, 'document_ids': documents,
+                   'note_ids': notes, 'wiki_topic_ids': [identity for identity in descendants if identity != topic_id]}
+        payload['fingerprint'] = sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+        return payload
+
+    def usable_scope(self, topic_id):
+        """Whether the topic subtree has material that retrieval can actually use."""
+        with self.db.lock:
+            rows = self.library.rows(
+                'WITH RECURSIVE descendants(id) AS ('
+                ' SELECT id FROM topics WHERE id=? UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT ('
+                " EXISTS(SELECT 1 FROM documents d JOIN document_topics dt ON dt.document_id=d.id "
+                ' JOIN descendants ds ON ds.id=dt.topic_id '
+                " WHERE d.deleted_at IS NULL AND d.extraction_status IN ('ready','partial'))"
+                ' OR EXISTS(SELECT 1 FROM notes n JOIN documents d ON d.id=n.document_id '
+                ' JOIN document_topics dt ON dt.document_id=n.document_id '
+                ' JOIN descendants ds ON ds.id=dt.topic_id '
+                " WHERE d.deleted_at IS NULL AND trim(n.body_md)<>'')"
+                ' OR EXISTS(SELECT 1 FROM topics t JOIN revisions r ON r.id=t.current_revision_id '
+                ' JOIN descendants ds ON ds.id=t.id '
+                " WHERE t.id<>? AND trim(r.body_md)<>'')"
+                ') AS usable', (topic_id, topic_id))
+            return bool(rows and rows[0]['usable'])
+
+    def scope_changed(self, item, current_fingerprint=None):
+        scope = item.get('scope') or {}
+        if scope.get('mode') != 'topic' or not scope.get('fingerprint'):
+            return False
+        fingerprint = current_fingerprint if current_fingerprint is not None else self.scope(item['topic_id'], 'topic')['fingerprint']
+        return fingerprint != scope['fingerprint']
+
     def catalog(self):
         with self.db.lock:
             items=[]
@@ -129,7 +192,9 @@ class Suggestions:
             if not rows:raise HTTPException(404,detail='SUGGESTION_NOT_FOUND')
             item=rows[0]
             for field,key in [('sources_json','sources'),('materials_json','materials'),('provider_snapshot_json','provider')]:item[key]=json.loads(item.pop(field))
-            item.pop('request_json')
+            request=json.loads(item.pop('request_json'))
+            item['scope']=request.get('scope') or {'mode':'workspace'}
+            item['scope_changed']=False
             decisions=self.library.rows('SELECT action,revision_id FROM wiki_decisions WHERE suggestion_id=?',(identity,))
             item['decision']=decisions[0] if decisions else None
             item['stale']=self.garden.get(item['topic_id'])['revision']['id']!=item['base_revision_id']
@@ -149,7 +214,15 @@ class Suggestions:
     def list(self,topic_id):
         with self.db.lock:
             self.garden.get(topic_id)
-            return {'items':[self.get(r['id']) for r in self.library.rows('SELECT id FROM suggestions WHERE topic_id=? ORDER BY created_at,id',(topic_id,))]}
+            current_fingerprint = self.scope(topic_id, 'topic')['fingerprint']
+            items=[]
+            for row in self.library.rows('SELECT id FROM suggestions WHERE topic_id=? ORDER BY created_at,id',(topic_id,)):
+                item=self.get(row['id'])
+                item['scope_changed']=self.scope_changed(item, current_fingerprint)
+                stored=item.get('scope') or {'mode':'workspace'}
+                item['scope']={key:stored[key] for key in ('mode','topic_id','fingerprint') if key in stored}
+                items.append(item)
+            return {'items':items}
 
     def generate(self,topic_id,value,key):
         payload=value.model_dump(mode='json')
@@ -170,12 +243,13 @@ class Suggestions:
         self.pool.submit(self._run,identity,config,key,snapshot['title'])
         return self.get(identity)
 
-    def generate_auto(self, topic_id, instruction, base_revision_id, sources, request_id, config, key, *, dispatch=True):
+    def generate_auto(self, topic_id, instruction, base_revision_id, sources, request_id, config, key, *, scope=None, dispatch=True):
         """Receive server-selected, version-checked sources from the workflow."""
         sources = [{**{k: v for k, v in source.items() if k != 'available'},
                     'evidence': [{k: v for k, v in ref.items() if k != 'available'} for ref in source['evidence']]}
                    for source in sources]
-        payload = {'instruction': instruction, 'base_revision_id': base_revision_id, 'sources': sources}
+        payload = {'instruction': instruction, 'base_revision_id': base_revision_id, 'sources': sources,
+                   'scope': scope or {'mode': 'workspace'}}
         with self.db.write() as conn:
             existing = self.library.rows('SELECT id,topic_id,request_json FROM suggestions WHERE request_id=?', (request_id,))
             if existing:
