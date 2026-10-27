@@ -230,7 +230,7 @@ function App() {
     setActiveKey(key)
     setStorageKey(key)
     setModule('Storage')
-    sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
+    if (tool !== 'resource') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
   }
   function collapseTool(document: DocumentRecord, tool: StorageTool) {
     const title = document.title || document.original_name
@@ -239,7 +239,7 @@ function App() {
     setActiveKey(documentKey)
     setStorageKey(documentKey)
     setModule('Storage')
-    sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
+    if (tool !== 'resource') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
   }
   function expandGardenTool(topic: Topic, tool: GardenTool) {
     const key = `${tool}:${topic.id}`
@@ -349,7 +349,7 @@ function App() {
     {layoutNotice && <p role="status" className="app-notice">{layoutNotice}<button onClick={() => setLayoutNotice('')}>关闭提示</button></p>}
     {status.state !== 'ready' && <p role="status" className={`app-status ${status.state}`}>{status.message}</p>}
     {(status.state === 'ready' || started) && (layoutReady ? <main className="app-main">
-      <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab && isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab && isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} activeTool={storageTool} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onOpenTool={(tool, document) => expandTool(document, tool)} onCollapseTool={(tool, document) => collapseTool(document, tool)} onNavigate={(document, page) => openDocumentAt(document, page)} onShowNotes={document => expandTool(document, 'notes')} pendingJump={pendingJump} onJumpApplied={clearJump} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
+      <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab && isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab && isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} activeTool={storageTool} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onOpenTool={(tool, document) => expandTool(document, tool)} onCollapseTool={(tool, document) => collapseTool(document, tool)} onNavigate={(document, page) => openDocumentAt(document, page)} onShowNotes={document => expandTool(document, 'notes')} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} pendingJump={pendingJump} onJumpApplied={clearJump} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
       <div className="module-view" id="garden-panel" role={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Garden'}><Garden activeTopicId={gardenTopicId} activeTool={gardenTool} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} onOpenTool={(tool, topic) => expandGardenTool(topic, tool)} onCollapseTool={(tool, topic) => collapseGardenTool(topic, tool)} directoryCollapsed={directoryCollapsed} onToggleDirectory={() => setDirectoryCollapsed(value => !value)} onTitles={updateTopicTitles} /></div>
       <div className="module-view house-view" hidden={module !== 'House'}><House active={module === 'House'} /></div>
     </main> : <p className="app-status" role="status">正在恢复工作标签…</p>)}

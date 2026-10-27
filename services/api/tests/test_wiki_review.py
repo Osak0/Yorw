@@ -112,7 +112,7 @@ def test_schema8_upgrade_preserves_existing_suggestions_and_revisions(tmp_path):
         conn.execute("INSERT INTO suggestions(id,topic_id,base_revision_id,base_body_md,instruction,body_md,sources_json,materials_json,request_json,provider_snapshot_json,prompt_version,status,request_id,task_id,created_at) VALUES(?,?,?,'','instruction','Retained draft [S1]','[]','[]','{}','{}','v1','completed',?,?,'time')",(sid,topic['topic']['id'],topic['revision']['id'],str(uuid4()),task))
     old.close();updated=Database(workspace)
     try:
-        assert updated.version==11 and Garden(updated).get(topic['topic']['id'])==topic
+        assert updated.version==15 and Garden(updated).get(topic['topic']['id'])==topic
         assert updated.connection.execute('SELECT body_md FROM suggestions WHERE id=?',(sid,)).fetchone()[0]=='Retained draft [S1]'
         assert updated.connection.execute('SELECT count(*) FROM wiki_decisions').fetchone()[0]==0
         assert updated.connection.execute('PRAGMA foreign_key_check').fetchall()==[]

@@ -5,9 +5,9 @@ import type { WorkspaceLayout, WorkspaceLayoutModule, WorkspaceLayoutSidebarMode
 
 const MODULES = new Set<WorkspaceLayoutModule>(['Storage', 'Garden', 'House'])
 const SIDEBAR_MODES = new Set<WorkspaceLayoutSidebarMode>(['notes', 'search', 'chat'])
-const TAB_KINDS = new Set(['document', 'topic', 'notes', 'search', 'chat', 'ai', 'history'])
-const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat'])
-const GARDEN_TAB_KINDS = new Set(['topic', 'ai', 'history'])
+const TAB_KINDS = new Set(['document', 'topic', 'notes', 'search', 'chat', 'resource', 'ai', 'history', 'materials'])
+const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat', 'resource'])
+const GARDEN_TAB_KINDS = new Set(['topic', 'ai', 'history', 'materials'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_TABS = 50
 const MAX_TITLE = 500

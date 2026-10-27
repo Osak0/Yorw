@@ -28,7 +28,13 @@ export class Documents {
   }
   update(input: any) {
     if (!input || !Number.isInteger(input.version) || !Array.isArray(input.authors)) throw new Error('INVALID_INPUT')
-    return this.backend.request(`/v1/documents/${id(input.id)}`, 'PATCH', { title: input.title, authors: input.authors, year: input.year, version: input.version })
+    if (input.tags !== undefined && (!Array.isArray(input.tags) || input.tags.length > 200 || input.tags.some((tag: unknown) => typeof tag !== 'string' || tag.length > 200))) throw new Error('INVALID_INPUT')
+    if (input.summary_md !== undefined && input.summary_md !== null && (typeof input.summary_md !== 'string' || input.summary_md.length > 20_000)) throw new Error('INVALID_INPUT')
+    return this.backend.request(`/v1/documents/${id(input.id)}`, 'PATCH', {
+      title: input.title, authors: input.authors, year: input.year, version: input.version,
+      ...(input.tags === undefined ? {} : { tags: input.tags }),
+      ...(input.summary_md === undefined ? {} : { summary_md: input.summary_md })
+    })
   }
   remove(input: any) {
     if (!input || !Number.isInteger(input.version) || input.version < 1) throw new Error('INVALID_INPUT')

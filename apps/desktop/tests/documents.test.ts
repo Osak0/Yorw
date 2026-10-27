@@ -27,6 +27,18 @@ test('native cancellation never uploads; selection uploads only selected bytes, 
 })
 
 
+test('metadata bridge forwards tags and manual summary to the fixed document route', async () => {
+  const request = vi.fn(async () => ({ id: '12345678-1234-1234-1234-123456789abc', version: 3 }))
+  const documents = new Documents({ request } as unknown as Backend)
+  const identity = '12345678-1234-1234-1234-123456789abc'
+  await documents.update({ id: identity, version: 2, title: 'Paper', authors: ['Author'], year: 2026, tags: ['检索'], summary_md: '人工总结' })
+  expect(request).toHaveBeenCalledWith(`/v1/documents/${identity}`, 'PATCH', {
+    title: 'Paper', authors: ['Author'], year: 2026, version: 2, tags: ['检索'], summary_md: '人工总结'
+  })
+  expect(() => documents.update({ id: identity, version: 2, title: null, authors: [], year: null, tags: 'not-an-array' as unknown as string[] })).toThrow('INVALID_INPUT')
+  expect(() => documents.update({ id: identity, version: 2, title: null, authors: [], year: null, summary_md: 42 as unknown as string })).toThrow('INVALID_INPUT')
+})
+
 test('PDF bridge accepts IDs and positive integer pages only', async () => {
   const readPdf = vi.fn(async () => new Uint8Array([37,80,68,70]))
   const request = vi.fn(async () => ({ page: 2 }))

@@ -14,8 +14,9 @@ import { Suggestions } from './suggestions'
 import { Workspace } from './workspace'
 import { Layout } from './layout'
 import { Intelligence } from './intelligence'
+import { Resources } from './resources'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
-import {runWorkspaceChatSmoke,runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
+import {runResourceRelationsSmoke,runWorkspaceChatSmoke,runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
 let quitting = false
@@ -46,7 +47,7 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['INVALID_CITATION','SUGGESTION_DECIDED','SUGGESTION_NOT_READY','INVALID_EXPORT_SELECTION','EXPORT_TOO_LARGE','EXPORT_UNAVAILABLE','EXPORT_DESTINATION_PROTECTED','SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'INVALID_LAYOUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = error instanceof Error && ['INVALID_CITATION','SUGGESTION_DECIDED','SUGGESTION_NOT_READY','INVALID_EXPORT_SELECTION','EXPORT_TOO_LARGE','EXPORT_UNAVAILABLE','EXPORT_DESTINATION_PROTECTED','SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'INVALID_LAYOUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'RELATION_SELF', 'SEARCH_HISTORY_NOT_FOUND', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
       return { ok: false, code }
     }
   }
@@ -83,6 +84,22 @@ else app.whenReady().then(async () => {
   ipcMain.handle('garden:history',providerAction(input=>garden.history(input)))
   const documents = new Documents(backend)
   const notes = new Notes(backend)
+  const resources = new Resources(backend)
+  ipcMain.handle('resources:resource', providerAction(input => resources.resource(input)))
+  ipcMain.handle('resources:searchHistory', providerAction(input => resources.searchHistory(input)))
+  ipcMain.handle('resources:deleteSearchHistory', providerAction(input => resources.deleteSearchHistory(input)))
+  ipcMain.handle('resources:clearSearchHistory', providerAction(input => resources.clearSearchHistory(input)))
+  ipcMain.handle('resources:candidates', providerAction(input => resources.candidates(input)))
+  ipcMain.handle('resources:searchDocuments', providerAction(input => resources.searchDocuments(input)))
+  ipcMain.handle('resources:relations', providerAction(input => resources.relations(input)))
+  ipcMain.handle('resources:addRelation', providerAction(input => resources.addRelation(input)))
+  ipcMain.handle('resources:removeRelation', providerAction(input => resources.removeRelation(input)))
+  ipcMain.handle('resources:documentTopics', providerAction(input => resources.documentTopics(input)))
+  ipcMain.handle('resources:addDocumentTopic', providerAction(input => resources.addDocumentTopic(input)))
+  ipcMain.handle('resources:removeDocumentTopic', providerAction(input => resources.removeDocumentTopic(input)))
+  ipcMain.handle('resources:topicMaterials', providerAction(input => resources.topicMaterials(input)))
+  ipcMain.handle('resources:addTopicDocument', providerAction(input => resources.addTopicDocument(input)))
+  ipcMain.handle('resources:removeTopicDocument', providerAction(input => resources.removeTopicDocument(input)))
   const chat = new Chat(backend, providers)
   ipcMain.handle('chat:list', providerAction(input => chat.list(input)))
   ipcMain.handle('chat:ask', providerAction(input => chat.ask(input)))
@@ -161,7 +178,7 @@ else app.whenReady().then(async () => {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
       }
       await new Promise(resolve => setTimeout(resolve, 400))
-      if (readerSmoke && process.argv.includes('--tabs-smoke')) {
+      if (readerSmoke && (process.argv.includes('--tabs-smoke') || process.argv.includes('--tabs-resource-smoke'))) {
         const second = await readFile(join(reportDir, 'fixture2.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([second]), 'SyntheticStudyB.pdf')
@@ -178,6 +195,7 @@ else app.whenReady().then(async () => {
       const citationProof = readerSmoke && process.argv.includes('--tabs-citation-smoke') ? await runWorkspaceCitationSmoke(window,providers) : null
       const chatProof = readerSmoke && process.argv.includes('--tabs-chat-smoke') ? await runWorkspaceChatSmoke(window,providers) : null
       const toolResumeProof = readerSmoke && process.argv.includes('--tabs-tool-resume-smoke') ? await runWorkspaceTabsToolResumeSmoke(window) : null
+      const resourceProof = readerSmoke && process.argv.includes('--tabs-resource-smoke') ? await runResourceRelationsSmoke(window, backend) : null
       const tabCloseProof = readerSmoke && process.argv.includes('--tabs-close-smoke') ? await runWorkspaceTabsCloseSmoke(window) : null
       if (tabCloseProof) {
         const documents = await backend.request('/v1/documents')
@@ -194,8 +212,49 @@ else app.whenReady().then(async () => {
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
-      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, citationProof, chatProof, toolResumeProof, tabCloseProof, tabFaultProof }, null, 2))
+      await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, citationProof, chatProof, toolResumeProof, resourceProof, tabCloseProof, tabFaultProof }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
+      if (resourceProof) {
+        const layouts = []
+        const openView = async (kind: string, title: string, selector: string) => {
+          const opened = await window.webContents.executeJavaScript(`(async () => {
+            const wait = async predicate => { const end = Date.now() + 8000; while (Date.now() < end) { if (predicate()) return true; await new Promise(resolve => setTimeout(resolve, 100)) } return false }
+            const tab = [...document.querySelectorAll('.workspace-tab')].find(item => item.querySelector('.workspace-tab-kind')?.textContent === ${JSON.stringify(kind)} && item.textContent.includes(${JSON.stringify(title)}))
+            if (!tab) return false
+            tab.click()
+            return await wait(() => !!document.querySelector(${JSON.stringify(selector)}))
+          })()`)
+          return opened === true
+        }
+        for (const [width, height] of [[1280, 720], [1440, 900]]) {
+          window.setContentSize(width, height)
+          await new Promise(resolve => setTimeout(resolve, 500))
+          const resourceOpened = await openView('文献资料', 'Reader fixture', '.document-resource-view')
+          const resourceLayout = resourceOpened ? await window.webContents.executeJavaScript(`(() => {
+            const view = document.querySelector('.document-resource-view')
+            const rect = view?.getBoundingClientRect()
+            return { view: 'resource', width: innerWidth, height: innerHeight,
+              visible: !!rect && rect.width > 0 && rect.top >= 0 && rect.bottom <= innerHeight + 1,
+              horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+              viewOverflow: view ? view.scrollWidth > view.clientWidth + 1 : null }
+          })()`) : { view: 'resource', opened: false }
+          layouts.push(resourceLayout)
+          await writeFile(join(reportDir, `resource-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
+          const materialsOpened = await openView('关联材料', 'Resource Topic', '.topic-materials-view')
+          const materialsLayout = materialsOpened ? await window.webContents.executeJavaScript(`(() => {
+            const view = document.querySelector('.topic-materials-view')
+            const rect = view?.getBoundingClientRect()
+            return { view: 'materials', width: innerWidth, height: innerHeight,
+              visible: !!rect && rect.width > 0 && rect.top >= 0 && rect.bottom <= innerHeight + 1,
+              horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+              viewOverflow: view ? view.scrollWidth > view.clientWidth + 1 : null }
+          })()`) : { view: 'materials', opened: false }
+          layouts.push(materialsLayout)
+          await writeFile(join(reportDir, `materials-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
+        }
+        await writeFile(join(reportDir, 'resource-relations-layouts.json'), JSON.stringify(layouts, null, 2))
+        if (layouts.some(layout => layout.opened === false || layout.visible !== true || layout.horizontalOverflow || layout.viewOverflow)) throw new Error('RESOURCE_LAYOUT_OVERFLOW')
+      }
       if (readerSmoke && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
         const layouts = []
         for (const [width, height] of [[1440,1024],[1024,768],[1280,720],[1440,900]]) {
