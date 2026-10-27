@@ -12,6 +12,7 @@ from yorw_api.garden import CreateTopic, SaveBody
 from yorw_api.notes import NewNote, NoteBody
 from yorw_api.providers import ProbeError
 from yorw_api.retrieval import spans, excerpt, query_terms
+from yorw_api.search_history import SearchHistory
 from yorw_api.wiki_review import WikiReview, Accept, Decision
 from test_library import library
 from test_suggestions import service, setup
@@ -58,6 +59,78 @@ def test_local_search_one_submit_short_original_snippet_and_scope(workflow):
     assert workflow.start(value)['id'] == result['id']
     with pytest.raises(HTTPException):
         workflow.start(value.model_copy(update={'text': 'changed'}))
+
+
+def test_search_history_is_a_deletable_snapshot_and_tasks_remain(workflow):
+    local(workflow)
+    current = document(workflow.suggestions.search, ['Registration allows individual applicants and teams of three.'])
+    value, result = run(workflow, 'search', current, 'registration teams')
+    assert result['status'] == 'succeeded', result
+    history = SearchHistory(workflow.db)
+    entries = history.list(current)['items']
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry['query'] == 'registration teams'
+    assert entry['status'] == 'succeeded'
+    assert entry['task_id'] == result['id']
+    assert entry['items'] and entry['items'][0]['available'] is True
+    assert entry['items'][0]['evidence'][0]['chunk_id']
+    assert 'text' not in entry['items'][0]
+
+    history.delete(current, entry['id'])
+    assert history.list(current)['items'] == []
+    assert workflow.get(result['id'])['status'] == 'succeeded'
+    _, second = run(workflow, 'search', current, 'registration teams')
+    assert second['status'] == 'succeeded'
+    assert len(history.list(current)['items']) == 1
+    assert history.clear(current) == {'deleted': 1}
+    assert history.list(current)['items'] == []
+    assert workflow.get(second['id'])['status'] == 'succeeded'
+
+
+def test_search_history_records_failure_and_interrupted_restart(workflow, monkeypatch):
+    local(workflow)
+    current = document(workflow.suggestions.search, ['Registration allows individual applicants.'])
+    def fail(*args, **kwargs):
+        raise ProbeError('EMBEDDING_FAILED')
+    monkeypatch.setattr(workflow.retriever, 'retrieve', fail)
+    _, failed = run(workflow, 'search', current, 'registration')
+    assert failed['status'] == 'failed'
+    entry = SearchHistory(workflow.db).list(current)['items'][0]
+    assert entry['status'] == 'failed' and entry['error_code'] == 'EMBEDDING_FAILED'
+    monkeypatch.undo()
+
+    history = SearchHistory(workflow.db)
+    task_id = str(uuid4())
+    with workflow.db.write() as conn:
+        conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,created_at,updated_at) VALUES(?,'ai_search',?,'queued','PREPARING','time','time')", (task_id, current))
+        history.create(conn, current, str(uuid4()), task_id, 'unfinished')
+    restarted = Workflows(workflow.suggestions)
+    try:
+        assert restarted.get(task_id)['status'] == 'interrupted'
+        restored = [item for item in SearchHistory(workflow.db).list(current)['items'] if item['task_id'] == task_id]
+        assert restored and restored[0]['status'] == 'interrupted'
+    finally:
+        restarted.close()
+
+
+def test_cancelled_search_history_is_not_overwritten_by_a_late_worker(workflow, monkeypatch):
+    local(workflow)
+    current = document(workflow.suggestions.search, ['Registration allows individual applicants.'])
+    started, release = Event(), Event()
+    def wait_retrieve(*args, **kwargs):
+        started.set()
+        release.wait(2)
+        raise ProbeError('CANCELLED')
+    monkeypatch.setattr(workflow.retriever, 'retrieve', wait_retrieve)
+    value = WorkflowInput(kind='search', target_id=current, text='registration', request_id=uuid4())
+    task = workflow.start(value)
+    workflow.cancel(task['id'])
+    release.set()
+    started.wait(2)
+    time.sleep(.3)
+    entries = [item for item in SearchHistory(workflow.db).list(current)['items'] if item['task_id'] == task['id']]
+    assert entries and entries[0]['status'] == 'cancelled'
 
 
 def test_segment_and_excerpt_offsets_remain_original():
@@ -257,7 +330,7 @@ def test_schema9_upgrade_and_preferences_preserve_research_assets(tmp_path):
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 11
+        assert upgraded.version == 15
         assert Garden(upgraded).get(topic['topic']['id']) == saved
         assert upgraded.connection.execute('SELECT semantic_enabled,version FROM ai_preferences').fetchone() == (1, 1)
         assert len(list((workspace.root/'backups').glob('*.sqlite3'))) == 1

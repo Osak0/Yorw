@@ -67,9 +67,15 @@ def create_app(token: str, database: Database) -> FastAPI:
         return database.workspace_info()
     from .providers import router
     app.include_router(router(database))
+    # Register the literal /v1/documents/search route before the document-detail
+    # route so FastAPI does not treat "search" as a document UUID.
+    from .resources import router as resources_router
+    app.include_router(resources_router(library))
     app.include_router(library_router(library))
     from .notes import router as notes_router
     app.include_router(notes_router(database))
+    from .search_history import router as search_history_router
+    app.include_router(search_history_router(database))
     app.include_router(search_router(search))
     app.include_router(chat_router(chat))
     from .garden import router as garden_router

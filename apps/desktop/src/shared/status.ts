@@ -38,10 +38,40 @@ export interface NoteInput { id: string; document_id: string; body_md: string; v
 export interface NotesBridge { list(documentId: string): Promise<Result<{items: NoteRecord[]}>>; save(input: NoteInput): Promise<Result<NoteRecord>> }
 export type WorkspaceLayoutModule = 'Storage' | 'Garden' | 'House'
 export type WorkspaceLayoutSidebarMode = 'notes' | 'search' | 'chat'
-export interface WorkspaceLayoutTab {kind:'document'|'topic'|'notes'|'search'|'chat'|'ai'|'history';id:string;title?:string}
+export interface WorkspaceLayoutTab {kind:'document'|'topic'|'notes'|'search'|'chat'|'resource'|'ai'|'history'|'materials';id:string;title?:string}
 export interface WorkspaceLayout {version:1;module:WorkspaceLayoutModule;tabs:WorkspaceLayoutTab[];activeKey:string|null;storageKey:string|null;gardenKey:string|null;sidebar?:{mode:WorkspaceLayoutSidebarMode;width:number};directoryCollapsed?:boolean}
 export interface LayoutBridge {load():Promise<Result<{layout:WorkspaceLayout|null;invalid?:boolean}>>;save(layout:WorkspaceLayout):Promise<Result<{saved:boolean}>>}
-export interface DesktopBridge { ai:AiBridge; workspace:WorkspaceBridge; suggestions:SuggestionsBridge; garden: GardenBridge; chat: ChatBridge; search: SearchBridge; notes: NotesBridge; layout: LayoutBridge; getStatus(): Promise<AppStatus>; documents: { readPdf(id: string): Promise<Result<Uint8Array>>; savePosition(input: {id: string; page: number}): Promise<Result<{page: number}>>; list(): Promise<Result<{items: DocumentRecord[]}>>; importPdf(): Promise<Result<ImportResult>>; update(input: DocumentInput): Promise<Result<DocumentRecord>>; remove(input: {id: string; version: number}): Promise<Result<{removed: boolean; cleanup_pending: boolean}>> }; tasks: { cancel(id: string): Promise<Result<TaskRecord>>; get(id: string): Promise<Result<TaskRecord>>; retry(id: string): Promise<Result<TaskRecord>> }; providers: { list(): Promise<Result<ProviderConfig[]>>; save(input: ProviderInput): Promise<Result<ProviderConfig>>; test(kind: ProviderKind): Promise<Result<ProbeResult>> } }
+export interface DocumentSummary { id:string; original_name:string; title:string|null; authors:string[]; year:number|null; tags:string[]; document_available:boolean }
+export interface ResourceTopic { topic:Topic; path:string[] }
+export interface RelatedDocument { document:DocumentSummary; document_available:boolean; description:string; created_at:string; updated_at:string }
+export interface TagMatch { document:DocumentSummary; shared_tags:string[] }
+export interface ResourceNote { id:string; document_id:string; excerpt:string; version:number; created_at:string; updated_at:string; sources_count:number }
+export interface ResourceChat { id:string; question:string; body_excerpt:string; status:string; error_code:string|null; created_at:string; sources_count:number; citations:number }
+export interface SearchHistoryEvidence { document_id:string; chunk_id:string; physical_page:number; extraction_version:number; quote:string; available:boolean }
+export interface SearchHistoryItem { id:string; kind:string; object_id:string; title:string; snippet:string; snippet_start:number; snippet_end:number; document_id:string|null; physical_page:number|null; evidence:SearchHistoryEvidence[]; available:boolean }
+export interface SearchHistoryEntry { id:string; document_id:string; request_id:string; task_id:string; query:string; status:string; error_code:string|null; reason:string|null; created_at:string; updated_at:string; result_count:number; items:SearchHistoryItem[] }
+export interface DocumentResource { document:DocumentRecord; topics:ResourceTopic[]; related:RelatedDocument[]; tag_matches:TagMatch[]; notes:ResourceNote[]; chat:ResourceChat[]; search_history:SearchHistoryEntry[] }
+export interface TopicMaterialDocument { document:DocumentSummary; linked_at?:string; topics?:{id:string;title:string}[] }
+export interface TopicMaterialNote { id:string; document_id:string; document_title:string; document_available:boolean; direct:boolean; topics:string[]; excerpt:string; version:number; sources_count:number; created_at:string; updated_at:string }
+export interface TopicMaterials { topic:Topic; direct:TopicMaterialDocument[]; inherited:TopicMaterialDocument[]; notes:TopicMaterialNote[] }
+export interface ResourcesBridge {
+  resource(id:string):Promise<Result<DocumentResource>>;
+  searchHistory(id:string):Promise<Result<{items:SearchHistoryEntry[]}>>;
+  deleteSearchHistory(input:{document_id:string;history_id:string}):Promise<Result<{deleted:boolean}>>;
+  clearSearchHistory(id:string):Promise<Result<{deleted:number}>>;
+  candidates(input:{id:string;query:string}):Promise<Result<{items:(DocumentSummary&{shared_tags:string[]})[]}>>;
+  searchDocuments(query:string):Promise<Result<{items:DocumentSummary[]}>>;
+  relations(id:string):Promise<Result<{items:RelatedDocument[]}>>;
+  addRelation(input:{id:string;related_id:string;description:string}):Promise<Result<{relation:RelatedDocument}>>;
+  removeRelation(input:{id:string;related_id:string}):Promise<Result<{removed:boolean}>>;
+  documentTopics(id:string):Promise<Result<{items:ResourceTopic[]}>>;
+  addDocumentTopic(input:{document_id:string;topic_id:string}):Promise<Result<{linked:boolean}>>;
+  removeDocumentTopic(input:{document_id:string;topic_id:string}):Promise<Result<{linked:boolean}>>;
+  topicMaterials(id:string):Promise<Result<TopicMaterials>>;
+  addTopicDocument(input:{topic_id:string;document_id:string}):Promise<Result<{linked:boolean}>>;
+  removeTopicDocument(input:{topic_id:string;document_id:string}):Promise<Result<{linked:boolean}>>
+}
+export interface DesktopBridge { ai:AiBridge; workspace:WorkspaceBridge; suggestions:SuggestionsBridge; garden: GardenBridge; chat: ChatBridge; search: SearchBridge; notes: NotesBridge; resources:ResourcesBridge; layout: LayoutBridge; getStatus(): Promise<AppStatus>; documents: { readPdf(id: string): Promise<Result<Uint8Array>>; savePosition(input: {id: string; page: number}): Promise<Result<{page: number}>>; list(): Promise<Result<{items: DocumentRecord[]}>>; importPdf(): Promise<Result<ImportResult>>; update(input: DocumentInput): Promise<Result<DocumentRecord>>; remove(input: {id: string; version: number}): Promise<Result<{removed: boolean; cleanup_pending: boolean}>> }; tasks: { cancel(id: string): Promise<Result<TaskRecord>>; get(id: string): Promise<Result<TaskRecord>>; retry(id: string): Promise<Result<TaskRecord>> }; providers: { list(): Promise<Result<ProviderConfig[]>>; save(input: ProviderInput): Promise<Result<ProviderConfig>>; test(kind: ProviderKind): Promise<Result<ProbeResult>> } }
 
 export interface AiPreferences{semantic_enabled:boolean;version:number}
 export interface AiInput{kind:'search'|'chat'|'draft';target_id:string;text:string;request_id:string;base_revision_id?:string}
@@ -56,7 +86,7 @@ export interface ProviderInput extends ProviderConfig { key?: string; clear_key?
 export interface ProbeResult { ok: boolean; code: string; dimension?: number }
 export type Result<T> = { ok: true; value: T } | { ok: false; code: string }
 
-export interface DocumentRecord { id: string; original_name: string; title: string | null; authors: string[]; year: number | null; version: number; page_count: number | null; last_page: number; extraction_status: string; warning: string | null; metadata_source: Record<string, string>; task?: TaskRecord }
+export interface DocumentRecord { id: string; original_name: string; title: string | null; authors: string[]; year: number | null; tags: string[]; summary_md: string | null; summary_source: string | null; summary_updated_at: string | null; version: number; page_count: number | null; last_page: number; extraction_status: string; warning: string | null; metadata_source: Record<string, string>; task?: TaskRecord }
 export interface TaskRecord { id: string; target_id: string; status: string; stage: string; progress: number | null }
-export interface DocumentInput { id: string; version: number; title: string | null; authors: string[]; year: number | null }
+export interface DocumentInput { id: string; version: number; title: string | null; authors: string[]; year: number | null; tags?: string[]; summary_md?: string | null }
 export interface ImportResult { cancelled?: boolean; document?: DocumentRecord; task?: TaskRecord; deduplicated?: boolean }

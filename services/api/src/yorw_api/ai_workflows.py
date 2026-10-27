@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .library import now
 from .providers import ProbeError
 from .retrieval import Retriever, json_completion
+from .search_history import SearchHistory
 
 
 class Preferences(BaseModel):
@@ -33,8 +34,13 @@ class Workflows:
         self.suggestions = suggestions
         self.chat, self.db, self.library = suggestions.chat, suggestions.db, suggestions.library
         self.retriever = Retriever(suggestions)
+        self.history = SearchHistory(self.db)
         self.closing = Event()
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='ai-workflow')
+        with self.db.write() as conn:
+            timestamp = now()
+            conn.execute("UPDATE tasks SET status='interrupted',stage='INTERRUPTED',updated_at=? WHERE kind='ai_search' AND status IN ('queued','running')", (timestamp,))
+            conn.execute("UPDATE search_history SET status='interrupted',error_code='INTERRUPTED',updated_at=? WHERE status IN ('queued','running')", (timestamp,))
 
     def preferences(self):
         row = self.library.rows('SELECT semantic_enabled,version FROM ai_preferences WHERE singleton=1')[0]
@@ -63,7 +69,10 @@ class Workflows:
     def cancel(self, identity):
         with self.db.write() as conn:
             task = self.get(identity)
+            was_running = task['status'] in ('queued', 'running')
             conn.execute("UPDATE tasks SET status='cancelled',stage='CANCELLED',updated_at=? WHERE id=? AND status IN ('queued','running')", (now(), identity))
+            if was_running and task['kind'] == 'ai_search':
+                self.history.finish_with(conn, identity, 'cancelled', error_code='CANCELLED')
             # The preparation task may already have handed off to a stream. A
             # single cancel action also stops that owned stream.
             result = task['result'] or {}
@@ -105,6 +114,8 @@ class Workflows:
             conn.execute('INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
                          (task_id, 'ai_' + value.kind, target, 'queued', 'PREPARING', json.dumps(data), now(), now()))
             conn.execute('INSERT INTO ai_requests VALUES(?,?,?,?,?)', (request_id, value.kind, target, json.dumps(data, sort_keys=True), task_id))
+            if value.kind == 'search':
+                self.history.create(conn, target, request_id, task_id, value.text)
         self.pool.submit(self._run, task_id, value, configs, prefs, chat_key, embedding_key)
         return self.get(task_id)
 
@@ -112,11 +123,14 @@ class Workflows:
         with self.db.lock:
             if self.closing.is_set():
                 raise ProbeError('INTERRUPTED')
-            if self.get(identity)['status'] not in ('queued', 'running'):
+            task = self.get(identity)
+            if task['status'] not in ('queued', 'running'):
                 raise ProbeError('CANCELLED')
             if self.configs() != configs or self.preferences() != prefs:
                 raise ProbeError('CONFIG_CHANGED')
             self.db.connection.execute("UPDATE tasks SET status='running',stage=?,updated_at=? WHERE id=?", (phase, now(), identity))
+            if task['kind'] == 'ai_search':
+                self.history.mark_running(self.db.connection, identity)
 
     def _history(self, identity):
         rows = self.library.rows("SELECT m.question,m.body_md FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.document_id=? AND m.status='completed' ORDER BY m.created_at DESC,m.id DESC LIMIT 4", (identity,))
@@ -203,13 +217,46 @@ class Workflows:
                 with self.db.write() as conn:
                     check('READY')
                     conn.execute("UPDATE tasks SET status='succeeded',stage='READY',result_json=?,updated_at=? WHERE id=?", (json.dumps(result), now(), identity))
+                    self.history.finish_with(conn, identity, 'succeeded', {
+                        'items': self._history_items(found['items']), 'reason': found['reason']})
         except Exception as error:
             code = error.code if isinstance(error, ProbeError) else error.detail if isinstance(error, HTTPException) and isinstance(error.detail, str) else 'AI_FAILED'
             with self.db.write() as conn:
-                conn.execute("UPDATE tasks SET status=?,stage=?,error_json=?,updated_at=? WHERE id=? AND status IN ('queued','running')",
-                             ('interrupted' if code == 'INTERRUPTED' else 'failed', code, json.dumps({'code': code}), now(), identity))
+                status = 'interrupted' if code == 'INTERRUPTED' else 'failed'
+                cursor = conn.execute("UPDATE tasks SET status=?,stage=?,error_json=?,updated_at=? WHERE id=? AND status IN ('queued','running')",
+                                      (status, code, json.dumps({'code': code}), now(), identity))
+                # A worker that lost the cancellation race must not turn a
+                # user-cancelled history entry back into failed.
+                if value.kind == 'search' and cursor.rowcount:
+                    self.history.finish_with(conn, identity, status, error_code=code)
         finally:
             chat_key = embedding_key = ''
+
+    @staticmethod
+    def _history_items(items):
+        """Compact immutable snapshots: excerpt, reference and availability inputs only."""
+        result = []
+        for row in items:
+            evidence = []
+            for ref in row.get('source', {}).get('evidence', []):
+                if not isinstance(ref, dict) or not ref.get('chunk_id'):
+                    continue
+                evidence.append({
+                    'document_id': ref.get('document_id'),
+                    'chunk_id': ref.get('chunk_id'),
+                    'physical_page': ref.get('physical_page'),
+                    'extraction_version': ref.get('extraction_version'),
+                    'quote': (ref.get('quote') or ref.get('text') or '')[:800],
+                })
+            result.append({
+                'id': row.get('id'), 'kind': row.get('kind'), 'object_id': row.get('object_id'),
+                'title': row.get('title'), 'snippet': row.get('snippet'),
+                'snippet_start': row.get('snippet_start'), 'snippet_end': row.get('snippet_end'),
+                'document_id': evidence[0]['document_id'] if evidence else None,
+                'physical_page': evidence[0]['physical_page'] if evidence else None,
+                'evidence': evidence,
+            })
+        return result
 
     def close(self):
         self.closing.set()

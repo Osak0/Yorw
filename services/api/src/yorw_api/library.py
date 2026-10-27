@@ -17,7 +17,29 @@ from .storage.database import Database
 MAX_BYTES = 50 * 1024 * 1024
 MAX_PAGES = 2000
 MAX_PAGE_TEXT = 200_000
+MAX_TAGS = 50
+MAX_TAG_LENGTH = 40
+MAX_SUMMARY_LENGTH = 20_000
 logging.getLogger("pypdf").setLevel(logging.CRITICAL)
+
+
+def normalize_tags(values: list[str]) -> list[str]:
+    """Trim, drop blanks and deduplicate case-insensitively while keeping first spelling."""
+    tags, seen = [], set()
+    for value in values:
+        tag = value.strip()
+        if not tag:
+            continue
+        if len(tag) > MAX_TAG_LENGTH:
+            raise HTTPException(422, detail="INVALID_METADATA")
+        key = tag.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        tags.append(tag)
+    if len(tags) > MAX_TAGS:
+        raise HTTPException(422, detail="INVALID_METADATA")
+    return tags
 
 
 def now() -> str:
@@ -30,6 +52,10 @@ class Metadata(BaseModel):
     title: str | None = Field(default=None, max_length=1000)
     authors: list[str] = Field(default_factory=list, max_length=100)
     year: int | None = Field(default=None, ge=1000, le=9999)
+    # None preserves the saved value; [] / "" clears it. This keeps older callers
+    # from erasing metadata they never sent.
+    tags: list[str] | None = Field(default=None, max_length=200)
+    summary_md: str | None = Field(default=None, max_length=MAX_SUMMARY_LENGTH)
 
 
 class ReadingPosition(BaseModel):
@@ -62,6 +88,8 @@ class Library:
         result = rows[0]
         for field in ("authors", "metadata_source"):
             result[field] = json.loads(result.pop(field + "_json"))
+        result["tags"] = [item["tag"] for item in self.rows(
+            "SELECT tag FROM document_tags WHERE document_id=? ORDER BY created_at,tag_key", (identity,))]
         result.pop("relative_path")
         latest = self.rows("SELECT id FROM tasks WHERE target_id=? AND kind='extract' ORDER BY created_at DESC LIMIT 1", (identity,))
         result['task'] = self.task(latest[0]['id']) if latest else None
@@ -242,13 +270,39 @@ class Library:
             conn.execute("UPDATE tasks SET status=?,stage=?,progress=1,result_json=?,error_json=?,updated_at=? WHERE id=?", (task_status,warning or 'COMPLETED',json.dumps({'document_id': identity, 'extraction_status': status}),json.dumps({'code': warning}) if warning else None,now(),task_id))
 
     def update(self, identity, metadata: Metadata):
+        tags = normalize_tags(metadata.tags) if metadata.tags is not None else None
         with self.operations, self.db.write() as conn:
             doc = self.document(identity)
             if doc['version'] != metadata.version:
                 raise HTTPException(409, detail="DOCUMENT_CONFLICT")
             if any(len(author) > 1000 for author in metadata.authors):
                 raise HTTPException(422, detail="INVALID_METADATA")
-            conn.execute("UPDATE documents SET title=?,authors_json=?,year=?,metadata_source_json=?,version=version+1,updated_at=? WHERE id=?", (metadata.title or None,json.dumps(metadata.authors),metadata.year,json.dumps({'title':'user','authors':'user','year':'user'}),now(),identity))
+            timestamp = now()
+            summary_md, summary_source, summary_updated_at = (
+                doc['summary_md'], doc['summary_source'], doc['summary_updated_at'])
+            summary_changed = False
+            if metadata.summary_md is not None:
+                candidate = metadata.summary_md.strip()
+                if not candidate:
+                    summary_changed = summary_md is not None or summary_source is not None
+                    summary_md = summary_source = summary_updated_at = None
+                elif candidate != (summary_md or ''):
+                    summary_changed = True
+                    summary_md, summary_source, summary_updated_at = candidate, 'manual', timestamp
+            sources = {**doc['metadata_source'], 'title': 'user', 'authors': 'user', 'year': 'user'}
+            if tags is not None:
+                sources['tags'] = 'user'
+            if summary_changed:
+                sources['summary'] = 'user'
+            conn.execute(
+                "UPDATE documents SET title=?,authors_json=?,year=?,metadata_source_json=?,summary_md=?,summary_source=?,summary_updated_at=?,version=version+1,updated_at=? WHERE id=?",
+                (metadata.title or None, json.dumps(metadata.authors), metadata.year, json.dumps(sources),
+                 summary_md, summary_source, summary_updated_at, timestamp, identity))
+            if tags is not None:
+                conn.execute("DELETE FROM document_tags WHERE document_id=?", (identity,))
+                conn.executemany(
+                    "INSERT INTO document_tags(document_id,tag_key,tag,created_at) VALUES(?,?,?,?)",
+                    [(identity, tag.casefold(), tag, timestamp) for tag in tags])
         return self.document(identity)
 
     def remove(self, identity, version):
@@ -257,11 +311,13 @@ class Library:
                 doc = self.document(identity)
                 if doc['version'] != version:
                     raise HTTPException(409, detail="DOCUMENT_CONFLICT")
-                conn.execute("UPDATE documents SET deleted_at=?,updated_at=?,version=version+1,active_index_generation=NULL,warning='FILE_CLEANUP_PENDING' WHERE id=?", (now(),now(),identity))
+                timestamp = now()
+                conn.execute("UPDATE documents SET deleted_at=?,updated_at=?,version=version+1,active_index_generation=NULL,warning='FILE_CLEANUP_PENDING' WHERE id=?", (timestamp,timestamp,identity))
                 conn.execute("DELETE FROM chunks WHERE document_id=?", (identity,))
                 conn.execute('DELETE FROM index_generations WHERE document_id=?', (identity,))
                 conn.execute('DELETE FROM search_documents WHERE document_id=?', (identity,))
-                conn.execute("UPDATE tasks SET status='cancelled',stage='DOCUMENT_REMOVED',updated_at=? WHERE target_id=? AND status IN ('queued','running')", (now(),identity))
+                conn.execute("UPDATE search_history SET status='cancelled',error_code='DOCUMENT_REMOVED',updated_at=? WHERE task_id IN (SELECT id FROM tasks WHERE target_id=? AND status IN ('queued','running'))", (timestamp,identity))
+                conn.execute("UPDATE tasks SET status='cancelled',stage='DOCUMENT_REMOVED',updated_at=? WHERE target_id=? AND status IN ('queued','running')", (timestamp,identity))
             return {"removed": True, "cleanup_pending": not self.cleanup_deleted(identity)}
 
     def retry(self, task_id):

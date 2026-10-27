@@ -50,6 +50,7 @@ v0.2.1 阶段 A 的界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用�
 - `--tabs-citation-smoke`：工具标签中的来源跳转到正确阅读标签和物理页；关闭阅读标签后可重新创建。
 - `--tabs-chat-smoke`：长回答流式增长、自动跟随/回到最新、停止、重新回答、输入法组合输入和保存笔记。
 - `--tabs-tool-resume-smoke`：工具标签重启恢复并返回阅读。
+- `--tabs-resource-smoke`：阶段 B 文献资料/关系/专题材料；编辑标签和人工总结、关联专题、双向关联文献、笔记显示、从 Garden 添加专题文献，并检查 1280×720/1440×900 的资料与材料视图无横向溢出。与 `--tabs-smoke` 一样，报告目录需有 `fixture.pdf` 和 `fixture2.pdf`。
 - `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
 
 这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
@@ -81,4 +82,6 @@ v0.2.1 阶段 A 的界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用�
 
 本轮通过类型检查、29 项桌面测试、生产构建、118 条本地文档链接和 15 项忽略规则检查。另在 `release/repository-cleanup-check/` 创建独立检查包，使用新生成的样例完成受限 PATH 下的完整流程与故障恢复（32.38 秒，schema 11）；报告位于 `.cache/repository-cleanup-proof/verification.json`。Python 业务、迁移及依赖没有改动，本轮未重跑完整后端回归，154 项属于 v0.2.0 历史交付证据。新检查包不是公开发布制品，不替代原验收包。
 
-2026-10-27 v0.2.1 阶段 A（步骤 1–6）核验：`pnpm typecheck`、`pnpm test`（16 文件 / 41 项）、`pnpm build` 通过；重新构建冻结后端后完整 pytest 154 项通过（87.01 秒，无跳过）。开发 Electron 烟测覆盖标签、工具宿主、引用跳转、底部问答、Garden 三视图、目录收起、重启和关闭保护；阅读布局在 1440×1024、1024×768、1280×720、1440×900 均无导航/工具栏溢出或页面横向滚动，125% 设备缩放通过。`pnpm build:backend` 后打包 `release/v0.2.1-stage-a-review/win-unpacked`，使用新自编写夹具在受限 PATH 下完成完整流程与恢复，37.61 秒、schema 11；报告 `.cache/stage-a-packaged-20261027/verification.json`。真实模型逐题质量、独立干净 Windows、安装器和公开发布仍未验证；本阶段分支未合并 main、未发布，包版本仍为 0.2.0.0。
+2026-10-27 v0.2.1 阶段 A（步骤 1–6）核验：`pnpm typecheck`、`pnpm test`（16 文件 / 41 项）、`pnpm build` 通过；重新构建冻结后端后完整 pytest 154 项通过（87.01 秒，无跳过）。开发 Electron 烟测覆盖标签、工具宿主、引用跳转、底部问答、Garden 三视图、目录收起、重启和关闭保护；阅读布局在 1440×1024、1024×768、1280×720、1440×900 均无导航/工具栏溢出或页面横向滚动，125% 设备缩放通过。`pnpm build:backend` 后打包 `release/v0.2.1-stage-a-review/win-unpacked`，使用新自编写夹具在受限 PATH 下完成完整流程与恢复，37.61 秒、schema 11；报告 `.cache/stage-a-packaged-20261027/verification.json`。真实模型逐题质量、独立干净 Windows、安装器和公开发布仍未验证；阶段 A 后续已随 PR #15 合并 main（3452909），但未核查公开 Release，包版本仍为 0.2.0.0。
+
+2026-10-27 v0.2.1 阶段 B（步骤 7–10）核验，分支 `feature/resource-relations`，实现与验证完成、等待 review，未提交/合并/发布。`pnpm typecheck`、`pnpm test`（19 文件 / 46 项）、`pnpm build` 通过；重新构建冻结后端后完整 pytest 172 项通过（159.05 秒，无跳过）。新增 `test_resources.py` 覆盖 schema 11→15 升级、标签去重、总结来源/时间、关系双向幂等、自关联拒绝、解除保留资料、同标签辅助查找、专题多对多、直接/后代材料、笔记按 ID 去重、目录移动重算、检索历史状态与来源失效；`test_resources_service.py` 覆盖真实 HTTP 路由和重启持久化。开发 Electron `--tabs-resource-smoke` 通过：资料页标签/总结/专题、双向文献关联、笔记显示、Garden 直接关联与双专题材料切换隔离、1280×720/1440×900 无横向溢出；后代材料由后端 pytest 覆盖，不由该烟测覆盖；报告 `.cache/stage-b-final-smoke-20261027/`。打包 `release/v0.2.1-stage-b-review/win-unpacked`，在受限 PATH 下用新自编写夹具完成完整流程与恢复，42.76 秒、schema 15；报告 `.cache/stage-b-packaged-report5-20261027/verification.json`，exe SHA256 `F55960EDD9F390A103EF6D15654D392C70939C7AEA973B01962C71C4D1733FFA`。真实模型逐题质量、独立干净 Windows、安装器和公开发布仍未验证；包版本仍为 0.2.0.0。

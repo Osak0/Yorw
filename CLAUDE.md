@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Yorw（知栖）是 Windows 本地优先的科研阅读与知识工作区。产品模块固定命名为 **Storage / Garden / House**。
 
-开始改动前先读 `AGENTS.md`、`README.md`、`PLAN.md`；涉及当前界面重构时读 `PLAN_v0_2_1.md`（阶段 A 步骤 1–6 已在 `feature/user-interface-optimization` 实现并等待用户 review；步骤 7–12 另行启动）。数据、通信与 AI 合同见 `docs/architecture.md`，环境与验证口径见 `docs/development.md`，阶段 A 证据见 `docs/history/v0.2.1-stage-a.md`。
+开始改动前先读 `AGENTS.md`、`README.md`、`PLAN.md`；涉及当前规划时读 `PLAN_v0_2_1.md`（阶段 A 经 PR #15 合并 main `3452909`；阶段 B 步骤 7–10 已在 `feature/resource-relations` 完成实现与本机验证、schema 15，等待 review；步骤 11–12 另行启动）。数据、通信与 AI 合同见 `docs/architecture.md`，环境与验证口径见 `docs/development.md`，阶段 A/B 证据见 `docs/history/v0.2.1-stage-a.md` 与 `docs/history/v0.2.1-stage-b.md`。
 
 必须保持的不变量：
 
@@ -67,32 +67,34 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<制品�
 - `apps/desktop/src/preload/index.ts` + `src/shared/status.ts`
   - 固定桥接操作与手写 TypeScript 合同（含 `layout:load/save`）。修改 IPC 时必须同步 preload、`shared/status.ts`、main 校验、Python DTO/路由和测试。
 - `apps/desktop/src/renderer/`
-  - React 19 + CSS，无路由、无 TanStack Query/Zustand/Tailwind。`src.tsx` 持有固定模块导航、统一工作标签、各模块最后活动标签和一次性引用跳转；`workspace-tabs.ts` 定义 `document/topic/notes/search/chat/ai/history` 标签，键为“类型:实体 ID”。
+  - React 19 + CSS，无路由、无 TanStack Query/Zustand/Tailwind。`src.tsx` 持有固定模块导航、统一工作标签、各模块最后活动标签和一次性引用跳转；`workspace-tabs.ts` 定义 `document/topic/notes/search/chat/resource/ai/history/materials` 标签，键为“类型:实体 ID”。
   - 任一时刻只挂载一个工具宿主：阅读侧栏或独立工具标签；两者共享 `session-state.ts` 的按文献页码/缩放/侧栏/检索/问答状态和按专题 AI 要求，以及 `Notebook`/`GardenBook` 的实体草稿。关闭标签的保存/放弃/取消与未保存标记由 App 统一处理。
   - `Notebook` 按 `documentId` 缓存会话级笔记草稿；`GardenBook` 保存专题目录、按 topic 的 Wiki 草稿、AI 审阅和历史状态；二者通过 `useSyncExternalStore` 订阅，未保存状态由关闭/退出保护读取。
-  - Garden 有正文、AI 优化、修订历史三个专题标签；目录可收起，收起状态进入布局；AI 选材/截断恢复/来源检查和 revision 回退合同保持在原有后端路径。
+  - Garden 有正文、AI 优化、修订历史、关联材料四个专题标签；关联材料区分直接关联与子专题汇集，笔记按 ID 去重。目录可收起，收起状态进入布局；AI 选材/截断恢复/来源检查和 revision 回退合同保持在原有后端路径。
+  - Storage 文献资料标签聚合标签、人工总结、专题、双向相关文献、相同标签、笔记、检索历史和问答历史；检索历史可删除/清空，来源可用性动态计算，查看历史不调用模型。
   - AI 交互统一走 `ai-task.ts` 的 `useAiTask`：用 `request_id` 实现幂等，每 750ms 轮询 `/v1/ai/tasks` 最新任务；取消由用户显式触发；切换标签不自动取消或重发。问答使用上方滚动消息与下方固定输入，自动跟随/回到最新并处理 IME。
   - PDF 用 pdf.js，Markdown 编辑用 CodeMirror，预览禁止原始 HTML/图片/活动链接。
 - `services/api/src/yorw_api/`
   - `__main__.py` 创建 FastAPI（无 docs/openapi）、Bearer 中间件和全部路由；workspace 打开失败通过 startup handshake 返回安全错误码。
-  - `library.py` 管文献/页文本/chunks/metadata；`notes.py`、`garden.py`、`wiki_review.py`、`exports.py` 管对应业务；`providers.py` 存版本化地址与模型名（不存 key）。
+  - `library.py` 管文献/页文本/chunks/metadata；`notes.py`、`garden.py`、`wiki_review.py`、`exports.py` 管对应业务；`resources.py` 管文献资料聚合、标签/总结查询、文献关系与文献—专题关系；`search_history.py` 管检索历史快照；`providers.py` 存版本化地址与模型名（不存 key）。
   - `ai_workflows.py` 统一 `search`/`chat`/`draft`：持久化任务与阶段、request 幂等、取消/配置/来源版本检查；先持久化生成交接再派发模型调用。
   - `retrieval.py` 生成页内段落/句子切片，FTS5/BM25 与归一化 embedding 各召回、RRF 融合、去重后交聊天模型筛选；引用必须是原文切片，模型不能改写引文。
   - `chat.py`/`suggestions.py` 处理兼容 Chat Completions 的 SSE 流、输出预算（问答 4096、草稿 8192 token）和长度截断的一次续写。
 - 数据层
-  - `services/api/src/yorw_api/migrations/001–011.sql` 顺序迁移。`storage/database.py` 在打开时校验迁移序列、checksum、`user_version`、完整性和外键；升级前用 SQLite backup API 备份；单连接 + `RLock` + `BEGIN IMMEDIATE`，WAL 与 busy_timeout。
-  - 权威记录：`documents/chunks`、`notes`、`conversations/messages`、`topics/revisions/suggestions/wiki_decisions`、`tasks`、`provider_configs`。`knowledge_*` 与旧 `search_*`/`embeddings` 是可重建的派生索引。
+  - `services/api/src/yorw_api/migrations/001–015.sql` 顺序迁移。`storage/database.py` 在打开时校验迁移序列、checksum、`user_version`、完整性和外键；升级前用 SQLite backup API 备份；单连接 + `RLock` + `BEGIN IMMEDIATE`，WAL 与 busy_timeout。
+  - 权威记录：`documents/chunks`、`document_tags`、`document_relations`、`document_topics`、`notes`、`conversations/messages`、`search_history`、`topics/revisions/suggestions/wiki_decisions`、`tasks`、`provider_configs`。`knowledge_*` 与旧 `search_*`/`embeddings` 是可重建的派生索引。
 - 测试
   - `apps/desktop/tests/`：Vitest，默认 node 环境；React 组件用 `renderToStaticMarkup` 验证，主进程模块用 `vi.fn()` 模拟 `Backend`/`Providers`。标签/布局合同有纯函数测试。
   - `services/api/tests/`：pytest，使用临时工作区和 `--basetemp` 下的独立目录；`fixtures/retrieval.json` 是回归资产。
-  - 原生 UI 烟测：`src/main/ai-workflow-smoke.ts` 和 `src/main/workspace-tabs-smoke.ts`，通过 `--tabs-*`/`--layout-smoke` 等隔离入口驱动真实 renderer、自编写 PDF 和本地 loopback 模型；只证明协议/界面/持久化，不代表真实模型质量。
+  - 原生 UI 烟测：`src/main/ai-workflow-smoke.ts` 和 `src/main/workspace-tabs-smoke.ts`，通过 `--tabs-*`（含 `--tabs-resource-smoke`）/`--layout-smoke` 等隔离入口驱动真实 renderer、自编写 PDF 和本地 loopback 模型；只证明协议/界面/持久化，不代表真实模型质量。
 
 ## 当前产品与 AI 边界
 
 - Storage 搜索/问答限当前文献；Garden 草稿自动从全工作区已保存文献、笔记和其他 Wiki 选材（最多 12 条 / 24000 字符）。语义检索默认开启，House 可全局关闭。
 - 问答证据最多 8 条；近期最多 4 轮 / 6000 字符对话仅用于理解追问，答案重新查原文；无证据时本地拒答。
 - 来源快照不可变；采纳追加时合并来源并重排 `S` 编号，替换与回退创建新修订。中断任务重启后不自动重发。
-- 内容导出 ZIP 不是完整备份，不含 PDF、密钥、完整对话或全部修订。
+- 文献标签、人工总结、相关文献和文献—专题关系都是手工整理信息；相同标签不自动建立关系，相关文献不自动扩大 AI 选材范围。检索历史查看不调用模型，来源可用性动态计算，删除历史不删除任务、笔记或对话。
+- 内容导出 ZIP 不是完整备份，不含 PDF、密钥、完整对话、全部修订、标签/总结、关系或检索历史。
 
 ## 历史教训（仍约束当前实现）
 

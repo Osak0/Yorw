@@ -5,6 +5,7 @@ import {MarkdownEditor} from './MarkdownEditor'
 import {MarkdownPreview} from './MarkdownPreview'
 import {SuggestionsPanel,Sources} from './SuggestionsPanel'
 import {WikiReview} from './WikiReview'
+import {TopicMaterialsView} from './TopicMaterials'
 import type {GardenTool} from './workspace-tabs'
 import './notes.css'
 import './garden.css'
@@ -17,7 +18,7 @@ function ToolHeader({topic,label,onBack}:{topic:Topic;label:string;onBack():void
  return <div className="topic-tool-header"><div className="topic-title-row"><h2>{topic.title}</h2><span className="topic-kind-chip">{label}</span></div><button onClick={onBack}>返回正文</button></div>
 }
 
-function TopicEditor({topic,draft,topics,onOpenAi,onOpenHistory}:{topic:Topic;draft:WikiDraft;topics:Topic[];onOpenAi():void;onOpenHistory():void}){
+function TopicEditor({topic,draft,topics,onOpenAi,onOpenHistory,onOpenMaterials}:{topic:Topic;draft:WikiDraft;topics:Topic[];onOpenAi():void;onOpenHistory():void;onOpenMaterials():void}){
  const book=gardenBook()
  const [title,setTitle]=useState(topic.title),[parent,setParent]=useState(topic.parent_id??''),[version,setVersion]=useState(topic.version)
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[preview,setPreview]=useState(false),[remote,setRemote]=useState<TopicView|null>(null)
@@ -32,7 +33,7 @@ function TopicEditor({topic,draft,topics,onOpenAi,onOpenHistory}:{topic:Topic;dr
    <details className="topic-metadata"><summary>名称与父级</summary><div className="topic-metadata-form"><label>名称<input aria-label="专题名称" disabled={busy} maxLength={120} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>父级<select aria-label="专题父级" disabled={busy} value={parent} onChange={e=>setParent(e.target.value)}><option value="">根目录</option>{topics.filter(t=>!excluded.has(t.id)).map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select></label><div className="actions"><button disabled={busy||!title.trim()} onClick={()=>void metadata()}>保存目录信息</button><button disabled={busy} onClick={()=>void loadDirectory()}>载入当前目录信息</button></div><small>目录变更需单独保存；不能移入自身或后代。</small></div></details>
   </header>
   <p role="status" className="topic-body-notice">{notice}</p>
-  <div className="topic-toolbar"><div role="group" aria-label="正文视图"><button aria-pressed={!preview} onClick={()=>setPreview(false)}>编辑</button><button aria-pressed={preview} onClick={()=>setPreview(true)}>预览</button></div><button className="primary" disabled={draft.saving||draft.conflict||!wikiDirty(draft)||draft.body.length>200000} onClick={()=>void book.save(topic.id)}>保存</button><button onClick={onOpenAi}>AI 优化</button><button onClick={onOpenHistory}>修订历史</button></div>
+  <div className="topic-toolbar"><div role="group" aria-label="正文视图"><button aria-pressed={!preview} onClick={()=>setPreview(false)}>编辑</button><button aria-pressed={preview} onClick={()=>setPreview(true)}>预览</button></div><button className="primary" disabled={draft.saving||draft.conflict||!wikiDirty(draft)||draft.body.length>200000} onClick={()=>void book.save(topic.id)}>保存</button><button onClick={onOpenAi}>AI 优化</button><button onClick={onOpenHistory}>修订历史</button><button onClick={onOpenMaterials}>关联材料</button></div>
   <p role="status" className="wiki-status">{draft.saving?'正在保存修订…':draft.message}{wikiDirty(draft)&&' · 有未保存正文（本次会话保留）'} · {draft.body.length.toLocaleString()} / 200,000 <button type="button" className="topic-link-button" disabled={draft.saving} onClick={loadLatest}>载入最新保存正文</button></p>
   {draft.body.length>200000&&<p role="alert" className="topic-body-alert">正文超过上限，当前草稿保留，请缩短后保存。</p>}
   {draft.conflict&&<div className="note-conflict"><p>保存基线已变化，当前草稿没有被覆盖。</p><button onClick={()=>void compare()}>比较最新修订</button>{remote&&<><p>最新修订 {remote.revision.ordinal}</p><pre>{remote.revision.body_md}</pre><button onClick={()=>{book.acceptLatest(remote,true);setRemote(null)}}>保留草稿，基于最新继续</button></>}</div>}
@@ -74,9 +75,9 @@ export function Garden({activeTopicId,activeTool,onOpenTopic,onOpenTool,onCollap
   {!directoryCollapsed&&<aside className="garden-directory" aria-label="专题目录"><div className="garden-directory-header"><h2>专题目录</h2><div className="garden-directory-actions"><button onClick={()=>setCreatingOpen(value=>!value)}>{creatingOpen?'收起':'新建'}</button><button onClick={()=>void book.refresh()} disabled={state.loading}>刷新</button></div></div>
    {creatingOpen&&<form className="garden-create" onSubmit={event=>{event.preventDefault();void create()}}><label>名称<input aria-label="新专题名称" disabled={creating} maxLength={120} value={title} onChange={e=>{setTitle(e.target.value);setCreateId(crypto.randomUUID())}}/></label><label>父级<select aria-label="新专题父级" disabled={creating} value={parent} onChange={e=>{setParent(e.target.value);setCreateId(crypto.randomUUID())}}><option value="">根目录</option>{state.topics.map(t=><option value={t.id} key={t.id}>{t.title}</option>)}</select></label><div className="actions"><button className="primary" disabled={creating||!title.trim()||state.loading}>创建专题</button><button type="button" onClick={()=>setCreatingOpen(false)}>取消</button></div></form>}
    <p role="status">{notice}</p>{!state.loading&&!state.topics.length&&<p>创建一个专题，开始积累自己的知识正文。</p>}{tree(null)}</aside>}
-  <div className="garden-content"><div className="garden-content-bar"><span>{activeTopicId?(tool==='ai'?'AI 优化':tool==='history'?'修订历史':'专题正文'):'专题目录'}</span><button onClick={onToggleDirectory}>{directoryCollapsed?'展开目录':'收起目录'}</button></div>
+  <div className="garden-content"><div className="garden-content-bar"><span>{activeTopicId?(tool==='ai'?'AI 优化':tool==='history'?'修订历史':tool==='materials'?'关联材料':'专题正文'):'专题目录'}</span><button onClick={onToggleDirectory}>{directoryCollapsed?'展开目录':'收起目录'}</button></div>
    {state.error&&<p role="alert">{state.error}<button onClick={()=>activeTopicId?void book.select(activeTopicId):void book.refresh()}>重试加载</button></p>}
-   {!activeTopicId?<div className="garden-empty"><h2>专题目录</h2><p>从左侧选择专题，或新建专题开始编辑。</p></div>:topic&&draft?(tool==='ai'?<TopicAi topic={topic} draft={draft} onBack={()=>onCollapseTool('ai',topic)}/>:tool==='history'?<TopicHistory topic={topic} draft={draft} onBack={()=>onCollapseTool('history',topic)}/>:<TopicEditor topic={topic} draft={draft} topics={state.topics} onOpenAi={()=>onOpenTool('ai',topic)} onOpenHistory={()=>onOpenTool('history',topic)}/>):<div className="garden-empty"><h2>{state.loading?'正在加载正文…':'专题暂不可用'}</h2><p>{state.loading?'正在读取专题目录。':'该专题不在当前目录中，可能已被移除；请刷新目录后重试。'}</p><button onClick={()=>void book.refresh()}>刷新目录</button></div>}
+   {!activeTopicId?<div className="garden-empty"><h2>专题目录</h2><p>从左侧选择专题，或新建专题开始编辑。</p></div>:topic&&draft?(tool==='ai'?<TopicAi topic={topic} draft={draft} onBack={()=>onCollapseTool('ai',topic)}/>:tool==='history'?<TopicHistory topic={topic} draft={draft} onBack={()=>onCollapseTool('history',topic)}/>:tool==='materials'?<TopicMaterialsView key={topic.id} topic={topic} onBack={()=>onCollapseTool('materials',topic)}/>:<TopicEditor topic={topic} draft={draft} topics={state.topics} onOpenAi={()=>onOpenTool('ai',topic)} onOpenHistory={()=>onOpenTool('history',topic)} onOpenMaterials={()=>onOpenTool('materials',topic)}/>):<div className="garden-empty"><h2>{state.loading?'正在加载正文…':'专题暂不可用'}</h2><p>{state.loading?'正在读取专题目录。':'该专题不在当前目录中，可能已被移除；请刷新目录后重试。'}</p><button onClick={()=>void book.refresh()}>刷新目录</button></div>}
   </div>
  </div>
 }

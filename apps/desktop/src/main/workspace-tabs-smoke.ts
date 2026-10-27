@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { randomUUID } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
@@ -168,6 +169,181 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
       moduleAfterDocumentTab: nav('Storage')?.getAttribute('aria-current'),
       documentBTitle: documentBTab()?.textContent ?? '',
       semantics: { tablist: !!tablist, tab: !!semanticTab, panel: !!panel, closeLabel, keyboardMoved }
+    }
+  })()`)
+}
+
+/** Exercises stage B metadata, bidirectional relations, topic materials and note display. */
+export async function runResourceRelationsSmoke(window: BrowserWindow, backend: Backend): Promise<unknown> {
+  const documents = await backend.request('/v1/documents')
+  const reader = documents.items.find((item: { title?: string; original_name: string }) => item.title === 'Reader fixture' || item.original_name === 'fixture.pdf')
+  const second = documents.items.find((item: { original_name: string }) => item.original_name === 'SyntheticStudyB.pdf')
+  if (!reader || !second) throw new Error('RESOURCE_DOCUMENTS_MISSING')
+  await backend.request('/v1/notes', 'POST', {
+    id: randomUUID(), document_id: reader.id, body_md: 'Resource smoke note for materials.'
+  })
+  return window.webContents.executeJavaScript(`(async () => {
+    const waitFor = async (predicate, label) => {
+      const end = Date.now() + 20000
+      while (Date.now() < end) {
+        if (predicate()) return
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      throw new Error('RESOURCE_TIMEOUT_' + label)
+    }
+    const text = () => document.body.textContent || ''
+    const button = value => [...document.querySelectorAll('button')].find(element => element.textContent === value)
+    const buttonIn = (root, value) => [...root.querySelectorAll('button')].find(element => element.textContent === value)
+    const nav = name => [...document.querySelectorAll('.module-nav button')].find(element => element.textContent === name)
+    const setValue = (element, value) => {
+      const prototype = element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value)
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    const setSelect = (element, label) => {
+      const option = [...element.options].find(item => item.textContent === label)
+      if (!option) throw new Error('RESOURCE_OPTION_MISSING:' + label)
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(element, option.value)
+      element.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    const openReader = label => {
+      const row = [...document.querySelectorAll('.document-row')].find(item => item.textContent.includes(label))
+      if (!row) throw new Error('RESOURCE_ROW_MISSING:' + label)
+      buttonIn(row, '打开阅读').click()
+    }
+    const resource = () => document.querySelector('.document-resource-view')
+    const materials = () => document.querySelector('.topic-materials-view')
+    const tabBy = (kind, title) => [...document.querySelectorAll('.workspace-tab')].find(tab =>
+      tab.querySelector('.workspace-tab-kind')?.textContent === kind && tab.querySelector('.workspace-tab-title')?.textContent === title)
+
+    nav('Garden').click()
+    await waitFor(() => button('新建'), 'GARDEN')
+    button('新建').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'TOPIC_FORM')
+    setValue(document.querySelector('input[aria-label="新专题名称"]'), 'Resource Topic')
+    await waitFor(() => !button('创建专题').disabled, 'TOPIC_CREATE_READY')
+    button('创建专题').click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Resource Topic'), 'TOPIC_CREATED')
+
+    nav('Storage').click()
+    await waitFor(() => button('导入 PDF'), 'LIBRARY')
+    openReader('Reader fixture')
+    await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'READER')
+    button('资料').click()
+    await waitFor(() => resource(), 'RESOURCE')
+    await waitFor(() => resource().textContent.includes('尚未填写人工总结'), 'RESOURCE_LOADED')
+
+    // A metadata editor opened on document A must not survive a switch to B.
+    nav('Storage').click()
+    await waitFor(() => button('导入 PDF'), 'LIBRARY_ISOLATION')
+    await waitFor(() => [...document.querySelectorAll('.document-row')].some(row => row.textContent.includes('Synthetic study B')), 'LIBRARY_ROWS_ISOLATION')
+    openReader('Synthetic study B')
+    await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存'), 'SECOND_READER_ISOLATION')
+    button('资料').click()
+    await waitFor(() => resource()?.textContent.includes('Synthetic study B'), 'SECOND_RESOURCE_ISOLATION')
+    tabBy('文献资料', 'Reader fixture').click()
+    await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'FIRST_RESOURCE_ISOLATION')
+    button('编辑元数据').click()
+    await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_EDITOR_ISOLATION')
+    tabBy('文献资料', 'Synthetic study B').click()
+    await waitFor(() => resource()?.textContent.includes('Synthetic study B'), 'SWITCH_RESOURCE_ISOLATION')
+    const editorClearedOnSwitch = !document.querySelector('[aria-label="编辑文献元数据"]')
+    tabBy('文献资料', 'Reader fixture').click()
+    await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'RETURN_RESOURCE_ISOLATION')
+    const editorStayedClosed = !document.querySelector('[aria-label="编辑文献元数据"]')
+    if (!editorClearedOnSwitch || !editorStayedClosed) throw new Error('RESOURCE_STATE_LEAK')
+
+    button('编辑元数据').click()
+    await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_EDITOR')
+    setValue(document.querySelector('[aria-label="关键词 / 标签"]'), '检索增强\\nRAG')
+    setValue(document.querySelector('[aria-label="人工总结"]'), '资源页人工总结。')
+    await new Promise(resolve => setTimeout(resolve, 100))
+    buttonIn(document.querySelector('[aria-label="编辑文献元数据"]'), '保存').click()
+    await waitFor(() => resource()?.textContent.includes('资源页人工总结。'), 'SUMMARY_SAVED')
+    await waitFor(() => resource().textContent.includes('检索增强'), 'TAGS_SAVED')
+    const summarySaved = resource().textContent.includes('资源页人工总结。')
+    const tagsSaved = resource().textContent.includes('检索增强')
+
+    setSelect(document.querySelector('select[aria-label="关联专题"]'), 'Resource Topic')
+    await waitFor(() => !button('关联专题').disabled, 'TOPIC_READY')
+    button('关联专题').click()
+    await waitFor(() => resource().textContent.includes('Resource Topic'), 'TOPIC_LINKED')
+    const topicLinked = resource().textContent.includes('Resource Topic')
+
+    setValue(document.querySelector('input[aria-label="查找可关联文献"]'), 'Synthetic study B')
+    await waitFor(() => document.querySelector('input[aria-label="查找可关联文献"]').value === 'Synthetic study B' && !button('查找文献').disabled, 'CANDIDATE_READY')
+    button('查找文献').click()
+    await waitFor(() => document.querySelector('.resource-candidates')?.textContent.includes('Synthetic study B'), 'CANDIDATE')
+    setValue(document.querySelector('[aria-label="关联说明"]'), '资源页关联')
+    await waitFor(() => document.querySelector('[aria-label="关联说明"]').value === '资源页关联', 'RELATION_DESCRIPTION')
+    buttonIn(document.querySelector('.resource-candidates'), '关联').click()
+    await waitFor(() => resource().textContent.includes('资源页关联'), 'RELATION_ADDED')
+    await waitFor(() => resource().textContent.includes('Resource smoke note for materials.'), 'NOTE_VISIBLE')
+
+    nav('Storage').click()
+    await waitFor(() => button('导入 PDF'), 'LIBRARY_BACK')
+    openReader('Synthetic study B')
+    await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存'), 'SECOND_READER')
+    button('资料').click()
+    await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'RELATION_BIDIRECTIONAL')
+    const bidirectional = resource().textContent.includes('资源页关联')
+
+    nav('Garden').click()
+    await waitFor(() => document.querySelector('.garden-directory'), 'GARDEN_BACK')
+    const topicButton = [...document.querySelectorAll('.garden-directory button[data-topic-id]')].find(item => item.textContent.includes('Resource Topic'))
+    if (!topicButton) throw new Error('RESOURCE_TOPIC_MISSING')
+    topicButton.click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Resource Topic'), 'TOPIC_OPEN')
+    button('关联材料').click()
+    await waitFor(() => materials(), 'MATERIALS')
+    await waitFor(() => materials().textContent.includes('Reader fixture'), 'DIRECT_MATERIAL')
+    const directNote = materials().textContent.includes('Resource smoke note for materials.')
+
+    // Create a second materials tab first, then switch directly from A to B
+    // with A's search results on screen.
+    button('新建').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'SECOND_TOPIC_FORM')
+    setValue(document.querySelector('input[aria-label="新专题名称"]'), 'Resource Topic B')
+    await waitFor(() => !button('创建专题').disabled, 'SECOND_TOPIC_READY')
+    button('创建专题').click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Resource Topic B'), 'SECOND_TOPIC_CREATED')
+    button('关联材料').click()
+    await waitFor(() => materials(), 'SECOND_MATERIALS')
+    const firstMaterialsTab = tabBy('关联材料', 'Resource Topic')
+    const secondMaterialsTab = tabBy('关联材料', 'Resource Topic B')
+    if (!firstMaterialsTab || !secondMaterialsTab) throw new Error('MATERIALS_TABS_MISSING')
+    firstMaterialsTab.click()
+    await waitFor(() => materials()?.querySelector('.resource-header h2')?.textContent === 'Resource Topic', 'FIRST_MATERIALS_BACK')
+    setValue(document.querySelector('.topic-materials-view input[aria-label="查找可关联文献"]'), 'Synthetic study B')
+    await waitFor(() => !buttonIn(materials(), '查找文献').disabled, 'MATERIAL_SEARCH_READY')
+    buttonIn(materials(), '查找文献').click()
+    await waitFor(() => materials().textContent.includes('Synthetic study B'), 'MATERIAL_CANDIDATE')
+    secondMaterialsTab.click()
+    await waitFor(() => materials()?.querySelector('.resource-header h2')?.textContent === 'Resource Topic B', 'SECOND_MATERIALS_SWITCH')
+    const secondMaterialsClean = document.querySelector('.topic-materials-view input[aria-label="查找可关联文献"]')?.value === ''
+      && !materials().querySelector('.resource-candidates')?.textContent.includes('Synthetic study B')
+    if (!secondMaterialsClean) throw new Error('MATERIAL_STATE_LEAK')
+    firstMaterialsTab.click()
+    await waitFor(() => materials()?.querySelector('.resource-header h2')?.textContent === 'Resource Topic', 'FIRST_MATERIALS_RESEARCH')
+    setValue(document.querySelector('.topic-materials-view input[aria-label="查找可关联文献"]'), 'Synthetic study B')
+    await waitFor(() => !buttonIn(materials(), '查找文献').disabled, 'MATERIAL_RESEARCH_READY')
+    buttonIn(materials(), '查找文献').click()
+    await waitFor(() => materials().textContent.includes('Synthetic study B'), 'MATERIAL_RESEARCH')
+    const candidateRow = [...materials().querySelectorAll('.resource-list li')].find(item => item.textContent.includes('Synthetic study B'))
+    buttonIn(candidateRow, '关联到本专题').click()
+    await waitFor(() => [...materials().querySelectorAll('.resource-section')].some(section => section.getAttribute('aria-label') === '直接关联' && section.textContent.includes('Synthetic study B')), 'MATERIAL_ADDED')
+
+    return {
+      summary: summarySaved,
+      tags: tagsSaved,
+      topicLinked,
+      bidirectional,
+      directNote,
+      materialAdded: [...materials().querySelectorAll('.resource-section')].some(section => section.getAttribute('aria-label') === '直接关联' && section.textContent.includes('Synthetic study B')),
+      noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth,
+      materialsOverflow: materials().scrollWidth <= materials().clientWidth + 1,
+      resourceTab: [...document.querySelectorAll('.workspace-tab')].some(tab => tab.textContent.includes('Reader fixture') && tab.textContent.includes('文献资料')),
+      materialsTab: [...document.querySelectorAll('.workspace-tab')].some(tab => tab.textContent.includes('Resource Topic') && tab.textContent.includes('关联材料'))
     }
   })()`)
 }

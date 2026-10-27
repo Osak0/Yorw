@@ -47,7 +47,8 @@ test('tool tabs are valid Storage pages and persist as the active page', async (
       tabs: [
         { kind: 'document', id: documentId, title: 'Paper' },
         { kind: 'notes', id: documentId, title: 'Paper' },
-        { kind: 'chat', id: documentId, title: 'Paper' }
+        { kind: 'chat', id: documentId, title: 'Paper' },
+        { kind: 'resource', id: documentId, title: 'Paper' }
       ],
       activeKey: `notes:${documentId}`,
       storageKey: `notes:${documentId}`,
@@ -69,7 +70,8 @@ test('Garden AI and history tabs persist as Garden pages', async () => {
       tabs: [
         { kind: 'topic', id: topicId, title: 'Topic' },
         { kind: 'ai', id: topicId, title: 'Topic' },
-        { kind: 'history', id: topicId, title: 'Topic' }
+        { kind: 'history', id: topicId, title: 'Topic' },
+        { kind: 'materials', id: topicId, title: 'Topic' }
       ],
       activeKey: `ai:${topicId}`,
       storageKey: null,

@@ -10,10 +10,11 @@ import './notes.css'
 
 interface ReaderJump { page: number; sequence: number }
 
-export function ReadingWorkspace({ document, onClose, onExpand, jump: externalJump, onJumpApplied }: {
+export function ReadingWorkspace({ document, onClose, onExpand, onResource, jump: externalJump, onJumpApplied }: {
   document: DocumentRecord
   onClose(): void
   onExpand(tool: SidebarMode): void
+  onResource(): void
   jump?: ReaderJump
   onJumpApplied?(sequence: number): void
 }) {
@@ -56,7 +57,7 @@ export function ReadingWorkspace({ document, onClose, onExpand, jump: externalJu
     {mode === 'search' && <div className="workspace-panel-body search-body"><SearchPanel documentId={document.id} onPage={page => { setLocalJump({ page, sequence: Date.now() }); if (narrow) closeNotes() }} /></div>}
     {mode === 'chat' && <div className="workspace-panel-body chat-body"><ChatPanel documentId={document.id} onPage={page => { setLocalJump({ page, sequence: Date.now() }); if (narrow) closeNotes() }} onNote={id => { void notebookFor(document.id).importSaved(id).then(() => setMode('notes')).catch(() => window.alert('笔记已保存，加载失败；请重新打开文献。')) }} /></div>}
   </>
-  return <div className="reading-workspace"><div className="reading-primary"><PdfReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} jump={jump} onJumpApplied={externalJump ? onJumpApplied : undefined} /></div>
+  return <div className="reading-workspace"><div className="reading-primary"><PdfReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump} onJumpApplied={externalJump ? onJumpApplied : undefined} /></div>
     {open && (narrow ? <dialog className="notes-overlay" aria-label="文献笔记与检索" ref={modal} onCancel={event => { event.preventDefault(); closeNotes() }}>{contents}</dialog> : <>
       <div className="notes-resizer" role="separator" tabIndex={0} aria-label="调整笔记侧栏宽度" aria-orientation="vertical" aria-valuemin={320} aria-valuemax={480} aria-valuenow={width}
         onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault() }}

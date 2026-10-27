@@ -32,9 +32,16 @@ try {
         $mvpRestart = Get-Content -LiteralPath (Join-Path $mvpReport 'ai-restart.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         $mvpFlow = Get-Content -LiteralPath (Join-Path $mvpReport 'ai-workflow-smoke.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($mvpFlow.result -ne 'passed' -or -not $mvpFlow.appendRenumbered -or -not $mvpFlow.replace -or -not $mvpFlow.rollback -or -not $mvpFlow.crossDocumentScope -or $mvpFlow.textDocuments -ne 5 -or $mvpFlow.negativeDocuments -ne 3 -or -not $mvpRestart.wiki -or -not $mvpRestart.note -or $mvpRestart.pendingStatus -ne 'interrupted') { throw 'Missing v0.2 workflow/recovery proof' }
-        $mvpSchema = 11
         $mvpPending = $mvpRestart.pendingStatus
         $mvpKinds = @($mvpState.source_kinds)
+        # Read PRAGMA user_version from the isolated workspace header (offset 60,
+        # big-endian) instead of asserting the expected schema in the report.
+        $mvpDatabase = Join-Path $mvpReport 'workspace/yorw.sqlite3'
+        if (-not (Test-Path -LiteralPath $mvpDatabase)) { throw 'Workspace database missing' }
+        $mvpBytes = [IO.File]::ReadAllBytes($mvpDatabase)
+        if ($mvpBytes.Length -lt 64 -or [Text.Encoding]::ASCII.GetString($mvpBytes,0,15) -ne 'SQLite format 3') { throw 'Invalid workspace database' }
+        $mvpSchema = [BitConverter]::ToInt32([byte[]]@($mvpBytes[63],$mvpBytes[62],$mvpBytes[61],$mvpBytes[60]),0)
+        if ($mvpSchema -ne 15) { throw "Unexpected schema version: $mvpSchema" }
     } else {
         # Keep the original v0.1 release's embedded smoke protocol reproducible.
         $mvpState = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json

@@ -10,7 +10,7 @@
 
 v0.2.0 实现提交 `d68e364` 已随 PR #13 合并 main（`2c31cae`）。本地有 v0.1.0 标签；本轮未核查 v0.2.0 的公开 Release，不把代码合并等同于公开发布。真实模型质量及独立干净 Windows 验收仍待补充。
 
-v0.2.1 阶段 A（步骤 1–6：工作标签、Storage 工具标签、底部问答、Garden 正文/AI 优化/修订历史）已在 `feature/user-interface-optimization` 实现，并通过本机桌面测试、打包完整流程和夹具复现；当前等待用户 review，未合并 main、未发布。详见 [PLAN](PLAN.md) 与 [阶段 A 开发记录](docs/history/v0.2.1-stage-a.md)。
+v0.2.1 阶段 A（步骤 1–6：工作标签、Storage 工具标签、底部问答、Garden 正文/AI 优化/修订历史）已通过 review，随 PR #15 合并 main（`3452909`）；未核查公开发布/Release。阶段 B（步骤 7–10：文献标签/人工总结、文献资料与检索历史、文献关系、文献—专题关系与关联材料）已在 `feature/resource-relations` 完成实现与本机验证，等待 review。详见 [PLAN](PLAN.md)、[阶段 A 开发记录](docs/history/v0.2.1-stage-a.md) 与[阶段 B 开发记录](docs/history/v0.2.1-stage-b.md)。
 
 用户操作见[使用指南](docs/user-guide.md)，版本变化见 [v0.2.0](docs/releases/v0.2.0.md) / [v0.1.0](docs/releases/v0.1.0.md)。数据默认本地保存，云端模型会接收任务所需文本；内容导出不是完整备份。
 
@@ -40,5 +40,6 @@ pnpm dev
 | [v0.1.0 开发记录](docs/history/v0.1.0.md) | 步骤 0–14 的原始验证与失败记录。 |
 | [v0.2.0 开发记录](docs/history/v0.2.0.md) | 三阶段改进、恢复修复与完整验证证据。 |
 | [v0.2.1 阶段 A 开发记录](docs/history/v0.2.1-stage-a.md) | 工作标签、问答与 Garden 界面重构的实施与验证证据。 |
+| [v0.2.1 阶段 B 开发记录](docs/history/v0.2.1-stage-b.md) | 文献资料、检索历史、文献/专题关系的实施与验证证据。 |
 
 后续 Agent 从 [AGENTS](AGENTS.md) 进入，不必将全部历史当作当前上下文。自动化测试与必要夹具保留；一次性 PDF、测试库、日志和制品按需生成，放在忽略目录中。
