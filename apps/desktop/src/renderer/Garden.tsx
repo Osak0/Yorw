@@ -44,7 +44,7 @@ function TopicEditor({topic,draft,topics,onOpenAi,onOpenHistory,onOpenMaterials}
 function TopicAi({topic,draft,onBack}:{topic:Topic;draft:WikiDraft|undefined;onBack():void}){
  const book=gardenBook(),[notice,setNotice]=useState('')
  async function review(suggestion:Suggestion){const existing=book.getSnapshot().reviews[topic.id];if(existing&&existing.body!==existing.suggestion.body_md&&!window.confirm('放弃之前对建议的未保存修改，比较这份建议？'))return;try{const current=await book.latest(topic.id);book.review(topic.id,{suggestion,current,body:suggestion.body_md,requestId:crypto.randomUUID()});setNotice('已打开比较；正文尚未变化。')}catch(e){setNotice(errorText(e))}}
- return <div className="topic-tool-view" aria-label="AI 优化"><ToolHeader topic={topic} label="AI 优化" onBack={onBack}/><div className="topic-tool-body">{draft?<><SuggestionsPanel topicId={topic.id} baseRevisionId={draft.base} dirty={wikiDirty(draft)} onReview={suggestion=>void review(suggestion)}/><WikiReview topicId={topic.id}/></>:<p>正在加载专题正文…</p>}<p role="status">{notice}</p></div></div>
+ return <div className="topic-tool-view" aria-label="AI 优化"><ToolHeader topic={topic} label="AI 优化" onBack={onBack}/><div className="topic-tool-body">{draft?<><SuggestionsPanel topicId={topic.id} baseRevisionId={draft.base} dirty={wikiDirty(draft)} onReview={suggestion=>void review(suggestion)} onReviewUpdate={suggestion=>book.refreshReview(topic.id,suggestion)}/><WikiReview topicId={topic.id}/></>:<p>正在加载专题正文…</p>}<p role="status">{notice}</p></div></div>
 }
 
 function TopicHistory({topic,draft,onBack}:{topic:Topic;draft:WikiDraft|undefined;onBack():void}){

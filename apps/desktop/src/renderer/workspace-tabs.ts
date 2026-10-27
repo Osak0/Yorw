@@ -1,10 +1,10 @@
 import type { WorkspaceLayoutTab } from '../shared/status'
 
 export type WorkspaceModule = 'Storage' | 'Garden'
-export type StorageTool = 'notes' | 'search' | 'chat' | 'resource'
+export type StorageTool = 'notes' | 'search' | 'chat' | 'resource' | 'metadata'
 export type GardenTool = 'ai' | 'history' | 'materials'
 export type WorkspaceTabKind = 'document' | 'topic' | StorageTool | GardenTool
-const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat', 'resource']
+const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat', 'resource', 'metadata']
 
 export type WorkspaceTab = {
   key: string
@@ -47,7 +47,7 @@ export function moduleForTab(tab: WorkspaceTab): WorkspaceModule {
 }
 
 export function tabKindLabel(tab: WorkspaceTab): string {
-  return { document: '文献', topic: '专题', notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
+  return { document: '文献', topic: '专题', notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
 }
 
 /** Restores saved pages against the current workspace and reports pages that no longer exist. */

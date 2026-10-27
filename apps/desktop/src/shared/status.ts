@@ -2,7 +2,9 @@ export interface MaterialChoice {kind:'document'|'note'|'message';id:string;vers
 export interface MaterialInput {kind:'document'|'note'|'message';id:string;version:string;segment_ids:string[]}
 export interface SourceRef {source_id:string;title?:string;kind:'document'|'note'|'message'|'wiki';source_object_id:string;source_version:string;excerpt:string;available?:boolean;evidence:{document_id:string;document_title:string;chunk_id:string;physical_page:number;quote:string;extraction_version:number}[]}
 export interface MaterialPreview {base_revision_id:string;base_body_md:string;title:string;sources:SourceRef[]}
-export interface Suggestion {id:string;topic_id:string;base_revision_id:string;base_body_md:string;instruction:string;body_md:string;sources:SourceRef[];decision?:{action:'accept'|'reject';revision_id:string|null}|null;status:string;error_code:string|null;recoverable?:boolean;stale:boolean;citations:number[];task_id:string;provider:{model:string;base_url:string;version:number};created_at:string}
+export type AiScope = 'topic' | 'workspace'
+export interface SuggestionScope {mode:AiScope;topic_id?:string;document_ids?:string[];note_ids?:string[];wiki_topic_ids?:string[];fingerprint?:string}
+export interface Suggestion {id:string;topic_id:string;base_revision_id:string;base_body_md:string;instruction:string;body_md:string;sources:SourceRef[];decision?:{action:'accept'|'reject';revision_id:string|null}|null;status:string;error_code:string|null;recoverable?:boolean;stale:boolean;scope:SuggestionScope;scope_changed:boolean;citations:number[];task_id:string;provider:{model:string;base_url:string;version:number};created_at:string}
 export interface WikiDecisionInput {request_id:string;base_revision_id:string}
 export interface WikiDecisionResult {view:TopicView;decision:{request_id:string;action:string;revision_id:string|null;suggestion_id:string|null}}
 export interface ExportCatalog {notes:{id:string;label:string;document_title:string;document_available:boolean;version:number}[];topics:Topic[]}
@@ -38,8 +40,8 @@ export interface NoteInput { id: string; document_id: string; body_md: string; v
 export interface NotesBridge { list(documentId: string): Promise<Result<{items: NoteRecord[]}>>; save(input: NoteInput): Promise<Result<NoteRecord>> }
 export type WorkspaceLayoutModule = 'Storage' | 'Garden' | 'House'
 export type WorkspaceLayoutSidebarMode = 'notes' | 'search' | 'chat'
-export interface WorkspaceLayoutTab {kind:'document'|'topic'|'notes'|'search'|'chat'|'resource'|'ai'|'history'|'materials';id:string;title?:string}
-export interface WorkspaceLayout {version:1;module:WorkspaceLayoutModule;tabs:WorkspaceLayoutTab[];activeKey:string|null;storageKey:string|null;gardenKey:string|null;sidebar?:{mode:WorkspaceLayoutSidebarMode;width:number};directoryCollapsed?:boolean}
+export interface WorkspaceLayoutTab {kind:'document'|'topic'|'notes'|'search'|'chat'|'resource'|'metadata'|'ai'|'history'|'materials';id:string;title?:string}
+export interface WorkspaceLayout {version:1;module:WorkspaceLayoutModule;tabs:WorkspaceLayoutTab[];activeKey:string|null;storageKey:string|null;gardenKey:string|null;sidebar?:{mode:WorkspaceLayoutSidebarMode;width:number};directoryCollapsed?:boolean;storageDirectoryCollapsed?:boolean}
 export interface LayoutBridge {load():Promise<Result<{layout:WorkspaceLayout|null;invalid?:boolean}>>;save(layout:WorkspaceLayout):Promise<Result<{saved:boolean}>>}
 export interface DocumentSummary { id:string; original_name:string; title:string|null; authors:string[]; year:number|null; tags:string[]; document_available:boolean }
 export interface ResourceTopic { topic:Topic; path:string[] }
@@ -71,10 +73,10 @@ export interface ResourcesBridge {
   addTopicDocument(input:{topic_id:string;document_id:string}):Promise<Result<{linked:boolean}>>;
   removeTopicDocument(input:{topic_id:string;document_id:string}):Promise<Result<{linked:boolean}>>
 }
-export interface DesktopBridge { ai:AiBridge; workspace:WorkspaceBridge; suggestions:SuggestionsBridge; garden: GardenBridge; chat: ChatBridge; search: SearchBridge; notes: NotesBridge; resources:ResourcesBridge; layout: LayoutBridge; getStatus(): Promise<AppStatus>; documents: { readPdf(id: string): Promise<Result<Uint8Array>>; savePosition(input: {id: string; page: number}): Promise<Result<{page: number}>>; list(): Promise<Result<{items: DocumentRecord[]}>>; importPdf(): Promise<Result<ImportResult>>; update(input: DocumentInput): Promise<Result<DocumentRecord>>; remove(input: {id: string; version: number}): Promise<Result<{removed: boolean; cleanup_pending: boolean}>> }; tasks: { cancel(id: string): Promise<Result<TaskRecord>>; get(id: string): Promise<Result<TaskRecord>>; retry(id: string): Promise<Result<TaskRecord>> }; providers: { list(): Promise<Result<ProviderConfig[]>>; save(input: ProviderInput): Promise<Result<ProviderConfig>>; test(kind: ProviderKind): Promise<Result<ProbeResult>> } }
+export interface DesktopBridge { ai:AiBridge; workspace:WorkspaceBridge; suggestions:SuggestionsBridge; garden: GardenBridge; chat: ChatBridge; search: SearchBridge; notes: NotesBridge; resources:ResourcesBridge; layout: LayoutBridge; getStatus(): Promise<AppStatus>; documents: { readPdf(id: string): Promise<Result<Uint8Array>>; savePosition(input: {id: string; page: number}): Promise<Result<{page: number}>>; list(): Promise<Result<{items: DocumentRecord[]}>>; importPdf(): Promise<Result<ImportResult>>; importPdfs(): Promise<Result<ImportBatchResult>>; update(input: DocumentInput): Promise<Result<DocumentRecord>>; remove(input: {id: string; version: number}): Promise<Result<{removed: boolean; cleanup_pending: boolean}>> }; tasks: { cancel(id: string): Promise<Result<TaskRecord>>; get(id: string): Promise<Result<TaskRecord>>; retry(id: string): Promise<Result<TaskRecord>> }; providers: { list(): Promise<Result<ProviderConfig[]>>; save(input: ProviderInput): Promise<Result<ProviderConfig>>; test(kind: ProviderKind): Promise<Result<ProbeResult>> } }
 
 export interface AiPreferences{semantic_enabled:boolean;version:number}
-export interface AiInput{kind:'search'|'chat'|'draft';target_id:string;text:string;request_id:string;base_revision_id?:string}
+export interface AiInput{kind:'search'|'chat'|'draft';target_id:string;text:string;request_id:string;base_revision_id?:string;scope?:AiScope}
 export interface SearchHit{id:string;kind:string;object_id:string;title:string;snippet:string;snippet_start:number;snippet_end:number;document_id:string|null;physical_page:number|null}
 export interface AiSearchResult{query:string;items:SearchHit[];reason:string|null;filtered:boolean}
 export interface AiTask{id:string;kind:string;target_id:string;status:string;stage:string;input:AiInput;result:(Partial<AiSearchResult>&{message_id?:string;suggestion_id?:string})|null;error:{code:string}|null}
@@ -88,5 +90,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; code: string }
 
 export interface DocumentRecord { id: string; original_name: string; title: string | null; authors: string[]; year: number | null; tags: string[]; summary_md: string | null; summary_source: string | null; summary_updated_at: string | null; version: number; page_count: number | null; last_page: number; extraction_status: string; warning: string | null; metadata_source: Record<string, string>; task?: TaskRecord }
 export interface TaskRecord { id: string; target_id: string; status: string; stage: string; progress: number | null }
-export interface DocumentInput { id: string; version: number; title: string | null; authors: string[]; year: number | null; tags?: string[]; summary_md?: string | null }
+export interface DocumentInput { id: string; version: number; title?: string | null; authors?: string[]; year?: number | null; tags?: string[]; summary_md?: string | null }
 export interface ImportResult { cancelled?: boolean; document?: DocumentRecord; task?: TaskRecord; deduplicated?: boolean }
+export interface ImportItem { name:string; ok:boolean; code?:string; document?:DocumentRecord; task?:TaskRecord; deduplicated?:boolean }
+export interface ImportBatchResult { cancelled?:boolean; items:ImportItem[] }

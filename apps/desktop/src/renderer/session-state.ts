@@ -19,6 +19,7 @@ export interface DocumentSession {
 
 export interface TopicSession {
   aiInstruction: string
+  aiScope: 'topic' | 'workspace'
 }
 
 class SessionStore {
@@ -52,7 +53,7 @@ class SessionStore {
   topic(id: string): TopicSession {
     let session = this.topics.get(id)
     if (!session) {
-      session = { aiInstruction: '' }
+      session = { aiInstruction: '', aiScope: 'topic' }
       this.topics.set(id, session)
     }
     return session

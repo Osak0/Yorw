@@ -27,6 +27,7 @@ class WorkflowInput(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     request_id: UUID
     base_revision_id: UUID | None = None
+    scope: Literal['topic', 'workspace'] | None = None
 
 
 class Workflows:
@@ -91,12 +92,16 @@ class Workflows:
                 if previous[0]['input_json'] != json.dumps(data, sort_keys=True):
                     raise HTTPException(409, detail='REQUEST_CONFLICT')
                 return self.get(previous[0]['task_id'])
+            draft_scope = None
             if value.kind == 'draft':
                 topic = self.suggestions.garden.get(target)
                 if len(value.text) > 2000 or not value.base_revision_id:
                     raise HTTPException(422, detail='INVALID_INPUT')
                 if topic['revision']['id'] != str(value.base_revision_id):
                     raise HTTPException(409, detail='REVISION_CONFLICT')
+                draft_scope = self.suggestions.scope(target, value.scope or 'topic')
+                if draft_scope['mode'] == 'topic' and not self.suggestions.usable_scope(target):
+                    raise HTTPException(409, detail='NO_SCOPED_MATERIALS')
             else:
                 self.library.document(target)
             if self.library.rows("SELECT id FROM tasks WHERE kind=? AND target_id=? AND status IN ('queued','running')", ('ai_' + value.kind, target)):
@@ -116,7 +121,7 @@ class Workflows:
             conn.execute('INSERT INTO ai_requests VALUES(?,?,?,?,?)', (request_id, value.kind, target, json.dumps(data, sort_keys=True), task_id))
             if value.kind == 'search':
                 self.history.create(conn, target, request_id, task_id, value.text)
-        self.pool.submit(self._run, task_id, value, configs, prefs, chat_key, embedding_key)
+        self.pool.submit(self._run, task_id, value, configs, prefs, chat_key, embedding_key, draft_scope)
         return self.get(task_id)
 
     def _check(self, identity, configs, prefs, phase):
@@ -143,7 +148,7 @@ class Workflows:
             available -= min(len(text), available)
         return list(reversed(history))
 
-    def _run(self, identity, value, configs, prefs, chat_key, embedding_key):
+    def _run(self, identity, value, configs, prefs, chat_key, embedding_key, draft_scope=None):
         check = lambda phase: self._check(identity, configs, prefs, phase)
         try:
             check('PREPARING')
@@ -166,6 +171,7 @@ class Workflows:
                 query = (topic['topic']['title'] + ' ' + value.text)[:1000]
             found = self.retriever.retrieve(query, document_id=target if value.kind != 'draft' else None,
                 exclude_topic=target if value.kind == 'draft' else None, limit={'search': 5, 'chat': 8, 'draft': 12}[value.kind],
+                scope=draft_scope if value.kind == 'draft' else None,
                 semantic=prefs['semantic_enabled'], embedding_config=configs['embedding'], embedding_key=embedding_key,
                 chat_config=configs['chat'], chat_key=chat_key, check=check)
             check('PREPARING')
@@ -204,7 +210,7 @@ class Workflows:
                             sources.append(row['source'])
                             budget -= size
                     draft = self.suggestions.generate_auto(target, value.text, str(value.base_revision_id),
-                        sources, str(value.request_id), configs['chat'], chat_key, dispatch=False)
+                        sources, str(value.request_id), configs['chat'], chat_key, scope=draft_scope, dispatch=False)
                     result = {'suggestion_id': draft['id'], 'reason': found['reason']}
                     try:
                         self.db.connection.execute("UPDATE tasks SET status='succeeded',stage='READY',result_json=?,updated_at=? WHERE id=?", (json.dumps(result), now(), identity))

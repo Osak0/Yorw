@@ -81,6 +81,52 @@ def test_metadata_rejects_oversized_tags_and_summary(library):
     assert library.document(document['id'])['version'] == document['version']
 
 
+def test_metadata_update_only_claims_and_writes_supplied_fields(library):
+    document = imported(library)
+    assert document['title'] == 'Fixture title'
+    assert document['authors'] == ['Fixture Author']
+    assert document['metadata_source']['title'] == 'pdf'
+    assert document['metadata_source']['authors'] == 'pdf'
+
+    # Import organizer saves only tags: extracted PDF metadata must survive and
+    # must not be relabelled as user-entered.
+    tagged = library.update(document['id'], Metadata(
+        version=document['version'], tags=['导入整理']))
+    assert tagged['title'] == 'Fixture title'
+    assert tagged['authors'] == ['Fixture Author']
+    assert tagged['year'] is None
+    assert tagged['metadata_source']['title'] == 'pdf'
+    assert tagged['metadata_source']['authors'] == 'pdf'
+    assert tagged['metadata_source'].get('year') != 'user'
+    assert tagged['metadata_source']['tags'] == 'user'
+
+    # Explicit null/[] from a user still clears and claims the field.
+    cleared = library.update(tagged['id'], Metadata(
+        version=tagged['version'], title=None, authors=[], year=None))
+    assert cleared['title'] is None
+    assert cleared['authors'] == []
+    assert cleared['metadata_source']['title'] == 'user'
+    assert cleared['metadata_source']['authors'] == 'user'
+    assert cleared['metadata_source']['year'] == 'user'
+
+
+def test_metadata_saved_before_extraction_does_not_block_pdf_metadata(library):
+    content = pdf_bytes() + b'\n%early-metadata\n'
+    result = library.import_pdf(BytesIO(content), 'early.pdf')
+    pending = result['document']
+    assert pending['extraction_status'] in ('pending', 'running', 'ready')
+
+    library.update(pending['id'], Metadata(version=pending['version'], tags=['先整理']))
+    extracted = wait(library, result)
+
+    assert extracted['extraction_status'] == 'ready'
+    assert extracted['title'] == 'Fixture title'
+    assert extracted['authors'] == ['Fixture Author']
+    assert extracted['metadata_source']['title'] == 'pdf'
+    assert extracted['metadata_source']['authors'] == 'pdf'
+    assert extracted['tags'] == ['先整理']
+
+
 def test_document_resource_aggregates_metadata_notes_chat_and_search_history(library):
     document = imported(library)
     library.update(document['id'], Metadata(

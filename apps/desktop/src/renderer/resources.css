@@ -37,3 +37,7 @@
 .document-tool-body.resource-tool>.resource-topic-links{flex:0 0 auto;margin:0;padding:10px 26px 16px;background:#f8fafc;border-top:1px solid #eef1f5}
 .resource-topic-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .resource-topic-links button{border:1px solid #c7d6f4;border-radius:6px;background:#fff;color:#3158c9;padding:6px 10px;font-size:12px}
+.import-results{margin:12px 0 18px;padding:16px 18px}
+.import-results-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.import-results-head h2{margin:0;font-size:16px}
+.import-results .actions{display:flex;gap:8px;flex:none}

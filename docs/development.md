@@ -41,7 +41,7 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 
 现役原生烟测保留 `ai-workflow-smoke.ts`、`workspace-tabs-smoke.ts` 与 main 中的启动/阅读探针；脚本使用 `--mvp-smoke`、`--mvp-resume-smoke` 兼容入口，仍可读取 v0.1.0 旧制品的报告协议。旧阶段专用 `--notes-smoke`、`--search-smoke`、`--chat-smoke`、`--garden-smoke`、`--suggestions-smoke`、`--review-export-smoke`、`--draft-recovery-smoke` 不再维护；复现旧版时检出对应历史提交，不在当前界面运行旧选择器。
 
-v0.2.1 阶段 A 的界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用隔离的绝对 `--report-dir`、自编写 PDF 和本地 loopback 模型/SSE 夹具：
+工作区界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用隔离的绝对 `--report-dir`、自编写 PDF 和本地 loopback 模型/SSE 夹具：
 
 - `--tabs-smoke`：打开同一/不同文献和专题、展开和返回三个 Storage 工具、共享检索输入、标签去重、标题更新与键盘语义。
 - `--tabs-resume-smoke`：恢复标签顺序、激活项、页码和侧栏模式。
@@ -50,10 +50,11 @@ v0.2.1 阶段 A 的界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用�
 - `--tabs-citation-smoke`：工具标签中的来源跳转到正确阅读标签和物理页；关闭阅读标签后可重新创建。
 - `--tabs-chat-smoke`：长回答流式增长、自动跟随/回到最新、停止、重新回答、输入法组合输入和保存笔记。
 - `--tabs-tool-resume-smoke`：工具标签重启恢复并返回阅读。
-- `--tabs-resource-smoke`：阶段 B 文献资料/关系/专题材料；编辑标签和人工总结、关联专题、双向关联文献、笔记显示、从 Garden 添加专题文献，并检查 1280×720/1440×900 的资料与材料视图无横向溢出。与 `--tabs-smoke` 一样，报告目录需有 `fixture.pdf` 和 `fixture2.pdf`。
+- `--tabs-resource-smoke`：阶段 B 文献资料/关系/专题材料；文献目录与本地搜索、整理文献独立标签及返回文献库；编辑标签和人工总结、关联专题、双向关联文献、笔记显示、从 Garden 添加专题文献，并检查 1280×720/1440×900 的资料与材料视图无横向溢出。与 `--tabs-smoke` 一样，报告目录需有 `fixture.pdf` 和 `fixture2.pdf`。
+- `--ai-workflow-smoke`：阶段 C 默认专题范围与显式全库切换、一次多选的批量导入矩阵、整理文献标签打开/保存/重开和既有 AI 追加/替换/回退；空范围、范围变化及 HTTP 错误由后端 pytest 覆盖。报告目录需有 `fixture.pdf` 与 `fixtures/` 下的 5 份文字和 3 份负例。
 - `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
 
-这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
+这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；`--ai-workflow-smoke` 另输出 `ai-workflow-smoke.json`、`ai-state.json`、`ai-restart.json`，并覆盖 AI 优化的材料范围选择、一次多选批量导入、整理文献标签保存/重开和打包流程。夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
 
 ## 如何解读结果
 
@@ -74,14 +75,18 @@ v0.2.1 阶段 A 的界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用�
 | development / user-guide | 开发复现 / 使用与能力边界。 |
 | releases / history | 面向版本的变化与发布状态 / 当时的开发、失败和验证证据。 |
 
-历史已按[设计](history/design.md)、[v0.1.0](history/v0.1.0.md)、[v0.2.0](history/v0.2.0.md)归档合并，保留原记录标题、路径、校验摘要与测试事实。旧文件可用 `git show 2c31cae:<原路径>` 精确恢复；当前代码无需同时读取全部历史。
+历史集中在[设计](history/design.md)、[v0.1.0](history/v0.1.0.md)、[v0.2.0 AI 改进](history/v0.2.0.md)和[v0.2.0 工作区改进](history/v0.2.0-workspace.md)。已完成计划和 A/B/C 原始记录保留路径、校验摘要与验证事实；历史命令及绝对路径不保证适用于当前源码或新克隆。
 
-本次仓库整理从 main `2c31cae` 创建 `feature/action`，不改变业务行为、SQL、依赖、用户数据或既有发布包；移除重复说明和过时烟测入口，整合包内帮助资源。历史记录中的绝对路径和 `.cache` 报告只指本机旧验证现场，不保证新克隆存在。
+CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和命令。历史版本名 v0.2.1 仅用于说明原计划与旧验证现场，当前统一发布版本为 v0.2.0。
 
-2026-10-26 整理核验：Markdown 从 30 份收敛为 12 份，22 份原始记录合并为 3 份历史归档；每条记录保留原路径和 SHA256，可与基线 Git 内容核对。删除的手工体验清单没有执行结果，不作为质量证据保留；源代码测试、JSON 夹具、现役样例生成器与完整流程烟测继续维护。仓库整理不修改平台生成记忆，旧分支及忽略目录内的发布包/原始证据也不清场。
+## v0.2.0 发布准备
 
-本轮通过类型检查、29 项桌面测试、生产构建、118 条本地文档链接和 15 项忽略规则检查。另在 `release/repository-cleanup-check/` 创建独立检查包，使用新生成的样例完成受限 PATH 下的完整流程与故障恢复（32.38 秒，schema 11）；报告位于 `.cache/repository-cleanup-proof/verification.json`。Python 业务、迁移及依赖没有改动，本轮未重跑完整后端回归，154 项属于 v0.2.0 历史交付证据。新检查包不是公开发布制品，不替代原验收包。
+当前版本号在根 package.json、桌面 package.json、Python pyproject.toml 和 uv.lock 中均为 0.2.0，SQLite schema 15。包内帮助固定为当前使用指南与 v0.2.0 发布说明。更新帮助后必须重新打包，不能上传旧 review 包。
 
-2026-10-27 v0.2.1 阶段 A（步骤 1–6）核验：`pnpm typecheck`、`pnpm test`（16 文件 / 41 项）、`pnpm build` 通过；重新构建冻结后端后完整 pytest 154 项通过（87.01 秒，无跳过）。开发 Electron 烟测覆盖标签、工具宿主、引用跳转、底部问答、Garden 三视图、目录收起、重启和关闭保护；阅读布局在 1440×1024、1024×768、1280×720、1440×900 均无导航/工具栏溢出或页面横向滚动，125% 设备缩放通过。`pnpm build:backend` 后打包 `release/v0.2.1-stage-a-review/win-unpacked`，使用新自编写夹具在受限 PATH 下完成完整流程与恢复，37.61 秒、schema 11；报告 `.cache/stage-a-packaged-20261027/verification.json`。真实模型逐题质量、独立干净 Windows、安装器和公开发布仍未验证；阶段 A 后续已随 PR #15 合并 main（3452909），但未核查公开 Release，包版本仍为 0.2.0.0。
+1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
+2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
+3. 使用新生成的自编写 PDF 对候选目录运行完整流程与恢复；核对包内帮助、后端、版本和 schema，记录安装器、可执行文件及分发目录各文件的 SHA256。
+4. 合并后，确认目标提交与候选源码树一致；若源码、锁文件或包内帮助变化，重建并重新验证。标签应指向最终合并提交，不能仅凭同版本文件名选择资产。
+5. 用户决定发布后上传对应安装器与 SHA256SUMS.txt；核对 GitHub Release 的标签、目标提交、资产和线上校验清单。公开发布及线上核验尚未完成时保持 pending。
 
-2026-10-27 v0.2.1 阶段 B（步骤 7–10）核验，分支 `feature/resource-relations`，实现与验证完成、等待 review，未提交/合并/发布。`pnpm typecheck`、`pnpm test`（19 文件 / 46 项）、`pnpm build` 通过；重新构建冻结后端后完整 pytest 172 项通过（159.05 秒，无跳过）。新增 `test_resources.py` 覆盖 schema 11→15 升级、标签去重、总结来源/时间、关系双向幂等、自关联拒绝、解除保留资料、同标签辅助查找、专题多对多、直接/后代材料、笔记按 ID 去重、目录移动重算、检索历史状态与来源失效；`test_resources_service.py` 覆盖真实 HTTP 路由和重启持久化。开发 Electron `--tabs-resource-smoke` 通过：资料页标签/总结/专题、双向文献关联、笔记显示、Garden 直接关联与双专题材料切换隔离、1280×720/1440×900 无横向溢出；后代材料由后端 pytest 覆盖，不由该烟测覆盖；报告 `.cache/stage-b-final-smoke-20261027/`。打包 `release/v0.2.1-stage-b-review/win-unpacked`，在受限 PATH 下用新自编写夹具完成完整流程与恢复，42.76 秒、schema 15；报告 `.cache/stage-b-packaged-report5-20261027/verification.json`，exe SHA256 `F55960EDD9F390A103EF6D15654D392C70939C7AEA973B01962C71C4D1733FFA`。真实模型逐题质量、独立干净 Windows、安装器和公开发布仍未验证；包版本仍为 0.2.0.0。
+本次候选输出与验证结果见[v0.2.0 发布说明](releases/v0.2.0.md)和[发布准备记录](history/v0.2.0-release-preparation.md)。该记录说明本机证据及未完成的验收，不代替真实模型质量、干净 Windows 或公开发布。

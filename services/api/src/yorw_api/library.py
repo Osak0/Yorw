@@ -52,8 +52,8 @@ class Metadata(BaseModel):
     title: str | None = Field(default=None, max_length=1000)
     authors: list[str] = Field(default_factory=list, max_length=100)
     year: int | None = Field(default=None, ge=1000, le=9999)
-    # None preserves the saved value; [] / "" clears it. This keeps older callers
-    # from erasing metadata they never sent.
+    # None preserves the saved value; [] / "" clears it. Omitted title, authors
+    # and year also preserve their values and provenance for partial clients.
     tags: list[str] | None = Field(default=None, max_length=200)
     summary_md: str | None = Field(default=None, max_length=MAX_SUMMARY_LENGTH)
 
@@ -271,11 +271,12 @@ class Library:
 
     def update(self, identity, metadata: Metadata):
         tags = normalize_tags(metadata.tags) if metadata.tags is not None else None
+        supplied = metadata.model_fields_set
         with self.operations, self.db.write() as conn:
             doc = self.document(identity)
             if doc['version'] != metadata.version:
                 raise HTTPException(409, detail="DOCUMENT_CONFLICT")
-            if any(len(author) > 1000 for author in metadata.authors):
+            if 'authors' in supplied and any(len(author) > 1000 for author in metadata.authors):
                 raise HTTPException(422, detail="INVALID_METADATA")
             timestamp = now()
             summary_md, summary_source, summary_updated_at = (
@@ -289,14 +290,20 @@ class Library:
                 elif candidate != (summary_md or ''):
                     summary_changed = True
                     summary_md, summary_source, summary_updated_at = candidate, 'manual', timestamp
-            sources = {**doc['metadata_source'], 'title': 'user', 'authors': 'user', 'year': 'user'}
+            title = metadata.title if 'title' in supplied else doc['title']
+            authors = metadata.authors if 'authors' in supplied else doc['authors']
+            year = metadata.year if 'year' in supplied else doc['year']
+            sources = dict(doc['metadata_source'])
+            for changed in ('title', 'authors', 'year'):
+                if changed in supplied:
+                    sources[changed] = 'user'
             if tags is not None:
                 sources['tags'] = 'user'
             if summary_changed:
                 sources['summary'] = 'user'
             conn.execute(
                 "UPDATE documents SET title=?,authors_json=?,year=?,metadata_source_json=?,summary_md=?,summary_source=?,summary_updated_at=?,version=version+1,updated_at=? WHERE id=?",
-                (metadata.title or None, json.dumps(metadata.authors), metadata.year, json.dumps(sources),
+                (title, json.dumps(authors), year, json.dumps(sources),
                  summary_md, summary_source, summary_updated_at, timestamp, identity))
             if tags is not None:
                 conn.execute("DELETE FROM document_tags WHERE document_id=?", (identity,))

@@ -65,6 +65,8 @@ class WikiReview:
                 return self._record(conn, action, topic, identity, None, value)
             if current['id'] != item['base_revision_id']:
                 raise HTTPException(409, detail='REVISION_CONFLICT')
+            if self.suggestions.scope_changed(item):
+                raise HTTPException(409, detail='SCOPE_CHANGED')
             if not all(s['available'] for s in item['sources']):
                 raise HTTPException(409, detail='MATERIAL_CHANGED')
             refs = [int(n) for n in re.findall(r'\[S(\d+)\]', value.body_md)]

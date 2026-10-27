@@ -1,18 +1,16 @@
 # 知栖 Yorw
 
-**Your own research workplace.** 本地优先的科研阅读与知识工作区，将文献、带来源问答、笔记和专题 Wiki 连接起来。
+**Your own research workplace.** Windows 本地优先的科研阅读与知识工作区，将文献、带来源问答、笔记和专题 Wiki 连接起来。
 
-- **Storage**：导入和阅读 PDF，搜索当前原文，提问并保存有来源的笔记。
-- **Garden**：描述要求后自动选材、生成草稿；编辑后追加或替换 Wiki，保留修订与回退。
-- **House**：独立配置聊天/检索服务、设置语义检索、查看数据位置并导出内容。
+- **Storage**：批量导入 PDF，以目录和搜索管理文献；阅读、检索、问答与笔记可在侧栏或独立标签中使用，资料页集中管理元数据和关系。
+- **Garden**：组织专题与关联文献，编辑 Wiki；AI 默认根据当前专题及子专题材料生成可编辑草稿，由用户追加或替换并保留修订。
+- **House**：配置聊天与检索服务、语义检索偏好，查看数据位置并导出已保存内容。
 
 ## 当前状态
 
-v0.2.0 实现提交 `d68e364` 已随 PR #13 合并 main（`2c31cae`）。本地有 v0.1.0 标签；本轮未核查 v0.2.0 的公开 Release，不把代码合并等同于公开发布。真实模型质量及独立干净 Windows 验收仍待补充。
+**v0.2.0 发布准备中，schema 15。** 原定 v0.2.1 的工作区改进（阶段 A/B/C，步骤 1–12）统一纳入 v0.2.0，不单独发布 v0.2.1。阶段 A/B 已合并 main；阶段 C 用户 review 通过，暂存于 `feature/ai-material-scope`，本次仓库整理仍待审查、提交和合并。用户确认此前 v0.2.0 未发布，本次不创建标签或 GitHub Release。
 
-v0.2.1 阶段 A（步骤 1–6：工作标签、Storage 工具标签、底部问答、Garden 正文/AI 优化/修订历史）已通过 review，随 PR #15 合并 main（`3452909`）；未核查公开发布/Release。阶段 B（步骤 7–10：文献标签/人工总结、文献资料与检索历史、文献关系、文献—专题关系与关联材料）已在 `feature/resource-relations` 完成实现与本机验证，等待 review。详见 [PLAN](PLAN.md)、[阶段 A 开发记录](docs/history/v0.2.1-stage-a.md) 与[阶段 B 开发记录](docs/history/v0.2.1-stage-b.md)。
-
-用户操作见[使用指南](docs/user-guide.md)，版本变化见 [v0.2.0](docs/releases/v0.2.0.md) / [v0.1.0](docs/releases/v0.1.0.md)。数据默认本地保存，云端模型会接收任务所需文本；内容导出不是完整备份。
+变化与候选包状态见 [v0.2.0 发布说明](docs/releases/v0.2.0.md)，使用与能力边界见[使用指南](docs/user-guide.md)。真实模型逐题质量及独立干净 Windows 验收仍待补充。数据默认本地保存，云端模型会接收任务所需文本；内容导出不是完整备份。
 
 ## 快速开发
 
@@ -25,21 +23,20 @@ uv sync --project services/api --locked
 pnpm dev
 ```
 
-开发环境使用独立工作区。完整验证和打包命令仅维护在[开发指南](docs/development.md)；技术栈为 Electron/electron-vite + React/TypeScript/CSS，Python/FastAPI + SQLite，PDF.js/pypdf、CodeMirror、FTS5/embedding/NumPy，采用 pnpm/uv 锁定依赖。
+开发环境使用独立工作区。完整验证、打包与复现命令只维护在[开发指南](docs/development.md)。技术栈：Electron/electron-vite、React/TypeScript/CSS、FastAPI/SQLite、PDF.js/pypdf、CodeMirror、FTS5/embedding/NumPy；依赖由 pnpm/uv 锁定。
 
 ## 文档入口
 
 | 文档 | 用途 |
 | --- | --- |
-| [PLAN](PLAN.md) | 当前进度、下一步和后置范围。 |
-| [产品约定](docs/product.md) | 三个空间、体验原则与视觉文化。 |
-| [架构](docs/architecture.md) | 现役模块、通信、数据、来源和 AI 工作流。 |
-| [开发指南](docs/development.md) | 环境、测试、构建、复现和交接。 |
+| [PLAN](PLAN.md) | 当前集成状态、发布前待办和后置范围。 |
+| [产品约定](docs/product.md) | 三个空间、体验原则与视觉。 |
+| [架构](docs/architecture.md) | 现役模块、数据、来源和 AI 工作流。 |
+| [开发指南](docs/development.md) | 环境、回归、打包与复现。 |
 | [使用指南](docs/user-guide.md) | 使用方法、异常处理及能力边界。 |
-| [设计历史](docs/history/design.md) | 原始产品输入、计划和设计评审。 |
-| [v0.1.0 开发记录](docs/history/v0.1.0.md) | 步骤 0–14 的原始验证与失败记录。 |
-| [v0.2.0 开发记录](docs/history/v0.2.0.md) | 三阶段改进、恢复修复与完整验证证据。 |
-| [v0.2.1 阶段 A 开发记录](docs/history/v0.2.1-stage-a.md) | 工作标签、问答与 Garden 界面重构的实施与验证证据。 |
-| [v0.2.1 阶段 B 开发记录](docs/history/v0.2.1-stage-b.md) | 文献资料、检索历史、文献/专题关系的实施与验证证据。 |
+| [v0.2.0](docs/releases/v0.2.0.md) / [v0.1.0](docs/releases/v0.1.0.md) | 版本变化和发布状态。 |
+| [设计历史](docs/history/design.md) / [v0.1.0 开发记录](docs/history/v0.1.0.md) | 原始设计与 MVP 实施证据。 |
+| [v0.2.0 AI 改进](docs/history/v0.2.0.md) / [工作区改进](docs/history/v0.2.0-workspace.md) | AI 流程和原 v0.2.1 计划、A/B/C 实施记录。 |
+| [v0.2.0 发布准备](docs/history/v0.2.0-release-preparation.md) | 本轮整理、候选制品与验收证据。 |
 
-后续 Agent 从 [AGENTS](AGENTS.md) 进入，不必将全部历史当作当前上下文。自动化测试与必要夹具保留；一次性 PDF、测试库、日志和制品按需生成，放在忽略目录中。
+后续 Agent 从 [AGENTS](AGENTS.md) 进入。历史是发生时的证据，无需全部作为当前开发指令加载。自动化测试、必要夹具和复现工具继续维护；测试 PDF、数据库、报告和制品在忽略目录中按需生成。

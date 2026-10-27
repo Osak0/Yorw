@@ -236,7 +236,18 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     // A metadata editor opened on document A must not survive a switch to B.
     nav('Storage').click()
     await waitFor(() => button('导入 PDF'), 'LIBRARY_ISOLATION')
+    await waitFor(() => document.querySelector('.storage-directory'), 'STORAGE_DIRECTORY')
     await waitFor(() => [...document.querySelectorAll('.document-row')].some(row => row.textContent.includes('Synthetic study B')), 'LIBRARY_ROWS_ISOLATION')
+    setValue(document.querySelector('input[aria-label="搜索文献"]'), 'Synthetic study B')
+    await waitFor(() => document.querySelectorAll('.document-row').length === 1 && document.querySelector('.document-row')?.textContent.includes('Synthetic study B'), 'STORAGE_SEARCH')
+    const storageSearch = document.querySelectorAll('.document-row').length === 1 && document.querySelector('.storage-directory-list')?.textContent.includes('Synthetic study B')
+    setValue(document.querySelector('input[aria-label="搜索文献"]'), '')
+    await waitFor(() => document.querySelectorAll('.document-row').length > 1, 'STORAGE_SEARCH_CLEARED')
+    button('收起目录').click()
+    await waitFor(() => !document.querySelector('.storage-directory'), 'STORAGE_DIRECTORY_COLLAPSED')
+    button('展开目录').click()
+    await waitFor(() => document.querySelector('.storage-directory'), 'STORAGE_DIRECTORY_EXPANDED')
+    const storageDirectory = Boolean(document.querySelector('.storage-directory'))
     openReader('Synthetic study B')
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存'), 'SECOND_READER_ISOLATION')
     button('资料').click()
@@ -244,21 +255,36 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     tabBy('文献资料', 'Reader fixture').click()
     await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'FIRST_RESOURCE_ISOLATION')
     button('编辑元数据').click()
-    await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_EDITOR_ISOLATION')
+    await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_TAB')
+    setValue(document.querySelector('[aria-label="关键词 / 标签"]'), 'draft-tag')
+    const metadataTabOpen = tabBy('整理文献', 'Reader fixture')?.getAttribute('aria-selected') === 'true'
     tabBy('文献资料', 'Synthetic study B').click()
     await waitFor(() => resource()?.textContent.includes('Synthetic study B'), 'SWITCH_RESOURCE_ISOLATION')
     const editorClearedOnSwitch = !document.querySelector('[aria-label="编辑文献元数据"]')
-    tabBy('文献资料', 'Reader fixture').click()
-    await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'RETURN_RESOURCE_ISOLATION')
-    const editorStayedClosed = !document.querySelector('[aria-label="编辑文献元数据"]')
-    if (!editorClearedOnSwitch || !editorStayedClosed) throw new Error('RESOURCE_STATE_LEAK')
+    tabBy('整理文献', 'Reader fixture').click()
+    await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_TAB_RETURN')
+    const metadataTitle = document.querySelector('[aria-label="文献标题"]')?.value
+    const metadataDraftKept = document.querySelector('[aria-label="关键词 / 标签"]')?.value === 'draft-tag'
+    const metadataTabReturned = Boolean(metadataTabOpen && metadataTitle === 'Reader fixture' && metadataDraftKept)
+    button('关闭整理').click()
+    await waitFor(() => button('导入 PDF') && !document.querySelector('[aria-label="编辑文献元数据"]'), 'META_CLOSED_TO_LIBRARY')
+    const metadataClosedToLibrary = tabBy('整理文献', 'Reader fixture') === undefined
+    if (!metadataTabOpen || !editorClearedOnSwitch || !metadataTabReturned || !metadataClosedToLibrary) throw new Error('RESOURCE_STATE_LEAK')
 
+    openReader('Reader fixture')
+    await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'META_REOPEN_READER')
+    button('资料').click()
+    await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'META_REOPEN_RESOURCE')
     button('编辑元数据').click()
     await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_EDITOR')
     setValue(document.querySelector('[aria-label="关键词 / 标签"]'), '检索增强\\nRAG')
     setValue(document.querySelector('[aria-label="人工总结"]'), '资源页人工总结。')
     await new Promise(resolve => setTimeout(resolve, 100))
     buttonIn(document.querySelector('[aria-label="编辑文献元数据"]'), '保存').click()
+    await waitFor(() => button('导入 PDF') && !document.querySelector('[aria-label="编辑文献元数据"]'), 'META_SAVED_TO_LIBRARY')
+    openReader('Reader fixture')
+    await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'SUMMARY_READER')
+    button('资料').click()
     await waitFor(() => resource()?.textContent.includes('资源页人工总结。'), 'SUMMARY_SAVED')
     await waitFor(() => resource().textContent.includes('检索增强'), 'TAGS_SAVED')
     const summarySaved = resource().textContent.includes('资源页人工总结。')
@@ -336,6 +362,10 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     return {
       summary: summarySaved,
       tags: tagsSaved,
+      storageDirectory,
+      storageSearch,
+      metadataTab: metadataTabReturned,
+      metadataClosedToLibrary,
       topicLinked,
       bidirectional,
       directNote,
