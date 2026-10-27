@@ -43,7 +43,7 @@ export function ChatPanel({documentId,onPage,onNote}:{documentId:string;onPage(p
     </article>)}
     {!messages.length&&!running&&<p className="chat-empty">向当前文献提问。回答只使用本文检索到的原文证据。</p>}
    </div>
-   {!atBottom&&<button className="chat-latest" onClick={scrollToLatest}>回到最新</button>}
+   {!atBottom&&<button className="chat-latest" type="button" title="跳转到最新消息（对话底部）" aria-label="回到最新消息，跳转到对话底部" onClick={scrollToLatest}>回到最新 <span aria-hidden="true">↓</span></button>}
   </div>
   <p className="chat-status" role="status">{notice||job.notice}</p>
   <form className="chat-compose" onSubmit={event=>{event.preventDefault();void send()}}>

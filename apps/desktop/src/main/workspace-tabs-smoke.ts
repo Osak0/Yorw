@@ -517,8 +517,14 @@ export async function runWorkspaceChatSmoke(window: BrowserWindow, providers: Pr
       history.scrollTop=0
       history.dispatchEvent(new Event('scroll',{bubbles:true}))
       await waitFor(()=>document.querySelector('.chat-latest'),'LATEST')
-      const latestVisible=!!document.querySelector('.chat-latest')
-      document.querySelector('.chat-latest').click()
+      const latestButton=document.querySelector('.chat-latest')
+      const latestStyle=latestButton?getComputedStyle(latestButton):null
+      const latestVisible=!!latestButton
+      const latestText=latestButton?.textContent?.trim()??''
+      const latestColor=latestStyle?.color??''
+      const latestBackground=latestStyle?.backgroundColor??''
+      const latestContrast=!!latestColor&&!!latestBackground&&latestColor!==latestBackground
+      latestButton.click()
       await waitFor(()=>!document.querySelector('.chat-latest'),'LATEST_CLICK')
       const latestDismissed=!document.querySelector('.chat-latest')
       await waitFor(()=>button('停止'),'STOP')
@@ -556,6 +562,10 @@ export async function runWorkspaceChatSmoke(window: BrowserWindow, providers: Pr
         inputBelowHistory,
         streamed:secondLength>firstLength,
         latestVisible,
+        latestText,
+        latestColor,
+        latestBackground,
+        latestContrast,
         latestDismissed,
         partialLength:partial,
         stoppedMessageCount:stoppedCount,
@@ -570,6 +580,7 @@ export async function runWorkspaceChatSmoke(window: BrowserWindow, providers: Pr
         noteOpened:!!document.querySelector('.notes-panel')
       }
     })()`)
+    if (!String((result as Record<string, unknown>).latestText).includes('回到最新') || !(result as Record<string, unknown>).latestContrast) throw new Error('LATEST_BUTTON_UNCLEAR')
     return { ...(result as Record<string, unknown>), modelRequests: calls.length }
   } finally {
     server.closeAllConnections()

@@ -9,7 +9,8 @@
 .chat-citations{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.chat-panel button{border:1px solid #3158c9;color:#3158c9;padding:4px 8px;margin:0;border-radius:4px;font-size:13px}
 .chat-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .chat-sources{margin-top:8px;font-size:13px}.chat-sources summary{cursor:pointer;color:#526174}.chat-sources p{white-space:pre-wrap;margin:6px 0}.chat-sources button{margin-top:2px}
-.chat-latest{position:absolute;right:8px;bottom:10px;min-height:0;padding:5px 10px;border:0;border-radius:16px;background:#3158c9;color:#fff;font-size:12px;box-shadow:0 2px 8px #1e293b30}
+.chat-panel .chat-latest{position:absolute;right:10px;bottom:10px;z-index:2;display:inline-flex;align-items:center;gap:4px;min-height:0;margin:0;padding:6px 11px;border:0;border-radius:16px;background:#3158c9;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px #1e293b30}
+.chat-panel .chat-latest:hover{background:#2546a8}
 .chat-status{flex-shrink:0;min-height:20px;margin:2px 0;color:#526174;font-size:13px}
 .chat-compose{flex-shrink:0;border-top:1px solid #dce2ea;padding-top:8px;background:#fff}.chat-compose label{margin:0;font-size:13px;color:#526174}
 .chat-compose textarea{width:100%;min-height:56px;max-height:140px;resize:none;display:block;border:1px solid #aeb9ca;border-radius:6px;padding:8px;margin-top:4px;font:inherit}
