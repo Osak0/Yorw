@@ -110,6 +110,7 @@ function ParserPanel({ active }: { active: boolean }) {
       <label>单文件解析超时（秒）<input aria-label="解析超时秒数" type="number" min={1} max={3600} value={form.timeout_seconds} onChange={event => update('timeout_seconds', Math.max(1, Math.min(3600, Number(event.target.value) || 1)))} /></label>
       <label className="check"><input aria-label="允许 OCR" type="checkbox" checked={form.ocr_enabled} onChange={event => update('ocr_enabled', event.target.checked)} />允许 OCR（扫描 PDF）</label>
       <label>OCR 模式<select aria-label="OCR 模式" value={form.ocr_mode} onChange={event => update('ocr_mode', event.target.value as ParserSettings['ocr_mode'])}><option value="default">默认（按版面区域）</option><option value="full_page">整页 OCR</option></select></label>
+      <label>OCR 引擎<select aria-label="OCR 引擎" value={form.ocr_engine} onChange={event => update('ocr_engine', event.target.value as ParserSettings['ocr_engine'])}><option value="auto">自动（Docling 选择）</option><option value="easyocr">EasyOCR</option><option value="rapidocr">RapidOCR（无需 GitHub 模型下载）</option><option value="tesseract">Tesseract</option></select></label>
       <div className="actions"><button className="primary" onClick={() => void save()}>保存解析配置</button><button onClick={() => void test()}>检测组件能力</button></div>
     </fieldset>}
     {status && <div className="parser-status"><p>Docling：{status.components.docling.available ? `可用（${status.components.docling.version}）` : `不可用 · ${status.components.docling.detail}`}；LibreOffice：{status.components.libreoffice.available ? '可用' : '不可用'}。</p>

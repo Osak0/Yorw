@@ -31,7 +31,7 @@ test('Storage home keeps the document directory and search, and can collapse the
   expect(expanded).toContain('文献目录')
   expect(expanded).toContain('搜索文献')
   expect(expanded).toContain('收起目录')
-  expect(expanded).toContain('导入 PDF')
+  expect(expanded).toContain('导入文献')
   const collapsed = renderToStaticMarkup(<Storage {...props} storageDirectoryCollapsed />)
   expect(collapsed).not.toContain('文献目录')
   expect(collapsed).toContain('展开目录')

@@ -37,6 +37,7 @@ def main() -> int:
     parser.add_argument('--libreoffice', default=None)
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--no-ocr', action='store_true')
+    parser.add_argument('--ocr-engine', default='auto', choices=['auto', 'easyocr', 'rapidocr', 'tesseract'])
     parser.add_argument('--prefix-arg', action='append', default=[])
     args = parser.parse_args()
     if not args.samples.is_dir():
@@ -47,7 +48,8 @@ def main() -> int:
         return 2
     config = DoclingConfig(executable=args.executable, prefix_args=args.prefix_arg,
                            libreoffice_executable=args.libreoffice,
-                           timeout_seconds=args.timeout, ocr=not args.no_ocr)
+                           timeout_seconds=args.timeout, ocr=not args.no_ocr,
+                           ocr_engine=args.ocr_engine)
     docling = DoclingParser(config)
     capabilities = [item.model_dump(mode='json') for item in docling.capabilities()]
     items = []
@@ -81,6 +83,7 @@ def main() -> int:
         'created_at': datetime.now(timezone.utc).isoformat(),
         'executable': args.executable,
         'ocr': not args.no_ocr,
+        'ocr_engine': args.ocr_engine,
         'timeout_seconds': args.timeout,
         'capabilities': capabilities,
         'items': items,

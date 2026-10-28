@@ -124,8 +124,17 @@ def test_pdf_conversion_keeps_pages_sections_tables_and_warnings(tmp_path):
     assert "A" in result.blocks[-1].text and "B" in result.blocks[-1].text
     assert any(item.code == "PICTURE_SKIPPED" for item in result.warnings)
     argv = json.loads((tmp_path / "argv.json").read_text(encoding="utf-8"))
+    assert "convert" in argv
     assert "--to" in argv and argv[argv.index("--to") + 1] == "json"
     assert "--output" in argv and "--ocr" in argv
+
+
+def test_selected_ocr_engine_is_passed(tmp_path):
+    script = fake_script(tmp_path)
+    parser = DoclingParser(config(tmp_path, script, ocr_engine='rapidocr'))
+    parser.parse(parse_request(tmp_path, "pdf"), threading.Event())
+    argv = json.loads((tmp_path / "argv.json").read_text(encoding="utf-8"))
+    assert "--ocr-engine" in argv and argv[argv.index("--ocr-engine") + 1] == "rapidocr"
 
 
 def test_non_pdf_conversion_does_not_fabricate_pages(tmp_path):

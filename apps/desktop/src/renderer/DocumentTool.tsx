@@ -1,5 +1,5 @@
 import React from 'react'
-import type { DocumentRecord, Topic } from '../shared/status'
+import type { DocumentRecord, ReaderTarget, Topic } from '../shared/status'
 import { NotesPanel } from './NotesPanel'
 import { SearchPanel } from './SearchPanel'
 import { ChatPanel } from './ChatPanel'
@@ -13,7 +13,7 @@ export function DocumentTool({ document, tool, onOpenDocument, onCollapse, onEdi
   onOpenDocument(): void
   onCollapse(): void
   onEditMetadata(): void
-  onNavigate(page: number): void
+  onNavigate(target: ReaderTarget): void
   onShowNotes(): void
   onOpenSearch(): void
   onOpenChat(): void
@@ -28,8 +28,8 @@ export function DocumentTool({ document, tool, onOpenDocument, onCollapse, onEdi
     </div>
     <div className={`document-tool-body ${tool}-tool`}>
       {tool === 'notes' && <NotesPanel documentId={document.id} />}
-      {tool === 'search' && <SearchPanel documentId={document.id} onPage={onNavigate} />}
-      {tool === 'chat' && <ChatPanel documentId={document.id} onPage={onNavigate} onNote={id => { void notebookFor(document.id).importSaved(id).then(onShowNotes).catch(() => window.alert('笔记已保存，加载失败；请重新打开文献。')) }} />}
+      {tool === 'search' && <SearchPanel documentId={document.id} onNavigate={onNavigate} />}
+      {tool === 'chat' && <ChatPanel documentId={document.id} onNavigate={onNavigate} onNote={id => { void notebookFor(document.id).importSaved(id).then(onShowNotes).catch(() => window.alert('笔记已保存，加载失败；请重新打开文献。')) }} />}
       {tool === 'resource' && <DocumentResourceView key={document.id} document={document} onEditMetadata={onEditMetadata} onOpenNotes={onShowNotes} onOpenSearch={onOpenSearch} onOpenChat={onOpenChat} onOpenTopic={onOpenTopic} onNavigate={onNavigate} />}
     </div>
   </div>

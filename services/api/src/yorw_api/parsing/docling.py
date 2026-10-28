@@ -78,10 +78,12 @@ class DoclingConfig(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     executable: str = ''
     prefix_args: list[str] = Field(default_factory=list, max_length=16)
+    subcommand: str = Field(default='convert', max_length=32)
     libreoffice_executable: str | None = None
     timeout_seconds: float = Field(default=600, ge=0.1, le=3600)
     ocr: bool = True
     ocr_mode: Literal['default', 'full_page'] = 'default'
+    ocr_engine: Literal['auto', 'easyocr', 'rapidocr', 'tesseract'] = 'auto'
     max_output_bytes: int = Field(default=64 * 1024 * 1024, ge=100, le=512 * 1024 * 1024)
 
 
@@ -123,7 +125,7 @@ class DoclingParser:
                 completed = subprocess.run(
                     [executable, *self.config.prefix_args, '--version'],
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    timeout=10, env=sanitized_environment(),
+                    timeout=60, env=sanitized_environment(),
                     **({'creationflags': CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session': True}),
                 )
                 output = (completed.stdout + completed.stderr).decode('utf-8', 'replace')[:4000]
@@ -189,8 +191,12 @@ class DoclingParser:
         if not executable:
             raise ParseError('COMPONENT_MISSING', diagnostic={'install_hint': INSTALL_HINT})
         command = [executable, *self.config.prefix_args]
+        if self.config.subcommand:
+            command.append(self.config.subcommand)
         if request.format == 'pdf':
             command.append('--ocr' if self.config.ocr else '--no-ocr')
+            if self.config.ocr and self.config.ocr_engine != 'auto':
+                command += ['--ocr-engine', self.config.ocr_engine]
             if self.config.ocr and self.config.ocr_mode == 'full_page':
                 command += ['--ocr-mode', 'full_page']
         command += ['--document-timeout', str(self.config.timeout_seconds),
@@ -449,7 +455,8 @@ class DoclingParser:
         fingerprint = config_fingerprint({
             'parser': self.name, 'version': parser_version, 'ocr': self.config.ocr,
             'ocr_mode': self.config.ocr_mode, 'timeout_seconds': self.config.timeout_seconds,
-            'max_output_bytes': self.config.max_output_bytes,
+            'max_output_bytes': self.config.max_output_bytes, 'subcommand': self.config.subcommand,
+            'ocr_engine': self.config.ocr_engine,
             'executable': Path(self.config.executable).name if self.config.executable else '',
         })
         summary = f'{len(blocks)} 个内容块' + (f' / {page_count} 页' if page_count else '')

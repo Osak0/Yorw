@@ -10,6 +10,7 @@ function id(value: unknown): string {
 export class Documents {
   constructor(private backend: Backend) {}
   readPdf(identity: unknown) { return this.backend.readPdf(id(identity)) }
+  blocks(identity: unknown) { return this.backend.request(`/v1/documents/${id(identity)}/blocks`) }
   savePosition(input: any) {
     if (!input || !Number.isInteger(input.page) || input.page < 1) throw new Error('INVALID_PAGE')
     return this.backend.request(`/v1/documents/${id(input.id)}/position`, 'PATCH', { page: input.page })
@@ -27,15 +28,16 @@ export class Documents {
     return this.backend.request('/v1/documents/import', 'POST', form)
   }
   async importPdfs() {
-    const selected = await dialog.showOpenDialog({ title: '批量导入研究文献', filters: [{ name: 'PDF', extensions: ['pdf'] }], properties: ['openFile', 'multiSelections'] })
+    const selected = await dialog.showOpenDialog({ title: '批量导入研究文献', filters: [{ name: '研究文献', extensions: ['pdf', 'docx', 'doc', 'md', 'txt'] }], properties: ['openFile', 'multiSelections'] })
     if (selected.canceled || !selected.filePaths.length) return { cancelled: true, items: [] }
     const items = []
     for (const path of selected.filePaths) {
       const name = basename(path)
+      const extension = name.toLowerCase().split('.').pop() ?? ''
       try {
-        if ((await stat(path)).size > 50 * 1024 * 1024) throw new Error('PDF_TOO_LARGE')
+        if ((await stat(path)).size > 50 * 1024 * 1024) throw new Error(extension === 'pdf' ? 'PDF_TOO_LARGE' : 'FILE_TOO_LARGE')
         const bytes = await readFile(path)
-        if (bytes.length > 50 * 1024 * 1024) throw new Error('PDF_TOO_LARGE')
+        if (bytes.length > 50 * 1024 * 1024) throw new Error(extension === 'pdf' ? 'PDF_TOO_LARGE' : 'FILE_TOO_LARGE')
         const form = new FormData()
         form.append('file', new Blob([bytes]), name)
         const result = await this.backend.request('/v1/documents/import', 'POST', form)

@@ -19,6 +19,7 @@ class ParserSettingsInput(BaseModel):
     timeout_seconds: float = Field(default=600, ge=1, le=3600)
     ocr_enabled: bool = Field(default=True, strict=True)
     ocr_mode: Literal['default', 'full_page'] = 'default'
+    ocr_engine: Literal['auto', 'easyocr', 'rapidocr', 'tesseract'] = 'auto'
     version: int = Field(ge=0, strict=True)
 
 
@@ -53,10 +54,10 @@ class ParserService:
                 raise HTTPException(409, detail='CONFIG_CONFLICT')
             conn.execute(
                 'UPDATE parser_settings SET enhanced_enabled=?,docling_executable=?,docling_prefix_json=?,'
-                'libreoffice_executable=?,timeout_seconds=?,ocr_enabled=?,ocr_mode=?,version=version+1 WHERE singleton=1',
+                'libreoffice_executable=?,timeout_seconds=?,ocr_enabled=?,ocr_mode=?,ocr_engine=?,version=version+1 WHERE singleton=1',
                 (int(value.enhanced_enabled), value.docling_executable.strip(),
                  json.dumps(value.docling_prefix, ensure_ascii=False), value.libreoffice_executable.strip(),
-                 value.timeout_seconds, int(value.ocr_enabled), value.ocr_mode))
+                 value.timeout_seconds, int(value.ocr_enabled), value.ocr_mode, value.ocr_engine))
         return self.settings()
 
     def docling_config(self) -> DoclingConfig:
@@ -65,7 +66,7 @@ class ParserService:
             executable=value['docling_executable'], prefix_args=value['docling_prefix'],
             libreoffice_executable=value['libreoffice_executable'] or None,
             timeout_seconds=value['timeout_seconds'], ocr=value['ocr_enabled'],
-            ocr_mode=value['ocr_mode'])
+            ocr_mode=value['ocr_mode'], ocr_engine=value['ocr_engine'])
 
     def registry(self):
         return default_registry(self.docling_config())

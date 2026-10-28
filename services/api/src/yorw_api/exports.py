@@ -50,11 +50,12 @@ class Exports:
                         view = self.garden.get(selected)
                         item, title = view['revision'], view['topic']['title']
                     entries.append({'kind':kind,'id':selected,'title':title,'file':f'{kind}/{selected}.md','snapshot':item})
+                    self._enrich(self.db.connection, item)
             manifest = {'format':'yorw-content-export-v1','created_at':timestamp,'workspace_id':self.db.workspace_info()['workspace_id'],
                         'notice':'内容导出，不是完整备份；不含 PDF、密钥、模型配置、聊天历史、未采纳建议、未保存草稿或完整修订历史。',
                         'items':[{k:v for k,v in e.items() if k!='snapshot'} | {'saved_version': e['snapshot'].get('version'), 'revision_id': e['snapshot']['id'] if e['kind']=='wiki' else None} for e in entries]}
             files = {'manifest.json':json.dumps(manifest,ensure_ascii=False,indent=2).encode('utf-8'),
-                     'README.md':('# 知栖内容导出\n\n'+manifest['notice']+'\n\nMarkdown 文件保持已保存正文原样。每份正文对应 .sources.json 和 .sources.md 来源快照；引用编号只在各自文件内有效。来源可用性是导出时状态，不代表已验证事实。\n').encode('utf-8')}
+                     'README.md':('# 知栖内容导出\n\n'+manifest['notice']+'\n\nMarkdown 文件保持已保存正文原样。每份正文对应 .sources.json 和 .sources.md 来源快照；引用编号只在各自文件内有效。来源清单记录材料类型、文件格式与物理页/内容块定位。来源可用性是导出时状态，不代表已验证事实。\n').encode('utf-8')}
             for entry in entries:
                 snapshot = entry['snapshot']
                 file = entry['file']
@@ -82,6 +83,32 @@ class Exports:
                 path.unlink(missing_ok=True)
                 raise
             return {'task_id':identity,'count':len(entries),'bytes':len(data)}
+
+    @staticmethod
+    def _enrich(conn, snapshot):
+        """Add format and page/block location to exported citation copies."""
+        sources = snapshot.get('sources')
+        if not isinstance(sources, list):
+            return
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            refs = source.get('evidence')
+            if not isinstance(refs, list):
+                refs = [source] if ('block_id' in source or 'chunk_id' in source) else []
+            for ref in refs:
+                if not isinstance(ref, dict):
+                    continue
+                document_id = ref.get('document_id')
+                if not document_id:
+                    continue
+                row = conn.execute('SELECT format FROM documents WHERE id=?', (document_id,)).fetchone()
+                ref['source_format'] = row[0] if row else None
+                if ref.get('physical_page'):
+                    ref['location'] = {'kind': 'page', 'physical_page': ref['physical_page']}
+                elif ref.get('block_id'):
+                    ref['location'] = {'kind': 'block', 'block_id': ref['block_id'],
+                                       'section_path': ref.get('section_path', [])}
 
     def _path(self, identity):
         path = self.db.workspace.root / 'tmp' / f'export-{UUID(identity)}.zip'

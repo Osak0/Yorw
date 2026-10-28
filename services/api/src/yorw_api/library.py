@@ -1,9 +1,10 @@
-"""Managed PDF ingestion and cancellable page extraction. No OCR or retrieval."""
+"""Managed multi-format ingestion and cancellable parser tasks. No OCR by default."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
 import logging
+from pathlib import Path
 from threading import Lock, Event, Thread
 from uuid import uuid4, UUID
 
@@ -17,6 +18,13 @@ MAX_BYTES = 50 * 1024 * 1024
 MAX_TAGS = 50
 MAX_TAG_LENGTH = 40
 MAX_SUMMARY_LENGTH = 20_000
+FORMAT_MEDIA = {
+    'pdf': 'application/pdf',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'doc': 'application/msword',
+    'md': 'text/markdown',
+    'txt': 'text/plain',
+}
 logging.getLogger("pypdf").setLevel(logging.CRITICAL)
 
 
@@ -130,12 +138,16 @@ class Library:
                 identity = str(UUID(data['document_id']))
                 if receipt.name != f"import-{identity}.json":
                     continue
-                path = self.workspace.document_path(identity)
+                relative_path = data.get('relative_path') or f"documents/{identity}.pdf"
+                extension = Path(relative_path).suffix.lstrip('.').lower() or 'pdf'
+                if extension not in FORMAT_MEDIA:
+                    continue
+                path = self.workspace.document_path(identity, extension)
                 exists = self.rows("SELECT id FROM documents WHERE id=?", (identity,))
                 if exists:
                     receipt.unlink()
                 elif path.exists() and sha256(path.read_bytes()).hexdigest() == data['sha256']:
-                    self.workspace.remove_document(identity)
+                    self.workspace.remove_document(identity, extension)
                     receipt.unlink()
                 elif not path.exists():
                     receipt.unlink()
@@ -146,7 +158,11 @@ class Library:
 
     def cleanup_deleted(self, identity):
         try:
-            self.workspace.remove_document(identity)
+            rows = self.rows('SELECT relative_path FROM documents WHERE id=?', (identity,))
+            extension = Path(rows[0]['relative_path']).suffix.lstrip('.').lower() if rows and rows[0]['relative_path'] else 'pdf'
+            if extension not in FORMAT_MEDIA:
+                extension = 'pdf'
+            self.workspace.remove_document(identity, extension)
             with self.db.write() as conn:
                 conn.execute("UPDATE documents SET relative_path=NULL,warning=NULL WHERE id=? AND deleted_at IS NOT NULL", (identity,))
             return True
@@ -159,47 +175,60 @@ class Library:
         capability = self.parser_service.capability('enhanced', format)
         return 'enhanced' if capability and capability['state'] == 'external' else 'builtin'
 
-    def import_pdf(self, source, original_name):
+    @staticmethod
+    def format_for_name(original_name):
+        extension = Path(original_name or '').suffix.lower().lstrip('.')
+        if extension not in FORMAT_MEDIA:
+            raise HTTPException(422, detail='UNSUPPORTED_FORMAT')
+        return extension
+
+    def import_document(self, source, original_name):
+        format = self.format_for_name(original_name)
+        media_type = FORMAT_MEDIA[format]
         source.seek(0, 2)
         size = source.tell()
         source.seek(0)
         if size > MAX_BYTES:
-            raise HTTPException(413, detail="PDF_TOO_LARGE")
-        if not source.read(1024).lstrip().startswith(b"%PDF-"):
-            raise HTTPException(422, detail="NOT_PDF")
-        source.seek(0)
+            raise HTTPException(413, detail='PDF_TOO_LARGE' if format == 'pdf' else 'FILE_TOO_LARGE')
+        if format == 'pdf':
+            if not source.read(1024).lstrip().startswith(b"%PDF-"):
+                raise HTTPException(422, detail="NOT_PDF")
+            source.seek(0)
         digest = sha256()
         while block := source.read(1024 * 1024):
             digest.update(block)
         source.seek(0)
         digest = digest.hexdigest()
         with self.operations:
-            existing = self.rows("SELECT id,deleted_at,extraction_version,parse_version,version FROM documents WHERE sha256=?", (digest,))
-            if existing and not existing[0]['deleted_at'] and self.workspace.document_path(existing[0]['id']).exists():
-                doc = self.document(existing[0]['id'])
-                tasks = self.rows("SELECT id FROM tasks WHERE target_id=? AND kind='extract' ORDER BY created_at DESC LIMIT 1", (doc['id'],))
-                return {"document": doc, "task": self.task(tasks[0]['id']) if tasks else None, "deduplicated": True}
+            existing = self.rows("SELECT id,deleted_at,extraction_version,parse_version,version,format FROM documents WHERE sha256=?", (digest,))
+            if existing and not existing[0]['deleted_at']:
+                existing_format = existing[0]['format'] or 'pdf'
+                if self.workspace.document_path(existing[0]['id'], existing_format).exists():
+                    doc = self.document(existing[0]['id'])
+                    tasks = self.rows("SELECT id FROM tasks WHERE target_id=? AND kind='extract' ORDER BY created_at DESC LIMIT 1", (doc['id'],))
+                    return {"document": doc, "task": self.task(tasks[0]['id']) if tasks else None, "deduplicated": True}
             identity = existing[0]['id'] if existing else str(uuid4())
             parse_version = existing[0]['parse_version'] + 1 if existing else 1
             if existing and not self.cleanup_deleted(identity):
                 raise HTTPException(409, detail="FILE_CLEANUP_PENDING")
+            relative_path = f"documents/{identity}.{format}"
             receipt = self.workspace.root / "tmp" / f"import-{identity}.json"
             with receipt.open('w', encoding='utf-8') as output:
                 import os
-                json.dump({"document_id": identity, "sha256": digest}, output)
+                json.dump({"document_id": identity, "sha256": digest, "relative_path": relative_path}, output)
                 output.flush()
                 os.fsync(output.fileno())
             try:
-                self.workspace.store_document(source, identity)
+                self.workspace.store_document(source, identity, format)
                 timestamp = now()
                 task_id = str(uuid4())
-                processor = self.processor_for_import('pdf')
+                processor = self.processor_for_import(format)
                 with self.db.write() as conn:
                     if existing:
-                        conn.execute("UPDATE documents SET relative_path=?,deleted_at=NULL,extraction_status='pending',parse_version=?,parse_status='pending',parse_warning=NULL,version=version+1,warning=NULL,format='pdf',media_type='application/pdf',updated_at=? WHERE id=?", (f"documents/{identity}.pdf",parse_version,timestamp,identity))
+                        conn.execute("UPDATE documents SET relative_path=?,deleted_at=NULL,extraction_status='pending',parse_version=?,parse_status='pending',parse_warning=NULL,version=version+1,warning=NULL,format=?,media_type=?,updated_at=? WHERE id=?", (relative_path,parse_version,format,media_type,timestamp,identity))
                     else:
-                        name = (original_name or 'document.pdf').replace('\\','/').split('/')[-1][:255]
-                        conn.execute("INSERT INTO documents(id,sha256,relative_path,original_name,extraction_status,format,media_type,parse_version,parse_status,created_at,updated_at) VALUES(?,?,?,?,'pending','pdf','application/pdf',?, 'pending',?,?)", (identity,digest,f"documents/{identity}.pdf",name,parse_version,timestamp,timestamp))
+                        name = (original_name or f'document.{format}').replace('\\','/').split('/')[-1][:255]
+                        conn.execute("INSERT INTO documents(id,sha256,relative_path,original_name,extraction_status,format,media_type,parse_version,parse_status,created_at,updated_at) VALUES(?,?,?,?,'pending',?,?,?, 'pending',?,?)", (identity,digest,relative_path,name,format,media_type,parse_version,timestamp,timestamp))
                     conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)", (task_id,identity,json.dumps({'parse_version': parse_version, 'processor': processor}),timestamp,timestamp))
                 receipt.unlink(missing_ok=True)
             except Exception:
@@ -208,6 +237,9 @@ class Library:
                 raise
             self.pool.submit(self.extract, identity, task_id, parse_version, processor)
             return {"document": self.document(identity), "task": self.task(task_id), "deduplicated": False}
+
+    def import_pdf(self, source, original_name):
+        return self.import_document(source, original_name)
 
     def active(self, identity, task_id):
         if self.closing.is_set():
@@ -251,7 +283,8 @@ class Library:
                 elif capability and capability['state'] == 'component_missing':
                     raise ParseError('COMPONENT_MISSING', capability.get('detail', ''),
                                      diagnostic={'install_hint': capability.get('install_hint')})
-            request = ParseRequest(path=self.workspace.document_path(identity), document_id=identity,
+            extension = document['format'] or 'pdf'
+            request = ParseRequest(path=self.workspace.document_path(identity, extension), document_id=identity,
                                    extraction_version=parse_version, format=document['format'] or 'pdf',
                                    original_name=document['original_name'], parser_name=parser_name)
             watcher = Thread(target=self._watch_cancel, args=(identity, task_id, cancel), daemon=True)
@@ -475,9 +508,9 @@ class Library:
         return self.task(identity_task)
 
     def file(self, identity: str):
-        self.document(identity)
+        document = self.document(identity)
         try:
-            path = self.workspace.document_path(identity)
+            path = self.workspace.document_path(identity, document['format'] or 'pdf')
             if not path.is_file():
                 raise HTTPException(404, detail="DOCUMENT_FILE_MISSING")
             return path
@@ -524,9 +557,9 @@ class Library:
 def router(library: Library):
     routes = APIRouter()
     @routes.post('/v1/documents/import')
-    def import_pdf(file: UploadFile):
+    def import_document(file: UploadFile):
         try:
-            return library.import_pdf(file.file, file.filename)
+            return library.import_document(file.file, file.filename)
         finally:
             file.file.close()
     @routes.get('/v1/documents')
@@ -537,7 +570,11 @@ def router(library: Library):
         return library.document(identity)
     @routes.get('/v1/documents/{identity}/file')
     def file(identity: str):
-        return FileResponse(library.file(identity), media_type='application/pdf')
+        document = library.document(identity)
+        return FileResponse(library.file(identity), media_type=document['media_type'] or 'application/octet-stream')
+    @routes.get('/v1/documents/{identity}/blocks')
+    def blocks(identity: str):
+        return {'items': library.blocks(identity)}
     @routes.patch('/v1/documents/{identity}/position')
     def position(identity: str, position: ReadingPosition):
         return library.save_position(identity, position.page)
