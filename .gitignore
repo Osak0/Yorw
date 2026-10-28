@@ -57,3 +57,9 @@ Desktop.ini
 # Local agent settings, sessions and planning residue (keep shared rules tracked)
 .claude/
 .superpowers/
+
+# Office locks and patch residue; keep authored documents and source fixtures
+~$*.docx
+.~lock.*#
+*.orig
+*.rej
