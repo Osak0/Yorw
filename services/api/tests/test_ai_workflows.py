@@ -1,4 +1,5 @@
 """Workflow control and provenance tests, not model-quality benchmarks."""
+from io import BytesIO
 import json
 import time
 from threading import Event
@@ -15,9 +16,10 @@ from yorw_api.resources import DocumentResources
 from yorw_api.retrieval import spans, excerpt, query_terms
 from yorw_api.search_history import SearchHistory
 from yorw_api.wiki_review import WikiReview, Accept, Decision
-from test_library import library
+from test_library import library, pdf_bytes
 from test_suggestions import service, setup
 from test_search import document, config, toy_embed
+from test_builtin_parsers import fixtures
 
 
 @pytest.fixture
@@ -54,6 +56,15 @@ def wait_draft(workflow, task):
             return item
         time.sleep(.01)
     pytest.fail('draft did not settle')
+
+
+def wait_import(library, result):
+    for _ in range(400):
+        task = library.task(result['task']['id'])
+        if task['status'] not in ('queued', 'running'):
+            return library.document(result['document']['id'])
+        time.sleep(.01)
+    pytest.fail('import did not settle')
 
 
 def scope_fixture(workflow):
@@ -544,3 +555,57 @@ def test_removed_source_is_not_uploaded_from_a_note_or_wiki_cache(workflow, monk
     assert not workflow.library.rows('SELECT * FROM knowledge_segments')
     assert not workflow.retriever.prepare(None, None, lambda phase: None)
     assert not workflow.library.rows('SELECT * FROM knowledge_segments')
+
+
+def test_multiformat_blocks_support_search_chat_and_mixed_draft(workflow, monkeypatch):
+    setup(workflow.suggestions)
+    local(workflow)
+    pdf = wait_import(workflow.library, workflow.library.import_pdf(BytesIO(pdf_bytes('Yorw fixture PDF evidence.')), 'fixture.pdf'))
+    docx = wait_import(workflow.library, workflow.library.import_document(BytesIO(fixtures.docx_bytes()), 'fixture.docx'))
+    md = wait_import(workflow.library, workflow.library.import_document(BytesIO(b'# Methods\n\nMarkdown fixture evidence.\n'), 'fixture.md'))
+    assert pdf['format'] == 'pdf' and docx['format'] == 'docx' and md['format'] == 'md'
+
+    _, search_task = run(workflow, 'search', md['id'], 'fixture evidence', chat_key='secret', chat_version=1)
+    assert search_task['status'] == 'succeeded', search_task
+    hit = search_task['result']['items'][0]
+    assert hit['block_id'] and hit['physical_page'] is None and hit['section_path'] == ['Methods']
+
+    asked = []
+    def chat_response(cfg, key, question, sources):
+        asked.append(sources)
+        yield 'Markdown answer [S1].'
+    monkeypatch.setattr('yorw_api.chat.stream', chat_response)
+    _, chat_task = run(workflow, 'chat', md['id'], 'fixture evidence', chat_key='secret', chat_version=1)
+    assert chat_task['status'] == 'succeeded', chat_task
+    for _ in range(300):
+        message = workflow.chat.message(chat_task['result']['message_id'])
+        if message['status'] != 'running':
+            break
+        time.sleep(.01)
+    assert message['status'] == 'completed'
+    source = message['sources'][0]
+    assert source['block_id'] and source['physical_page'] is None and source['section_path'] == ['Methods']
+    assert source['available'] is True
+    saved_note = workflow.chat.note(chat_task['result']['message_id'])
+    note_source = workflow.suggestions.notes._get(saved_note['id'])['sources'][0]
+    assert note_source['block_id'] == source['block_id'] and note_source['available'] is True
+
+    topic = workflow.suggestions.garden.create(CreateTopic(id=uuid4(), title='Mixed fixture scope'))['topic']
+    resources = DocumentResources(workflow.library)
+    for document in (pdf, docx, md):
+        resources.add_document_topic(document['id'], topic['id'])
+    base = workflow.suggestions.garden.get(topic['id'])['revision']['id']
+    captured = []
+    def draft_response(cfg, key, question, sources, **options):
+        captured.append(sources)
+        yield 'Mixed draft [S1].'
+    monkeypatch.setattr('yorw_api.suggestions.stream', draft_response)
+    _, draft_task = run(workflow, 'draft', topic['id'], 'fixture evidence', base, scope='topic', chat_key='secret', chat_version=1)
+    assert draft_task['status'] == 'succeeded', draft_task
+    draft = wait_draft(workflow, draft_task)
+    assert draft['status'] == 'completed' and draft['citations'] == [1]
+    text = '\n'.join(source['text'] for source in captured[0])
+    assert 'Yorw fixed English fixture evidence' in text and 'DOCX fixture' in text and 'Markdown fixture evidence' in text
+    evidence = [ref for source in draft['sources'] for ref in source['evidence']]
+    assert any(ref.get('physical_page') == 1 for ref in evidence)
+    assert any(ref.get('physical_page') is None and ref.get('block_id') for ref in evidence)

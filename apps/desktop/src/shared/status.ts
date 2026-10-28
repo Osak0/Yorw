@@ -1,6 +1,6 @@
 export interface MaterialChoice {kind:'document'|'note'|'message';id:string;version:string;label:string}
 export interface MaterialInput {kind:'document'|'note'|'message';id:string;version:string;segment_ids:string[]}
-export interface SourceRef {source_id:string;title?:string;kind:'document'|'note'|'message'|'wiki';source_object_id:string;source_version:string;excerpt:string;available?:boolean;evidence:{document_id:string;document_title:string;chunk_id:string;physical_page:number;quote:string;extraction_version:number}[]}
+export interface SourceRef {source_id:string;title?:string;kind:'document'|'note'|'message'|'wiki';source_object_id:string;source_version:string;excerpt:string;available?:boolean;evidence:{document_id:string;document_title:string;chunk_id?:string|null;physical_page:number|null;block_id?:string|null;block_type?:string|null;section_path?:string[];quote:string;extraction_version:number}[]}
 export interface MaterialPreview {base_revision_id:string;base_body_md:string;title:string;sources:SourceRef[]}
 export type AiScope = 'topic' | 'workspace'
 export interface SuggestionScope {mode:AiScope;topic_id?:string;document_ids?:string[];note_ids?:string[];wiki_topic_ids?:string[];fingerprint?:string}
@@ -25,7 +25,7 @@ export interface GardenBridge {
  reject(input:WikiDecisionInput&{id:string}):Promise<Result<WikiDecisionResult>>;
  restore(input:WikiDecisionInput&{id:string;revision_id:string}):Promise<Result<WikiDecisionResult>>
 }
-export interface ChatSource { id: string; chunk_id: string; document_id: string; text: string; physical_page: number | null; extraction_version: number; available: boolean; block_id?: string | null; block_type?: string | null; section_path?: string[] }
+export interface ChatSource { id: string; chunk_id?: string | null; document_id: string; text: string; physical_page: number | null; extraction_version: number; available: boolean; block_id?: string | null; block_type?: string | null; section_path?: string[] }
 export interface ChatMessage { id: string; document_id: string; question: string; body_md: string; status: string; error_code: string | null; sources: ChatSource[]; citations: number[]; note_id: string | null; provider: {model: string; base_url: string; version: number} }
 export interface ChatInput { document_id: string; question: string; segment_ids: string[]; config_version: number }
 export interface ChatBridge { list(id: string): Promise<Result<{items: ChatMessage[]}>>; ask(input: ChatInput): Promise<Result<ChatMessage>>; cancel(id: string): Promise<Result<ChatMessage>>; note(id: string): Promise<Result<{id: string}>> }
@@ -48,8 +48,8 @@ export interface RelatedDocument { document:DocumentSummary; document_available:
 export interface TagMatch { document:DocumentSummary; shared_tags:string[] }
 export interface ResourceNote { id:string; document_id:string; excerpt:string; version:number; created_at:string; updated_at:string; sources_count:number }
 export interface ResourceChat { id:string; question:string; body_excerpt:string; status:string; error_code:string|null; created_at:string; sources_count:number; citations:number }
-export interface SearchHistoryEvidence { document_id:string; chunk_id:string; physical_page:number|null; extraction_version:number; quote:string; available:boolean; block_id?:string|null; block_type?:string|null; section_path?:string[] }
-export interface SearchHistoryItem { id:string; kind:string; object_id:string; title:string; snippet:string; snippet_start:number; snippet_end:number; document_id:string|null; physical_page:number|null; evidence:SearchHistoryEvidence[]; available:boolean }
+export interface SearchHistoryEvidence { document_id:string; chunk_id?:string|null; physical_page:number|null; extraction_version:number; quote:string; available:boolean; block_id?:string|null; block_type?:string|null; section_path?:string[] }
+export interface SearchHistoryItem { id:string; kind:string; object_id:string; title:string; snippet:string; snippet_start:number; snippet_end:number; document_id:string|null; physical_page:number|null; block_id?:string|null; block_type?:string|null; section_path?:string[]; evidence:SearchHistoryEvidence[]; available:boolean }
 export interface SearchHistoryEntry { id:string; document_id:string; request_id:string; task_id:string; query:string; status:string; error_code:string|null; reason:string|null; created_at:string; updated_at:string; result_count:number; items:SearchHistoryItem[] }
 export interface DocumentResource { document:DocumentRecord; topics:ResourceTopic[]; related:RelatedDocument[]; tag_matches:TagMatch[]; notes:ResourceNote[]; chat:ResourceChat[]; search_history:SearchHistoryEntry[] }
 export interface TopicMaterialDocument { document:DocumentSummary; linked_at?:string; topics?:{id:string;title:string}[] }

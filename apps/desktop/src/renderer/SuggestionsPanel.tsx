@@ -11,7 +11,7 @@ export function Sources({sources}:{sources:SourceRef[]}){
  return <div className="suggestion-sources">{sources.map((source,index)=><details key={source.source_id??index}>
   <summary>[{source.source_id??'S'+(index+1)}] {source.title??source.evidence?.[0]?.document_title??labels[source.kind]??'来源'}{source.available===false?' · 来源已变化':''}</summary><small>{labels[source.kind]??'来源'}</small>
   <p className="source-excerpt">{source.excerpt}</p>
-  {source.evidence?.map((e,i)=><div key={i}><p>{e.document_title} · 第 {e.physical_page} 页</p><p className="source-excerpt">{e.quote}</p></div>)}
+  {source.evidence?.map((e,i)=><div key={i}><p>{e.document_title} · {e.physical_page ? `第 ${e.physical_page} 页` : e.section_path?.length ? e.section_path.join(' / ') : '内容块'}</p><p className="source-excerpt">{e.quote}</p></div>)}
  </details>)}</div>
 }
 export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview,onReviewUpdate}:{topicId:string;baseRevisionId:string;dirty:boolean;onReview(suggestion:Suggestion):void;onReviewUpdate?(suggestion:Suggestion):void}){

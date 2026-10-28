@@ -64,7 +64,8 @@ def test_draft_continuation_retains_evidence_and_has_a_separate_budget():
     assert [m['role'] for m in request['messages']] == ['system', 'user', 'assistant', 'user']
     assert request['messages'][2]['content'] == partial
     assert json.loads(request['messages'][1]['content'])['evidence'] == [
-        {'id': 'S1', 'physical_page': 2, 'text': 'Evidence'}]
+        {'id': 'S1', 'location': {'kind': 'page', 'physical_page': 2},
+         'physical_page': 2, 'text': 'Evidence'}]
 
 
 @pytest.mark.parametrize('finish', [None, 'stop'])

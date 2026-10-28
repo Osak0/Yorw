@@ -155,7 +155,7 @@ class Suggestions:
             if not note['document_available'] or str(note['version'])!=material.version or material.segment_ids:
                 raise HTTPException(409,detail='MATERIAL_CHANGED')
             excerpt=note['body_md']
-            evidence=[self.evidence(s) for s in note['sources'] if isinstance(s,dict) and s.get('chunk_id')]
+            evidence=[self.evidence(s) for s in note['sources'] if isinstance(s,dict) and (s.get('chunk_id') or s.get('block_id'))]
         else:
             row=self.library.rows("SELECT * FROM messages WHERE id=? AND status='completed'",(identity,))
             if not row or self.message_version(row[0])!=material.version or material.segment_ids:
@@ -286,7 +286,7 @@ class Suggestions:
                 from .retrieval import bounded_context
                 background = bounded_context(background, item['instruction'])
             question=json.dumps({'topic':title,'instruction':item['instruction'],'saved_body_for_context_only':background,'background_is_excerpt':background != item['base_body_md']},ensure_ascii=False)
-            sources=[{'text':s['excerpt'],'kind':s['kind'],'physical_page':s['evidence'][0]['physical_page'] if s['evidence'] else 0,'evidence':s['evidence']} for s in item['sources']]
+            sources=[{'text':s['excerpt'],'kind':s['kind'],'evidence':s['evidence']} for s in item['sources']]
             reasons = []
             for attempt in range(MAX_DRAFT_CONTINUATIONS + 1):
                 with self.db.write() as conn:

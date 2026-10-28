@@ -180,14 +180,20 @@ class Workflows:
                 # excerpts rather than pages of text or embedding diagnostics.
                 result = {**found, 'items': [{k: v for k, v in row.items() if k not in ('text', 'source')} | {
                     'document_id': row['source']['evidence'][0]['document_id'] if row['source']['evidence'] else None,
-                    'physical_page': row['source']['evidence'][0]['physical_page'] if row['source']['evidence'] else None,
+                    'physical_page': row['source']['evidence'][0].get('physical_page') if row['source']['evidence'] else None,
+                    'block_id': row['source']['evidence'][0].get('block_id') if row['source']['evidence'] else None,
+                    'block_type': row['source']['evidence'][0].get('block_type') if row['source']['evidence'] else None,
+                    'section_path': row['source']['evidence'][0].get('section_path', []) if row['source']['evidence'] else [],
                 } for row in found['items']]}
             elif value.kind == 'chat':
                 sources = []
                 for row in found['items']:
                     ref = row['source']['evidence'][0]
-                    sources.append({'id': row['id'], 'document_id': ref['document_id'], 'chunk_id': ref['chunk_id'],
-                                    'physical_page': ref['physical_page'], 'text': row['text'], 'extraction_version': ref['extraction_version']})
+                    sources.append({'id': row['id'], 'document_id': ref['document_id'],
+                                    'chunk_id': ref.get('chunk_id'), 'block_id': ref.get('block_id'),
+                                    'block_type': ref.get('block_type'), 'section_path': ref.get('section_path', []),
+                                    'physical_page': ref.get('physical_page'), 'text': row['text'],
+                                    'extraction_version': ref['extraction_version']})
                 with self.db.lock:
                     check('GENERATING')
                     message = self.chat.start_auto(target, value.text, sources, history, str(value.request_id), configs['chat'], chat_key, dispatch=False)
@@ -245,22 +251,26 @@ class Workflows:
         for row in items:
             evidence = []
             for ref in row.get('source', {}).get('evidence', []):
-                if not isinstance(ref, dict) or not ref.get('chunk_id'):
+                if not isinstance(ref, dict) or (not ref.get('chunk_id') and not ref.get('block_id')):
                     continue
                 evidence.append({
                     'document_id': ref.get('document_id'),
+                    'block_id': ref.get('block_id'),
                     'chunk_id': ref.get('chunk_id'),
+                    'block_type': ref.get('block_type'),
+                    'section_path': ref.get('section_path', []),
                     'physical_page': ref.get('physical_page'),
                     'extraction_version': ref.get('extraction_version'),
                     'quote': (ref.get('quote') or ref.get('text') or '')[:800],
                 })
+            first = evidence[0] if evidence else {}
             result.append({
                 'id': row.get('id'), 'kind': row.get('kind'), 'object_id': row.get('object_id'),
                 'title': row.get('title'), 'snippet': row.get('snippet'),
                 'snippet_start': row.get('snippet_start'), 'snippet_end': row.get('snippet_end'),
-                'document_id': evidence[0]['document_id'] if evidence else None,
-                'physical_page': evidence[0]['physical_page'] if evidence else None,
-                'evidence': evidence,
+                'document_id': first.get('document_id'), 'physical_page': first.get('physical_page'),
+                'block_id': first.get('block_id'), 'block_type': first.get('block_type'),
+                'section_path': first.get('section_path', []), 'evidence': evidence,
             })
         return result
 
