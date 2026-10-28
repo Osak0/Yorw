@@ -56,6 +56,22 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 
 这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；`--ai-workflow-smoke` 另输出 `ai-workflow-smoke.json`、`ai-state.json`、`ai-restart.json`，并覆盖 AI 优化的材料范围选择、一次多选批量导入、整理文献标签保存/重开和打包流程。夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
 
+阶段一多格式验证：
+
+```powershell
+services/api/.venv/Scripts/python.exe scripts/make-format-fixtures.py .cache/<新样例目录>
+services/api/.venv/Scripts/python.exe scripts/verify-docling.py `
+  --executable <用户安装的 docling.exe> `
+  --libreoffice "C:\Program Files\LibreOffice\program\soffice.exe" `
+  --samples .cache/<样例目录> --report .cache/<新报告>.json `
+  --ocr-engine rapidocr --ocr-mode full_page
+```
+
+- `make-format-fixtures.py` 生成 DOCX、DOC、MD、TXT、文字 PDF 和扫描 PDF；目标目录必须不存在。
+- 扫描 PDF 使用 Docling RapidOCR 时需要 `onnxruntime`；本机网络需设置 `HF_ENDPOINT=https://hf-mirror.com` 和 `HF_HUB_DISABLE_XET=1`，并在启动 Yorw 前保留这些环境变量。
+- 打包窗口多格式烟测：`Yorw.exe --yorw-smoke --reader-smoke --multiformat-smoke --report-dir=<新绝对目录>`；报告目录需含 `fixture.docx`、`fixture.md`、`fixture.txt`。
+- 随包冻结后端外部解析：`services/api/.venv/Scripts/python.exe scripts/verify-packaged-parsers.py --backend release/desktop/win-unpacked/resources/backend/yorw-api/yorw-api.exe --samples <样例目录> --report <新报告>.json --workspace <新工作区> --docling <docling.exe> --libreoffice <soffice.exe>`。
+
 ## 如何解读结果
 
 - 源码单元/API、冻结服务、原生桌面流程和真实云模型质量分别记录。loopback 夹具只证明协议、来源、状态和持久化行为，不证明回答正确。
@@ -81,7 +97,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## v0.2.0 发布准备
 
-当前版本号在根 package.json、桌面 package.json、Python pyproject.toml 和 uv.lock 中均为 0.2.0，SQLite schema 15。包内帮助固定为当前使用指南与 v0.2.0 发布说明。更新帮助后必须重新打包，不能上传旧 review 包。
+当前 main 发布版本号为 0.2.0，SQLite schema 15；开发分支 `feature/multi-format-import` 的应用版本号仍为 0.2.0，schema 18。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。

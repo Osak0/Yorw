@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-适用 v0.2.0 / schema 15，包含原 v0.2.1 阶段 A/B/C 的工作区与材料关系功能。这里描述现役代码；环境和复现见[开发指南](development.md)，历史取舍见[AI 改进](history/v0.2.0.md)与[工作区改进](history/v0.2.0-workspace.md)。
+适用分支 `feature/multi-format-import` 的 v0.3.0 阶段一 / schema 18；main 发布基线仍为 v0.2.0 / schema 15。这里描述现役分支代码；环境和复现见[开发指南](development.md)，阶段一证据见[v0.3.0 记录](history/v0.3.0-phase1.md)，历史取舍见[AI 改进](history/v0.2.0.md)与[工作区改进](history/v0.2.0-workspace.md)。
 
 ## 模块与通信
 
@@ -12,8 +12,9 @@ React renderer → 受限 preload IPC → Electron main → 本地 FastAPI → S
 | --- | --- |
 | `apps/desktop/src/main/` | 窗口、原生对话框、safeStorage 密钥、Python 生命周期、业务 IPC、工作区布局校验/写入，以及 `resources.ts` 的资料/关系/检索历史转发。 |
 | `apps/desktop/src/preload/`、`src/shared/` | 固定桥接操作和手写 TypeScript 合同（含 `layout:load/save`、`resources:*`）；变更时与 Python DTO 同步。 |
-| `apps/desktop/src/renderer/` | Storage/Garden/House、工作标签与布局、PDF.js、CodeMirror、Markdown 预览、按实体会话状态、文献资料与关联材料视图。 |
-| `services/api/src/yorw_api/` | 按业务文件组织 FastAPI/Pydantic、有限并发任务、模型协议和持久化；`resources.py` 管资料聚合与关系，`search_history.py` 管检索快照。 |
+| `apps/desktop/src/renderer/` | Storage/Garden/House、工作标签与布局、PDF.js、结构化阅读视图、CodeMirror、Markdown 预览、按实体会话状态、文献资料与关联材料视图。 |
+| `services/api/src/yorw_api/` | 按业务文件组织 FastAPI/Pydantic、有限并发任务、模型协议和持久化；`resources.py` 管资料聚合与关系，`search_history.py` 管检索快照，`parsers.py` 管处理器设置、能力检测和显式重解析。 |
+| `services/api/src/yorw_api/parsing/` | 版本化解析合同、能力表、注册表、内置 PDF/TXT/Markdown/DOCX 解析器、外部 Docling 适配器和 DOC LibreOffice 转换。业务只消费 `ParseResult`/内容块，不读取解析器私有结构。 |
 | `storage/`、`migrations/` | 受管路径、SQLite 事务、完整性检查和顺序迁移。 |
 | 两侧 `tests/`、`scripts/` | 自动化回归、构建、自编写样例生成及完整桌面复现。 |
 
@@ -44,14 +45,17 @@ AI 优化的材料范围默认是当前专题及子专题，显式切换到全�
 - `topics` 管层级与当前修订指针；`revisions` 是不可变正文/来源快照；`suggestions` 独立保存生成草稿、基础修订、材料与请求；自动草稿的请求快照包含材料范围、范围指纹和来源版本；`wiki_decisions` 保证采纳、拒绝与回退幂等。
 - `tasks` 持久化任务状态与进度；`provider_configs` 保存版本化地址和模型名，不保存 key；`ai_preferences/ai_requests` 保存检索偏好和一次输入的幂等请求。
 - 旧 `search_documents/search_segments/index_generations/embeddings` 与新 `knowledge_sources/knowledge_segments/knowledge_vectors/knowledge_fts` 均为派生检索数据；原始页文本、修订及来源快照继续是权威记录。
-- 当前 schema 由 001–015 迁移组成：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
+- `documents` 保存格式、媒体类型、活动抽取版本、解析版本/状态、解析器与配置指纹；`document_blocks` 保存按版本和顺序排列的内容块、类型、章节路径、物理页（仅 PDF/OCR 有真实页）和定位。旧 `chunks` 继续作为 PDF 兼容索引，内容块 ID 与对应 chunk ID 一致；旧引用快照不重写，来源可用性按活动版本动态计算。
+- 解析版本与活动版本分离：尝试解析递增 `parse_version`；成功才切换 `extraction_version` 并删除/失效派生索引；失败保留上一活动版本和其内容块，记录 `parse_status/parse_warning`。重新解析成功后旧内容块仍可按版本读取，但不再作为当前来源。
+- `parser_settings` 保存增强解析开关、Docling/LibreOffice 路径、超时、OCR 开关/模式/引擎和版本；能力检测与测试只读取独立用户环境，不把组件装进 Yorw 运行时。
+- 当前 schema 由 001–018 迁移组成：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
 - 正文保存比较 base_revision_id，目录修改比较 version。追加保留旧正文，合并原始来源并重排新增 S 编号；替换及回退创建新修订。动态 available 状态不写回不可变来源。
 
 ## 统一 AI 工作流
 
 `ai_workflows.py` 统一处理 search/chat/draft。main 读取聊天与 embedding 独立密钥，经私有请求头交给后端；renderer 和任务 JSON 不持有密钥。前端提交 request_id 后轮询任务，后台依次准备、查找、筛选，再交接生成流；先持久化交接结果再派发调用，失败重试不额外创建生成请求。
 
-`retrieval.py` 按页内段落/句子生成原文切片，最多 800 字符、100 字符重叠。中文问句去填充词，FTS5/BM25 与归一化向量各召回最多 40 项；RRF 融合、去重后最多 20 项由现有聊天模型筛选，严格校验候选 ID 与句子下标。摘要仍是原文切片，模型不能改写引文。专题草稿通过显式 document/note/wiki ID 集合过滤目录，不使用“当前选择”猜测归属。
+`retrieval.py` 从活动 `document_blocks` 构建原文切片（PDF 页块或非 PDF 段落/表格/列表块），最多 800 字符、100 字符重叠。中文问句去填充词，FTS5/BM25 与归一化向量各召回最多 40 项；RRF 融合、去重后最多 20 项由现有聊天模型筛选，严格校验候选 ID 与句子下标。摘要仍是原文切片，模型不能改写引文。来源证据携带 `block_id`、`block_type`、`section_path` 和 PDF 物理页；专题草稿通过显式 document/note/wiki ID 集合过滤目录，不使用“当前选择”猜测归属。
 
 | 场景 | 范围与预算 |
 | --- | --- |
@@ -69,10 +73,10 @@ AI 优化的材料范围默认是当前专题及子专题，显式切换到全�
 
 ## 导入与资料整理
 
-导入在 main 通过固定的多选文件对话框读取本地 PDF，逐个上传到后端；单个文件的大小、格式或后端错误只记录在该文件的导入结果中，不中止整批。每个结果显示成功、重复复用或失败原因；成功项提供非阻塞的“整理资料”入口和“打开阅读”；“整理资料”打开独立“整理文献”标签，不覆盖文献库。整理资料复用文献元数据编辑（标题、作者、年份、标签、人工总结）和可选专题关联，打开前刷新当前文献记录，且只提交用户实际修改的字段；未修改的 PDF 抽取标题/作者保留原值和来源，保存后刷新文献列表；不填写也可以直接阅读。导入完成不会请求总结模型，AI 总结任务与技术方案仍后置。
+导入在 main 通过固定的多选文件对话框读取本地 PDF/DOCX/DOC/MD/TXT，逐个上传到后端；后端按扩展名选择内置解析器，单个文件的大小、格式或后端错误只记录在该文件的导入结果中，不中止整批。每个结果显示成功、重复复用或失败原因；成功项提供非阻塞的“整理资料”入口和“打开阅读”；“整理资料”打开独立“整理文献”标签，不覆盖文献库。PDF 使用现有 PDF.js 阅读器；其他格式使用结构化视图显示章节、段落、列表、代码和基础表格，引用跳转定位到内容块。导入完成不会请求总结模型，AI 总结任务与技术方案仍后置。
 
 ## 导出与扩展边界
 
-内容导出在同一数据库锁内创建快照，ZIP 的 Markdown 与已保存正文一致，来源独立列入清单；main 通过系统对话框保存，临时文件加 rename。导出仍只含已保存笔记和 Wiki 当前修订，不包含文献标签/总结、关系、检索历史或完整工作区。没有完整工作区恢复、云同步或外部 Markdown 双向同步。
+内容导出在同一数据库锁内创建快照，ZIP 的 Markdown 与已保存正文一致，来源独立列入清单并补充文件格式与物理页/内容块定位；main 通过系统对话框保存，临时文件加 rename。导出仍只含已保存笔记和 Wiki 当前修订，不包含文献标签/总结、关系、检索历史或完整工作区。没有完整工作区恢复、云同步或外部 Markdown 双向同步。
 
-旧检索/选材 API 保留兼容；现役界面走统一工作流。PDF 当前用可替换的 pypdf 文字抽取，无 OCR、图像观察或复杂版面理解。扩展先依据失败案例验证，不以增加 Skill/插件替代来源与数据合同。
+旧检索/选材 API 保留兼容；现役界面走统一工作流。PDF 使用内置 pypdf 文字抽取，非 PDF 使用内置 TXT/Markdown/DOCX 解析或用户配置的 Docling；扫描 PDF 的 OCR 由 Docling 可选引擎完成，DOC 经用户安装的 LibreOffice 转换。图像语义理解、复杂版面和公式识别仍后置。

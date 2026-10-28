@@ -1,30 +1,28 @@
 # Yorw 当前计划
 
-更新：2026-10-28。详细下一版本计划见 [PLAN_v0_3_0.md](PLAN_v0_3_0.md)，本次只整理仓库和交接，未开始功能开发。
+更新：2026-10-28。详细下一版本计划见 [PLAN_v0_3_0.md](PLAN_v0_3_0.md)。阶段一已在 `feature/multi-format-import` 实现并等待 review；阶段二未开始。
 
 ## 当前实现
 
-当前代码 v0.2.0、schema 15。本地 main 为 `78648a3`：AI 流程 PR #13、仓库整理 PR #14、工作区阶段 A/B/C 的 PR #15/#16/#17 均已合并。原 v0.2.1 计划已统一纳入 v0.2.0。
+当前 main 发布基线为 v0.2.0、schema 15（`78648a3`）。开发分支 `feature/multi-format-import` 已完成 v0.3.0 阶段一步骤 1–7，schema 18；应用版本号仍为 0.2.0，尚未合并或重新发布。
 
-现役闭环：批量导入 PDF → 整理资料/关联专题 → 阅读、检索与问答 → 保存笔记 → 专题 AI 草稿 → 人工采纳 → 修订、回退与导出。Storage 限当前文献，Garden 默认当前专题及子专题；当前没有多格式导入、OCR 或 AI 自动总结。
+阶段一现役闭环（分支）：PDF/DOCX/DOC/MD/TXT 导入 → 统一内容块与来源定位 → PDF 原文阅读或非 PDF 结构化阅读 → 搜索、问答、笔记、文献资料与专题关系 → Garden AI 草稿 → 人工采纳、修订与导出。Docling 与 LibreOffice 由用户安装，House 提供配置、能力检测与重解析；失败重解析保留上一可用版本。
 
-当前线上资产未重新核验，不把本地合并状态视为发布完成。2026-10-27 候选包及历史验证见[发布准备记录](docs/history/v0.2.0-release-preparation.md)。真实模型逐题质量、独立干净 Windows 验收仍待补充。
+实施与验证证据见 [v0.3.0 阶段一记录](docs/history/v0.3.0-phase1.md)。真实模型逐题质量、独立干净 Windows 验收和公开发布仍未完成。
 
 ## 开发准备状态
 
-已复核用户完成的 release 清理：22个旧目录不存在，保留 v0.1.0 最终验收包和 v0.2.0 候选包，校验清单逐项通过。当前无已发现的仓库级开发阻碍；工具入口和本地依赖目录存在，未重新运行应用回归。完整记录见[清理与开发准备复核](docs/history/v0.2.0-release-preparation.md#用户清理后的开发准备复核)。
-
-当前在 main，作品材料与交接文档已暂存但未提交。建议先提交已审核文档，再使用开发分支实施阶段一；Docling/DOC/OCR 实际兼容性由阶段一步骤2验证。此次只复核，功能仍未开始。
+阶段一代码已提交在开发分支，后端 221 项测试、前端 55 项测试和类型检查通过；打包目录已完成基础多格式窗口烟测与冻结后端外部解析验证。当前没有已发现的仓库级开发阻碍。阶段一完成后等待 osako review，未获通过不进入阶段二。
 
 ## 下一步
 
 | 阶段 | 范围 | 当前状态 |
 | --- | --- | --- |
-| v0.3.0 阶段一 | PDF/DOC/DOCX/MD/TXT、统一解析与来源、结构化阅读、外部 Docling 适配和可选 OCR | 未开始；等待单独授权实施，完成后用户 review。 |
+| v0.3.0 阶段一 | PDF/DOC/DOCX/MD/TXT、统一解析与来源、结构化阅读、外部 Docling 适配和可选 OCR | 代码完成，等待 osako review；真实 Docling/OCR 已用自编写样例验证。 |
 | v0.3.0 阶段二 | 首次授权后的自动整理、AI 标签、已有专题推荐、元数据辅助 RAG、检索评估和替换接口 | 未开始；阶段一 review 通过后进入。 |
 | 研究记忆 | 会话记忆、研究足迹和建议的初步设计 | 只形成构想，不开发长期记忆或自动建 Wiki。 |
 
-本轮不安装第三方组件、不迁移数据库、不更改应用版本、不提交、合并或发布。第三方处理器未来由用户自行安装，业务统一使用适配接口；本轮计划不引入 Chroma。
+本轮分支不安装第三方组件到 Yorw 环境、不迁移发布库、不更改应用版本、不合并或发布。Docling/RapidOCR/onnxruntime 与 LibreOffice 仅安装在用户环境；业务通过适配接口调用。
 
 ## 已知边界与后置范围
 
@@ -32,4 +30,4 @@
 
 ## 历史与交接入口
 
-[设计](docs/history/design.md) → [MVP](docs/history/v0.1.0.md) → [AI 改进](docs/history/v0.2.0.md) → [工作区 A/B/C](docs/history/v0.2.0-workspace.md) → [候选包与本轮整理](docs/history/v0.2.0-release-preparation.md)。历史保留当时状态，不作为当前指令；开发命令只维护在[开发指南](docs/development.md)。
+[设计](docs/history/design.md) → [MVP](docs/history/v0.1.0.md) → [AI 改进](docs/history/v0.2.0.md) → [工作区 A/B/C](docs/history/v0.2.0-workspace.md) → [候选包](docs/history/v0.2.0-release-preparation.md) → [v0.3.0 阶段一](docs/history/v0.3.0-phase1.md)。历史保留当时状态，不作为当前指令；开发命令只维护在[开发指南](docs/development.md)。
