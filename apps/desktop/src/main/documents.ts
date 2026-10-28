@@ -66,4 +66,8 @@ export class Documents {
   task(identity: unknown) { return this.backend.request(`/v1/tasks/${id(identity)}`) }
   cancel(identity: unknown) { return this.backend.request(`/v1/tasks/${id(identity)}/cancel`, 'POST', {}) }
   retry(identity: unknown) { return this.backend.request(`/v1/tasks/${id(identity)}/retry`, 'POST', {}) }
+  reparse(input: any) {
+    if (!input || !['builtin', 'enhanced'].includes(input.processor)) throw new Error('INVALID_INPUT')
+    return this.backend.request(`/v1/documents/${id(input.id)}/reparse`, 'POST', { processor: input.processor })
+  }
 }

@@ -20,8 +20,10 @@ HTTP_SHUTDOWN_GRACE_SECONDS = 2
 
 
 def create_app(token: str, database: Database) -> FastAPI:
+    from .parsers import ParserService, router as parsers_router
+    parser_service = ParserService(database)
     from .library import Library, router as library_router
-    library = Library(database)
+    library = Library(database, parser_service=parser_service)
     from .search import Search, router as search_router
     search = Search(library)
     from .chat import Chat, router as chat_router
@@ -72,6 +74,7 @@ def create_app(token: str, database: Database) -> FastAPI:
     from .resources import router as resources_router
     app.include_router(resources_router(library))
     app.include_router(library_router(library))
+    app.include_router(parsers_router(parser_service, library))
     from .notes import router as notes_router
     app.include_router(notes_router(database))
     from .search_history import router as search_history_router

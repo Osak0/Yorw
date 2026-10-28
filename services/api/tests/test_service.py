@@ -33,11 +33,11 @@ def test_authentication_health_and_parent_eof(frozen, tmp_path):
                 time.sleep(.1)
         else:
             pytest.fail("Backend readiness timed out")
-        assert health["ready"] and health["schema_version"] == 16
+        assert health["ready"] and health["schema_version"] == 17
         assert "token" not in health
         with urllib.request.urlopen(urllib.request.Request(url.replace('/health', '/workspace'), headers={"Authorization": "Bearer " + token}), timeout=2) as response:
             info = json.load(response)
-        assert info["schema_version"] == 16
+        assert info["schema_version"] == 17
         assert "workspace_path" not in info
         assert (tmp_path / "workspace/yorw.sqlite3").exists()
         for headers in [{}, {"Authorization": "Bearer invalid"}]:

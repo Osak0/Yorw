@@ -473,7 +473,7 @@ def test_schema9_upgrade_and_preferences_preserve_research_assets(tmp_path):
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 16
+        assert upgraded.version == 17
         assert Garden(upgraded).get(topic['topic']['id']) == saved
         assert upgraded.connection.execute('SELECT semantic_enabled,version FROM ai_preferences').fetchone() == (1, 1)
         assert len(list((workspace.root/'backups').glob('*.sqlite3'))) == 1

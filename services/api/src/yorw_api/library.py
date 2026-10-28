@@ -61,10 +61,11 @@ class ReadingPosition(BaseModel):
 
 
 class Library:
-    def __init__(self, database: Database, parsers=None):
+    def __init__(self, database: Database, parsers=None, parser_service=None):
         self.db = database
         self.workspace = database.workspace
         self.parsers = parsers or default_registry()
+        self.parser_service = parser_service
         self.operations = Lock()
         self.closing = Event()
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pdf-extract")
@@ -152,6 +153,12 @@ class Library:
         except OSError:
             return False
 
+    def processor_for_import(self, format: str) -> str:
+        if not self.parser_service or not self.parser_service.settings()['enhanced_enabled']:
+            return 'builtin'
+        capability = self.parser_service.capability('enhanced', format)
+        return 'enhanced' if capability and capability['state'] == 'external' else 'builtin'
+
     def import_pdf(self, source, original_name):
         source.seek(0, 2)
         size = source.tell()
@@ -186,19 +193,20 @@ class Library:
                 self.workspace.store_document(source, identity)
                 timestamp = now()
                 task_id = str(uuid4())
+                processor = self.processor_for_import('pdf')
                 with self.db.write() as conn:
                     if existing:
                         conn.execute("UPDATE documents SET relative_path=?,deleted_at=NULL,extraction_status='pending',parse_version=?,parse_status='pending',parse_warning=NULL,version=version+1,warning=NULL,format='pdf',media_type='application/pdf',updated_at=? WHERE id=?", (f"documents/{identity}.pdf",parse_version,timestamp,identity))
                     else:
                         name = (original_name or 'document.pdf').replace('\\','/').split('/')[-1][:255]
                         conn.execute("INSERT INTO documents(id,sha256,relative_path,original_name,extraction_status,format,media_type,parse_version,parse_status,created_at,updated_at) VALUES(?,?,?,?,'pending','pdf','application/pdf',?, 'pending',?,?)", (identity,digest,f"documents/{identity}.pdf",name,parse_version,timestamp,timestamp))
-                    conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)", (task_id,identity,json.dumps({'parse_version': parse_version}),timestamp,timestamp))
+                    conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)", (task_id,identity,json.dumps({'parse_version': parse_version, 'processor': processor}),timestamp,timestamp))
                 receipt.unlink(missing_ok=True)
             except Exception:
                 # Reconciliation will only remove files with an owned receipt, never arbitrary files.
                 self.reconcile()
                 raise
-            self.pool.submit(self.extract, identity, task_id, parse_version)
+            self.pool.submit(self.extract, identity, task_id, parse_version, processor)
             return {"document": self.document(identity), "task": self.task(task_id), "deduplicated": False}
 
     def active(self, identity, task_id):
@@ -221,10 +229,11 @@ class Library:
                 cancel.set()
                 return
 
-    def extract(self, identity, task_id, parse_version=None):
-        if parse_version is None:
+    def extract(self, identity, task_id, parse_version=None, processor=None):
+        if parse_version is None or processor is None:
             task = self.task(task_id)
-            parse_version = (task.get('input') or {}).get('parse_version') or self.document(identity)['parse_version']
+            parse_version = parse_version or (task.get('input') or {}).get('parse_version') or self.document(identity)['parse_version']
+            processor = processor or (task.get('input') or {}).get('processor') or 'builtin'
         cancel = Event()
         try:
             with self.db.write() as conn:
@@ -233,13 +242,22 @@ class Library:
                 conn.execute("UPDATE tasks SET status='running',stage='PARSING',updated_at=? WHERE id=?", (now(),task_id))
                 conn.execute("UPDATE documents SET parse_status='running',parse_updated_at=? WHERE id=? AND parse_version=?", (now(),identity,parse_version))
             document = self.document(identity)
+            registry, parser_name = self.parsers, None
+            if processor == 'enhanced' and self.parser_service:
+                registry = self.parser_service.registry()
+                capability = self.parser_service.capability('enhanced', document['format'])
+                if capability and capability['state'] == 'external':
+                    parser_name = 'docling'
+                elif capability and capability['state'] == 'component_missing':
+                    raise ParseError('COMPONENT_MISSING', capability.get('detail', ''),
+                                     diagnostic={'install_hint': capability.get('install_hint')})
             request = ParseRequest(path=self.workspace.document_path(identity), document_id=identity,
                                    extraction_version=parse_version, format=document['format'] or 'pdf',
-                                   original_name=document['original_name'])
+                                   original_name=document['original_name'], parser_name=parser_name)
             watcher = Thread(target=self._watch_cancel, args=(identity, task_id, cancel), daemon=True)
             watcher.start()
             try:
-                result = self.parsers.parse(request, cancel)
+                result = registry.parse(request, cancel)
             finally:
                 cancel.set()
                 watcher.join(timeout=1)
@@ -423,9 +441,37 @@ class Library:
                          (parse_version, timestamp, document['extraction_status'] if keep_active else 'pending',
                           document['warning'] if keep_active else None, timestamp, identity))
             identity_task = str(uuid4())
+            processor = (task.get('input') or {}).get('processor') or 'builtin'
             conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)",
-                         (identity_task, identity, json.dumps({'parse_version': parse_version}), timestamp, timestamp))
-        self.pool.submit(self.extract, identity, identity_task, parse_version)
+                         (identity_task, identity, json.dumps({'parse_version': parse_version, 'processor': processor}), timestamp, timestamp))
+        self.pool.submit(self.extract, identity, identity_task, parse_version, processor)
+        return self.task(identity_task)
+
+    def reparse(self, identity, processor='builtin'):
+        """Explicitly reparse the stored file with the requested processor."""
+        with self.operations, self.db.write() as conn:
+            document = self.document(identity)
+            if processor not in ('builtin', 'enhanced'):
+                raise HTTPException(422, detail='INVALID_INPUT')
+            if processor == 'enhanced':
+                capability = self.parser_service.capability('enhanced', document['format']) if self.parser_service else None
+                if not capability or capability['state'] != 'external':
+                    raise HTTPException(409, detail='COMPONENT_MISSING')
+            if self.rows("SELECT id FROM tasks WHERE target_id=? AND status IN ('queued','running')", (identity,)):
+                raise HTTPException(409, detail='TASK_RUNNING')
+            active = conn.execute('SELECT count(*) FROM document_blocks WHERE document_id=? AND extraction_version=?',
+                                  (identity, document['extraction_version'])).fetchone()[0]
+            keep_active = bool(active) and document['extraction_status'] in ('ready', 'partial')
+            parse_version = document['parse_version'] + 1
+            timestamp = now()
+            conn.execute("UPDATE documents SET parse_version=?,parse_status='pending',parse_warning=NULL,parse_updated_at=?,"
+                         "extraction_status=?,warning=?,updated_at=? WHERE id=?",
+                         (parse_version, timestamp, document['extraction_status'] if keep_active else 'pending',
+                          document['warning'] if keep_active else None, timestamp, identity))
+            identity_task = str(uuid4())
+            conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)",
+                         (identity_task, identity, json.dumps({'parse_version': parse_version, 'processor': processor}), timestamp, timestamp))
+        self.pool.submit(self.extract, identity, identity_task, parse_version, processor)
         return self.task(identity_task)
 
     def file(self, identity: str):

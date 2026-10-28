@@ -102,7 +102,7 @@ def test_step9_database_upgrade_preserves_existing_research_assets(tmp_path):
     old.close()
     updated=Database(workspace)
     try:
-        assert updated.version==16
+        assert updated.version==17
         assert updated.connection.execute('SELECT body_md FROM notes').fetchone()[0]=='Retained note 中文'
         assert updated.connection.execute('SELECT body_md FROM messages').fetchone()[0]=='Retained answer'
         assert updated.connection.execute('SELECT count(*) FROM topics').fetchone()[0]==0

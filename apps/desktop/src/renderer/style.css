@@ -48,3 +48,4 @@ h1{font-size:36px;margin:12px 0}h2{font-size:18px}
 .library-search{display:flex;align-items:center;gap:8px;margin:0;color:#526174;font-size:13px;white-space:nowrap}.library-search input{display:inline-block;width:260px;max-width:100%;margin:0;padding:8px 10px}
 .document-tool-body.metadata-tool{display:block;overflow:auto}.metadata-tool>.card{margin-top:0;max-height:none;overflow:visible}.metadata-tool-loading{color:#526174}
 @media(max-width:1100px){.storage-workspace{flex-direction:column}.storage-directory{width:100%;height:auto;max-height:32vh}.storage-content{width:100%;flex:1;min-height:0}}
+.parser-status{margin-top:12px}.parser-capabilities{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}.parser-capabilities th,.parser-capabilities td{border:1px solid #dce2ea;padding:6px 8px;text-align:left;vertical-align:top}.parser-capabilities thead th{background:#f8fafc;color:#526174}.parser-capabilities small{display:block;margin-top:4px;color:#526174}

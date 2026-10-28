@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import type { ProviderConfig, ProviderKind } from '../shared/status'
+import type { ParserCapability, ParserSettings, ParserStatus, ProviderConfig, ProviderKind } from '../shared/status'
 import {WorkspacePanel} from './WorkspacePanel'
 import type {AiPreferences} from '../shared/status'
 
@@ -46,8 +46,7 @@ function ProviderForm({ kind, saved, onSaved }: { kind: ProviderKind; saved?: Pr
     <p role="status" className={error ? 'failed' : ''}>{notice}</p>
   </section>
 }
-function AiSettings({active}:{active:boolean}){
- const [saved,setSaved]=useState<AiPreferences|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('')
+function AiSettings({active}:{active:boolean}){ const [saved,setSaved]=useState<AiPreferences|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('')
  useEffect(()=>{let alive=true;if(active)void window.yorw.ai.preferences().then(result=>{if(alive&&result.ok)setSaved(result.value)}).catch(()=>{if(alive)setNotice('检索设置加载失败，请重试。')});return()=>{alive=false}},[active])
  async function change(enabled:boolean){if(!saved)return;setBusy(true);setNotice('')
   try{const result=await window.yorw.ai.savePreferences({...saved,semantic_enabled:enabled});if(result.ok){setSaved(result.value);setNotice('已保存。')}else setNotice(messages[result.code]??'设置未保存，请重试。')}
@@ -55,6 +54,80 @@ function AiSettings({active}:{active:boolean}){
  }
  return <section className="provider"><h2>检索</h2><label className="check"><input aria-label="语义检索" type="checkbox" checked={saved?.semantic_enabled??true} disabled={!saved||busy} onChange={event=>void change(event.target.checked)}/>语义检索</label><p>结合问题含义查找相关内容。关闭后使用本地文字匹配。</p><p role="status">{notice}</p></section>
 }
+const parserStateLabel: Record<ParserCapability['state'], string> = {
+  builtin: '内置可用', external: '外部可用', component_missing: '组件缺失', unsupported: '不支持'
+}
+const parserFormats = ['pdf', 'docx', 'doc', 'md', 'txt'] as const
+
+function ParserPanel({ active }: { active: boolean }) {
+  const [status, setStatus] = useState<ParserStatus | null>(null)
+  const [form, setForm] = useState<ParserSettings | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('正在加载解析配置…')
+  async function load() {
+    try {
+      const result = await window.yorw.parsers.status()
+      if (result.ok) { setStatus(result.value); setForm(result.value.settings); setNotice('') }
+      else setNotice(messages[result.code] ?? '解析配置加载失败，请重试。')
+    } catch { setNotice('解析配置加载失败，请重试。') }
+  }
+  useEffect(() => { if (active) void load() }, [active])
+  function update<K extends keyof ParserSettings>(key: K, value: ParserSettings[K]) {
+    setForm(previous => previous ? { ...previous, [key]: value } : previous)
+  }
+  async function save() {
+    if (!form) return
+    setBusy(true); setNotice('正在保存解析配置…')
+    try {
+      const result = await window.yorw.parsers.save(form)
+      if (result.ok) {
+        setForm(result.value)
+        setStatus(previous => previous ? { ...previous, settings: result.value } : previous)
+        setNotice('解析配置已保存。')
+      } else setNotice(result.code === 'CONFIG_CONFLICT' ? '配置已更新，请重新加载后再保存。' : messages[result.code] ?? '保存失败，请重试。')
+    } catch { setNotice('保存失败，请重试。') }
+    finally { setBusy(false) }
+  }
+  async function test() {
+    setBusy(true); setNotice('正在检测解析组件…')
+    try {
+      const result = await window.yorw.parsers.test()
+      if (result.ok) {
+        setStatus(result.value); setForm(result.value.settings)
+        const parts = result.value.components
+        setNotice(`检测完成：Docling ${parts.docling.available ? `可用（${parts.docling.version}）` : '不可用'}；LibreOffice ${parts.libreoffice.available ? '可用' : '不可用'}。`)
+      } else setNotice(messages[result.code] ?? '检测失败，请重试。')
+    } catch { setNotice('检测失败，请重试。') }
+    finally { setBusy(false) }
+  }
+  return <section className="provider"><h2>文献解析</h2>
+    <p>默认使用内置解析。增强解析调用你自行安装的 Docling；Yorw 不随包附带、不自动下载或安装组件。Doc 还需要 LibreOffice。</p>
+    {form && <fieldset disabled={busy}>
+      <label className="check"><input aria-label="启用增强解析" type="checkbox" checked={form.enhanced_enabled} onChange={event => update('enhanced_enabled', event.target.checked)} />启用增强解析</label>
+      <label>Docling 可执行文件<input aria-label="Docling 可执行文件" value={form.docling_executable} placeholder="例如 uv tool 安装后的 docling.exe 路径" onChange={event => update('docling_executable', event.target.value)} /></label>
+      <label>启动参数（每行一个，可选）<textarea aria-label="Docling 启动参数" rows={2} value={form.docling_prefix.join('\n')} placeholder="使用 python -m docling 时填写两行：-m 和 docling" onChange={event => update('docling_prefix', event.target.value.split('\n').map(value => value.trim()).filter(Boolean))} /></label>
+      <label>LibreOffice 可执行文件（留空自动检测）<input aria-label="LibreOffice 可执行文件" value={form.libreoffice_executable} placeholder="例如 C:\Program Files\LibreOffice\program\soffice.exe" onChange={event => update('libreoffice_executable', event.target.value)} /></label>
+      <label>单文件解析超时（秒）<input aria-label="解析超时秒数" type="number" min={1} max={3600} value={form.timeout_seconds} onChange={event => update('timeout_seconds', Math.max(1, Math.min(3600, Number(event.target.value) || 1)))} /></label>
+      <label className="check"><input aria-label="允许 OCR" type="checkbox" checked={form.ocr_enabled} onChange={event => update('ocr_enabled', event.target.checked)} />允许 OCR（扫描 PDF）</label>
+      <label>OCR 模式<select aria-label="OCR 模式" value={form.ocr_mode} onChange={event => update('ocr_mode', event.target.value as ParserSettings['ocr_mode'])}><option value="default">默认（按版面区域）</option><option value="full_page">整页 OCR</option></select></label>
+      <div className="actions"><button className="primary" onClick={() => void save()}>保存解析配置</button><button onClick={() => void test()}>检测组件能力</button></div>
+    </fieldset>}
+    {status && <div className="parser-status"><p>Docling：{status.components.docling.available ? `可用（${status.components.docling.version}）` : `不可用 · ${status.components.docling.detail}`}；LibreOffice：{status.components.libreoffice.available ? '可用' : '不可用'}。</p>
+      <table className="parser-capabilities"><thead><tr><th>格式</th><th>内置</th><th>增强（Docling）</th></tr></thead><tbody>
+        {parserFormats.map(format => {
+          const builtin = status.capabilities.find(item => item.format === format && item.processor === 'builtin')
+          const docling = status.capabilities.find(item => item.format === format && item.processor === 'docling')
+          return <tr key={format}><th>{format}</th>
+            <td>{builtin ? `${parserStateLabel[builtin.state]}${builtin.detail ? ` · ${builtin.detail}` : ''}` : '—'}</td>
+            <td>{docling ? `${parserStateLabel[docling.state]}${docling.detail ? ` · ${docling.detail}` : ''}` : '—'}{docling?.install_hint && docling.state === 'component_missing' && <small>{docling.install_hint}</small>}</td>
+          </tr>
+        })}
+      </tbody></table>
+    </div>}
+    <p role="status" className={notice && !notice.startsWith('检测完成') && !notice.endsWith('已保存。') ? 'failed' : ''}>{notice}</p>
+  </section>
+}
+
 export function House({active=true}:{active?:boolean}) {
   const [configs, setConfigs] = useState<ProviderConfig[] | null>(null)
   const [notice, setNotice] = useState('正在加载配置…')
@@ -63,5 +136,5 @@ export function House({active=true}:{active?:boolean}) {
     catch { setNotice('加载失败，请重试') }
   }
   useEffect(() => { void load() }, [])
-  return <><AiSettings active={active}/><p>聊天与检索模型分别配置。密钥由系统安全存储加密。</p>{notice && <p role="status">{notice} <button onClick={() => void load()}>重新加载</button></p>}{configs && (['chat', 'embedding'] as ProviderKind[]).map(kind => <ProviderForm key={kind} kind={kind} saved={configs.find(config => config.kind === kind)} onSaved={saved => setConfigs(previous => [...(previous ?? []).filter(config => config.kind !== kind), saved])} />)}<WorkspacePanel active={active}/></>
+  return <><AiSettings active={active}/><ParserPanel active={active}/><p>聊天与检索模型分别配置。密钥由系统安全存储加密。</p>{notice && <p role="status">{notice} <button onClick={() => void load()}>重新加载</button></p>}{configs && (['chat', 'embedding'] as ProviderKind[]).map(kind => <ProviderForm key={kind} kind={kind} saved={configs.find(config => config.kind === kind)} onSaved={saved => setConfigs(previous => [...(previous ?? []).filter(config => config.kind !== kind), saved])} />)}<WorkspacePanel active={active}/></>
 }
