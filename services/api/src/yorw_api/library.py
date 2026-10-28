@@ -4,21 +4,16 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 import logging
-from threading import Lock, Event
+from threading import Lock, Event, Thread
 from uuid import uuid4, UUID
 
-from pypdf import PdfReader
-from pypdf.errors import DependencyError, FileNotDecryptedError
 from fastapi import APIRouter, UploadFile, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, ConfigDict
 from .storage.database import Database
-from .parsing import (ContentBlock, ParseMetadata, ParseResult, ParseWarning, SourceLocation,
-                      config_fingerprint, stable_block_id)
+from .parsing import ParseError, ParseRequest, ParseResult, default_registry
 
 MAX_BYTES = 50 * 1024 * 1024
-MAX_PAGES = 2000
-MAX_PAGE_TEXT = 200_000
 MAX_TAGS = 50
 MAX_TAG_LENGTH = 40
 MAX_SUMMARY_LENGTH = 20_000
@@ -66,9 +61,10 @@ class ReadingPosition(BaseModel):
 
 
 class Library:
-    def __init__(self, database: Database):
+    def __init__(self, database: Database, parsers=None):
         self.db = database
         self.workspace = database.workspace
+        self.parsers = parsers or default_registry()
         self.operations = Lock()
         self.closing = Event()
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pdf-extract")
@@ -219,83 +215,50 @@ class Library:
                          (version, now(), now(), identity))
             return version
 
+    def _watch_cancel(self, identity, task_id, cancel):
+        while not cancel.wait(0.2):
+            if not self.active(identity, task_id):
+                cancel.set()
+                return
+
     def extract(self, identity, task_id, parse_version=None):
         if parse_version is None:
             task = self.task(task_id)
             parse_version = (task.get('input') or {}).get('parse_version') or self.document(identity)['parse_version']
+        cancel = Event()
         try:
             with self.db.write() as conn:
                 if not self.active(identity, task_id):
                     return
-                conn.execute("UPDATE tasks SET status='running',stage='EXTRACTING',updated_at=? WHERE id=?", (now(),task_id))
+                conn.execute("UPDATE tasks SET status='running',stage='PARSING',updated_at=? WHERE id=?", (now(),task_id))
                 conn.execute("UPDATE documents SET parse_status='running',parse_updated_at=? WHERE id=? AND parse_version=?", (now(),identity,parse_version))
-            texts, failures, warning, status = [], 0, None, 'ready'
-            total_text = 0
-            metadata, pages = {}, None
-            with self.workspace.document_path(identity).open('rb') as stream:
-                reader = PdfReader(stream)
-                if reader.is_encrypted:
-                    status, warning = 'unsupported', 'ENCRYPTED_PDF'
-                else:
-                    pages = len(reader.pages)
-                    if pages > MAX_PAGES:
-                        status, warning = 'unsupported', 'PAGE_LIMIT'
-                    else:
-                        try:
-                            info = reader.metadata
-                            metadata = {"title": str(info.title)[:1000] if info and info.title else None, "authors": [str(info.author)[:1000]] if info and info.author else []}
-                        except Exception:
-                            metadata = {}
-                        for number, page in enumerate(reader.pages, 1):
-                            if not self.active(identity, task_id):
-                                return
-                            try:
-                                text = page.extract_text() or ''
-                                if len(text) > MAX_PAGE_TEXT:
-                                    text = text[:MAX_PAGE_TEXT]
-                                    failures += 1
-                                remaining = max(0, 10_000_000 - total_text)
-                                if len(text) > remaining:
-                                    text = text[:remaining]
-                                    failures += 1
-                                if text.strip():
-                                    texts.append((number, text))
-                                    total_text += len(text)
-                            except Exception:
-                                failures += 1
-                            if total_text >= 10_000_000:
-                                failures += 1
-                                break
-                            with self.db.write() as conn:
-                                conn.execute("UPDATE tasks SET progress=?,updated_at=? WHERE id=? AND status='running'", (number / max(pages,1),now(),task_id))
-                        if not texts:
-                            status, warning = ('failed', 'EXTRACTION_FAILED') if failures else ('unsupported', 'NO_TEXT_NO_OCR')
-                        elif failures or len(texts) < pages:
-                            status, warning = 'partial', 'PARTIAL_TEXT'
-            blocks = [ContentBlock(
-                id=stable_block_id(identity, parse_version, ordinal),
-                ordinal=ordinal, type='page', text=text, physical_page=page,
-                location=SourceLocation(kind='page', physical_page=page, block_ordinal=ordinal))
-                for ordinal, (page, text) in enumerate(texts)]
-            result = ParseResult(
-                format='pdf', media_type='application/pdf', parser_name='builtin-pdf',
-                parser_version='pypdf-text-1',
-                config_fingerprint=config_fingerprint({'parser': 'builtin-pdf', 'version': 'pypdf-text-1'}),
-                status=status, warning=warning,
-                summary=f'{len(texts)} 页有文字 / 共 {pages} 页' if pages else '无法读取页数',
-                metadata=ParseMetadata(title=metadata.get('title'), authors=metadata.get('authors') or []),
-                page_count=pages, blocks=blocks,
-                warnings=([ParseWarning(code=warning, message=f'{failures} 页文字不完整')] if warning and failures else []))
+            document = self.document(identity)
+            request = ParseRequest(path=self.workspace.document_path(identity), document_id=identity,
+                                   extraction_version=parse_version, format=document['format'] or 'pdf',
+                                   original_name=document['original_name'])
+            watcher = Thread(target=self._watch_cancel, args=(identity, task_id, cancel), daemon=True)
+            watcher.start()
+            try:
+                result = self.parsers.parse(request, cancel)
+            finally:
+                cancel.set()
+                watcher.join(timeout=1)
             self.finish_parse(identity, task_id, parse_version, result)
-        except (DependencyError, FileNotDecryptedError):
-            result = ParseResult(
-                format='pdf', media_type='application/pdf', parser_name='builtin-pdf',
-                parser_version='pypdf-text-1',
-                config_fingerprint=config_fingerprint({'parser': 'builtin-pdf', 'version': 'pypdf-text-1'}),
-                status='unsupported', warning='ENCRYPTED_PDF', summary='PDF 已加密', page_count=None, blocks=[])
-            self.finish_parse(identity, task_id, parse_version, result)
+        except ParseError as error:
+            if error.code == 'CANCELLED':
+                return
+            if error.code == 'ENCRYPTED_PDF':
+                capability = self.parsers.capability('pdf')
+                result = ParseResult(
+                    format='pdf', media_type=capability.media_type or 'application/pdf',
+                    parser_name=capability.parser or 'builtin-pdf', parser_version='unavailable',
+                    config_fingerprint='unavailable', status='unsupported', warning='ENCRYPTED_PDF',
+                    summary='PDF 已加密', page_count=None, blocks=[])
+                self.finish_parse(identity, task_id, parse_version, result)
+            else:
+                self.fail_parse(identity, task_id, parse_version, error.code, error.message)
         except Exception:
-            self.fail_parse(identity, task_id, parse_version, 'PDF_PARSE_FAILED')
+            self.fail_parse(identity, task_id, parse_version, 'PARSER_FAILED')
 
     def finish_parse(self, identity, task_id, parse_version, result: ParseResult):
         """Switch the active version on success; keep the last usable version on failure."""
