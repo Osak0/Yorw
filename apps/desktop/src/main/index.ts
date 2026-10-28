@@ -17,6 +17,7 @@ import { Intelligence } from './intelligence'
 import { Resources } from './resources'
 import { Parsers } from './parsers'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
+import {runMultiFormatSmoke} from './multiformat-smoke'
 import {runResourceRelationsSmoke,runWorkspaceChatSmoke,runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
@@ -149,7 +150,7 @@ else app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
-      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')&&!process.argv.includes('--tabs-citation-smoke')&&!process.argv.includes('--tabs-tool-resume-smoke')&&!process.argv.includes('--tabs-chat-smoke')) {
+      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')&&!process.argv.includes('--tabs-citation-smoke')&&!process.argv.includes('--tabs-tool-resume-smoke')&&!process.argv.includes('--tabs-chat-smoke')&&!process.argv.includes('--multiformat-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([fixture]), 'Reader fixture.pdf')
@@ -218,6 +219,11 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--multiformat-smoke')) {
+        const multiFormatProof = await runMultiFormatSmoke(window, backend, reportDir)
+        await writeFile(join(reportDir, 'multiformat-smoke.json'), JSON.stringify(multiFormatProof, null, 2))
+        faultObserved = true
+      }
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
       await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, citationProof, chatProof, toolResumeProof, resourceProof, tabCloseProof, tabFaultProof }, null, 2))
