@@ -12,7 +12,7 @@ from .garden import Garden
 from .library import now
 from .notes import Notes
 from .providers import ProbeError
-from .source_status import source_status
+from .source_status import resolve_evidence, source_status
 
 MAX_DRAFT_CHARACTERS = 80000
 MAX_DRAFT_CONTINUATIONS = 1
@@ -133,14 +133,9 @@ class Suggestions:
             return {'items':items}
 
     def evidence(self,source):
-        chunk_id=source.get('chunk_id')
-        document_id=source.get('document_id')
-        quote=source.get('text',source.get('quote',''))
-        rows=self.library.rows('SELECT c.*,d.deleted_at,d.title,d.original_name,d.extraction_version AS live_version,d.extraction_status AS live_status FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND c.document_id=?',(chunk_id,document_id))
-        if not rows or rows[0]['deleted_at'] is not None or rows[0]['live_status'] not in ('ready','partial') or rows[0]['live_version']!=source.get('extraction_version') or not quote or quote not in rows[0]['text']:
-            raise HTTPException(409,detail='MATERIAL_CHANGED')
-        row=rows[0]
-        return {'document_id':document_id,'document_title':row['title'] or row['original_name'],'chunk_id':chunk_id,'physical_page':row['physical_page'],'quote':quote,'extraction_version':row['extraction_version']}
+        resolved=resolve_evidence(self.db,source)
+        if not resolved:raise HTTPException(409,detail='MATERIAL_CHANGED')
+        return resolved
 
     def snapshot(self,material):
         identity=str(material.id)

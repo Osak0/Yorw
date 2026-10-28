@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .library import now
 from .providers import NoRedirect, ProbeError
+from .source_status import evidence_available
 
 CHAT_OUTPUT_TOKENS = 4096
 DRAFT_OUTPUT_TOKENS = 8192
@@ -120,7 +121,8 @@ class Chat:
         item['context'] = json.loads(item.pop('context_json', '{}'))
         live = self.library.rows('SELECT extraction_version,deleted_at FROM documents WHERE id=?',(item['document_id'],))[0]
         for source in item['sources']:
-            source['available'] = live['deleted_at'] is None and live['extraction_version']==source['extraction_version'] and bool(self.library.rows('SELECT id FROM chunks WHERE id=?',(source['chunk_id'],)))
+            candidate = source if source.get('document_id') else {**source, 'document_id': item['document_id']}
+            source['available'] = live['deleted_at'] is None and evidence_available(self.db, candidate)
         item['citations'] = sorted(set(int(n) for n in re.findall(r'\[S(\d+)\]',item['body_md']) if 1<=int(n)<=len(item['sources'])))
         return item
 
@@ -218,7 +220,11 @@ class Chat:
             if item['note_id']: return {'id':item['note_id']}
             if item['status']!='completed': raise HTTPException(409,detail='ANSWER_NOT_COMPLETE')
             sources = [dict(item['sources'][n-1],citation=f'S{n}',message_id=identity) for n in item['citations']]
-            body = '# AI 讨论笔记（待人工核查）\n\n问题：'+item['question']+'\n\n'+item['body_md']+'\n\n## 原始引用\n'+ '\n'.join(f"- [{s['citation']}] 物理页 {s['physical_page']}：{s['text']}" for s in sources)
+            citations = []
+            for source in sources:
+                location = f"物理页 {source['physical_page']}" if source.get('physical_page') else f"内容块 {source.get('block_id') or '未知'}"
+                citations.append(f"- [{source['citation']}] {location}：{source['text']}")
+            body = '# AI 讨论笔记（待人工核查）\n\n问题：'+item['question']+'\n\n'+item['body_md']+'\n\n## 原始引用\n'+ '\n'.join(citations)
             nid = str(uuid4())
             conn.execute('INSERT INTO notes(id,document_id,body_md,sources_json,created_at,updated_at) VALUES(?,?,?,?,?,?)',(nid,item['document_id'],body,json.dumps(sources),now(),now()))
             conn.execute('UPDATE messages SET note_id=? WHERE id=?',(nid,identity))

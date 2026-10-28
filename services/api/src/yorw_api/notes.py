@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from .storage.database import Database
+from .source_status import evidence_available
 
 MAX_NOTE_LENGTH = 200_000
 
@@ -43,9 +44,9 @@ class Notes:
         note['sources'] = json.loads(note.pop('sources_json'))
         note['document_available'] = note.pop('deleted_at') is None
         for source in note['sources']:
-            if isinstance(source, dict) and 'chunk_id' in source:
-                live = self.db.connection.execute('SELECT extraction_version FROM chunks WHERE id=? AND document_id=?',(source['chunk_id'],note['document_id'])).fetchone()
-                source['available'] = note['document_available'] and live is not None and live[0] == source.get('extraction_version')
+            if isinstance(source, dict) and ('chunk_id' in source or 'block_id' in source):
+                candidate = source if source.get('document_id') else {**source, 'document_id': note['document_id']}
+                source['available'] = note['document_available'] and evidence_available(self.db, candidate)
         return note
 
     def list(self, document_id: str) -> list[dict]:

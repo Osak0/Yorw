@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from .library import now
 from .storage.database import Database
+from .source_status import evidence_available
 
 
 class SearchHistory:
@@ -33,16 +34,7 @@ class SearchHistory:
              reason, now(), task_id))
 
     def _available(self, ref: dict) -> bool:
-        if not isinstance(ref, dict) or not ref.get('chunk_id'):
-            return False
-        row = self.db.connection.execute(
-            'SELECT c.text,c.extraction_version,c.physical_page,d.deleted_at,d.extraction_version,d.extraction_status '
-            'FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND c.document_id=?',
-            (ref.get('chunk_id'), ref.get('document_id'))).fetchone()
-        quote = ref.get('quote', '')
-        return bool(row and row[3] is None and row[5] in ('ready', 'partial')
-                    and row[1] == row[4] == ref.get('extraction_version')
-                    and row[2] == ref.get('physical_page') and quote and quote in row[0])
+        return evidence_available(self.db, ref)
 
     def _entry(self, row: dict) -> dict:
         try:

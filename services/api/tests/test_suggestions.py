@@ -148,7 +148,7 @@ def test_step10_topics_and_revisions_survive_schema8_upgrade(tmp_path):
     saved=garden.save(first['topic']['id'],SaveBody(body_md='Retained Wiki 正文',base_revision_id=first['revision']['id']))
     old.close();updated=Database(workspace)
     try:
-        assert updated.version==15 and Garden(updated).get(first['topic']['id'])==saved
+        assert updated.version==16 and Garden(updated).get(first['topic']['id'])==saved
         assert updated.connection.execute('SELECT count(*) FROM suggestions').fetchone()[0]==0
         assert updated.connection.execute('PRAGMA foreign_key_check').fetchall()==[]
     finally:updated.close()
