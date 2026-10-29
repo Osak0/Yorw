@@ -138,3 +138,12 @@ services/api/.venv/Scripts/python.exe scripts/evaluate-retrieval.py --mode metad
 阶段二代码、冻结后端、窗口及评估证据集中在[阶段二记录](history/v0.3.0-phase2.md)。阶段二已 review 并合并；后续改动按 PLAN 验收，不自动提交/推送/合并/发布。独立干净 Windows、真实模型质量、NSIS 与签名继续分别验收。
 
 DOCX 整理/布局回归：先用 `scripts/make-mvp-fixtures.py .cache/<新目录> --enrichment-docx` 生成自编写中文活动决算文件，再运行上述 --enrichment-smoke 命令并增加 --enrichment-docx-smoke。报告同时断言空值/文字列表响应只调用一次模型即可处理，资料页只有一个滚动区，AI 卡片随整页滚动，1280×720/1024×768 无横向溢出，并保存资料页截图。
+
+
+## 文献目录回归
+
+迁移 021 增加逻辑文件夹。后端 test_folders.py 覆盖循环、名称/版本冲突、非空删除、批量原子性、原件保留以及源码/冻结 HTTP 路径；前端 library-folders.test.ts 覆盖子目录筛选与异常循环收敛。
+
+打包窗口验收：make-mvp-fixtures.py 生成新隔离目录，然后运行 `Yorw.exe --yorw-smoke --reader-smoke --folders-smoke --report-dir=<绝对目录>`。结果为 folders-smoke.json 与 library-folders.png，验证目录展开、子目录筛选、受限路径和原件哈希/解析版本不变。协议与本地窗口成功不代表独立干净 Windows 验收；系统默认应用与 Explorer 行为需在目标机器复核。
+
+目录 review 后 folders-smoke 同时核验根目录直属归属、上级导航、菜单边缘限制、唯一导入以及鼠标/键盘调整宽度；保存 library-folders-1024.png、library-folders-1280.png 和 library-context-menu.png。

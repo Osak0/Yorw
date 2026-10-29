@@ -1,3 +1,4 @@
+import {runFoldersSmoke} from './folders-smoke'
 import {runEnrichmentSmoke} from './enrichment-smoke'
 import {Enrichment} from './enrichment'
 import {operationError} from './operation-errors'
@@ -139,6 +140,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('documents:readPdf', providerAction(input => documents.readPdf(input)))
   ipcMain.handle('documents:blocks', providerAction(input => documents.blocks(input)))
   ipcMain.handle('documents:savePosition', providerAction(input => documents.savePosition(input)))
+  ipcMain.handle('documents:library', providerAction(input => documents.library(input)))
   ipcMain.handle('documents:list', providerAction(() => documents.list()))
   ipcMain.handle('documents:importPdf', providerAction(() => documents.importPdf()))
   ipcMain.handle('documents:importPdfs', providerAction(() => documents.importPdfs()))
@@ -238,6 +240,10 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--folders-smoke')) {
+        const proof=await runFoldersSmoke(window,backend,reportDir)
+        await writeFile(join(reportDir,'folders-smoke.json'),JSON.stringify(proof,null,2))
+      }
       if(readerSmoke && process.argv.includes('--enrichment-smoke')) {
         const proof=await runEnrichmentSmoke(window,backend,providers,reportDir)
         await writeFile(join(reportDir,'enrichment-smoke.json'),JSON.stringify(proof,null,2))

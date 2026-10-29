@@ -10,7 +10,7 @@ def test_topics_revisions_http_and_restart(frozen,tmp_path):
     workspace=tmp_path/'workspace'
     a,b=str(uuid4()),str(uuid4())
     with running(frozen,workspace) as (request,_):
-        assert request('/v1/health')['schema_version']==20
+        assert request('/v1/health')['schema_version']==21
         first=request('/v1/topics','POST',{'id':a,'title':'Medical research','parent_id':None})
         request('/v1/topics','POST',{'id':b,'title':'Reliability','parent_id':a})
         second=request('/v1/topics/'+a+'/revisions','POST',{'base_revision_id':first['revision']['id'],'body_md':'# Reliability\n\n人工正文'})

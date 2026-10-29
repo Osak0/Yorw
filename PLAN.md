@@ -4,7 +4,7 @@
 
 ## 当前工作
 
-新分支：`feature/library-workspace-polish`。工作区改进已并入 [v0.3.0 总计划](PLAN_v0_3_0.md)。整改阶段一已完成文档整理与制品清理审核，旧打包目录清理被自动审批拒绝，已完整保留，等待用户 review；阶段二、三尚未实施，详见[整理记录](docs/history/v0.3.0-workspace.md)。
+当前分支：`feature/library-workspace-polish`。整改阶段一已获用户 review 并提交；整改阶段二实现逻辑目录树、文献归类、菜单及受限系统操作，schema 20 → 21。验证与证据见[整改记录](docs/history/v0.3.0-workspace.md)。整改阶段二已完成，后端上一轮 258 项通过；本轮目录 review 修订前端 66 项通过，类型检查、构建及打包目录窗口验证通过，根目录浏览、分组右键菜单和可拖动目录宽度已按 review 修订，等待用户 review，再进入阶段三。
 
 按三个阶段推进，每阶段验证并等待用户 review：
 

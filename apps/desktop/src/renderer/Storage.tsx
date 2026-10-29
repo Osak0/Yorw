@@ -1,3 +1,5 @@
+import {DirectorySplitter,useDirectoryWidth} from './DirectorySplitter'
+import {LibraryDirectory,directDocuments,folderPath,type Folder} from './LibraryDirectory'
 import React, { useEffect, useState } from 'react'
 import { ReadingWorkspace } from './ReadingWorkspace'
 import { documentHasUnsavedNotes } from './notebook'
@@ -41,6 +43,12 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
   onShowLibrary(): void
   onTitles(documents: DocumentRecord[]): void
 }) {
+  const directoryWidth=useDirectoryWidth()
+  const [folders,setFolders]=useState<Folder[]>([])
+  const [selectedFolder,setSelectedFolder]=useState(()=>{try{const id=localStorage.getItem('yorw-selected-folder');return !id||['all','none'].includes(id)?'root':id}catch{return 'root'}})
+  const [folderRevision,setFolderRevision]=useState(0)
+  useEffect(()=>{void window.yorw.documents.library({action:'list'}).then(r=>{if(r.ok){setFolders(r.value.items);if(selectedFolder!=='root'&&!r.value.items.some((f:Folder)=>f.id===selectedFolder))setSelectedFolder('root')}})},[folderRevision])
+  useEffect(()=>{try{localStorage.setItem('yorw-selected-folder',selectedFolder)}catch{}},[selectedFolder])
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [loaded, setLoaded] = useState(false)
   const [message, setMessage] = useState('正在加载文献…')
@@ -51,6 +59,7 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
   useEffect(() => {
     let active = true
     async function load() {
+      void window.yorw.documents.library({action:'list'}).then(r=>{if(active&&r.ok)setFolders(r.value.items)}).catch(()=>{})
       try { const result = await window.yorw.documents.list(); if (active && result.ok) { const items = result.value.items; setDocuments(items); onTitles(items); setImports(previous => previous.map(item => { const current = item.document && items.find(document => document.id === item.document?.id); return current ? { ...item, document: current } : item })); setLoaded(true); setMessage(previous => previous === '正在加载文献…' ? '' : previous) } else if (active && !result.ok) setMessage(explain(result.code)) }
       catch { if (active) setMessage('文献列表加载失败，请重试。') }
     }
@@ -69,11 +78,13 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
       if (!result.ok) { setMessage(explain(result.code)); return }
       if (result.value.cancelled) { setMessage('已取消选择'); return }
       const items = result.value.items
+      let assignmentWarning=''
+      if(selectedFolder!=='root'){const fresh=items.filter(i=>i.ok&&!i.deduplicated&&i.document);if(fresh.length){const assigned=await window.yorw.documents.library({action:'assign',value:{folder_id:selectedFolder,documents:Object.fromEntries(fresh.map(i=>[i.document!.id,i.document!.version]))}});if(!assigned.ok)assignmentWarning='导入成功，但归类失败，请手动移动。'}}
       setImports(items)
       const succeeded = items.filter(item => item.ok).length
       const duplicates = items.filter(item => item.ok && item.deduplicated).length
       const failed = items.length - succeeded
-      setMessage(`导入完成：${succeeded} 篇成功${duplicates ? `（${duplicates} 篇已存在）` : ''}${failed ? `，${failed} 篇失败` : ''}。`)
+      setMessage(`导入完成：${succeeded} 篇成功${duplicates ? `（${duplicates} 篇已存在）` : ''}${failed ? `，${failed} 篇失败` : ''}。${assignmentWarning}`)
       const documentsResult = await window.yorw.documents.list()
       if (documentsResult.ok) { setDocuments(documentsResult.value.items); onTitles(documentsResult.value.items) }
     } catch { setMessage('导入失败，请重试。') } finally { setBusy(false) }
@@ -122,29 +133,26 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
     if (activeTool && activeTool !== 'document') return <DocumentTool key={`${activeTool}:${reading.id}`} document={reading} tool={activeTool} onOpenDocument={() => onOpenDocument(reading)} onCollapse={() => activeTool !== 'resource' && onCollapseTool(activeTool, reading)} onEditMetadata={() => onOpenTool('metadata', reading)} onNavigate={target => onNavigate(reading, target)} onShowNotes={() => onShowNotes(reading)} onOpenSearch={() => onOpenTool('search', reading)} onOpenChat={() => onOpenTool('chat', reading)} onOpenTopic={onOpenTopic} />
     return <ReadingWorkspace key={reading.id} document={reading} onClose={closeReading} onExpand={tool => onOpenTool(tool, reading)} onResource={() => onOpenTool('resource', reading)} jump={pendingJump?.documentId === reading.id ? pendingJump : undefined} onJumpApplied={onJumpApplied} />
   }
-  const visible = filterDocuments(documents, query)
-  return <div className={`storage-workspace${storageDirectoryCollapsed ? ' collapsed' : ''}`}>
+  const visible = filterDocuments(directDocuments(documents,selectedFolder), query)
+  return <div className={`storage-workspace${storageDirectoryCollapsed ? ' collapsed' : ''}`} style={{'--directory-width':`${directoryWidth.width}px`} as React.CSSProperties}>
     {!storageDirectoryCollapsed && <aside className="storage-directory" aria-label="文献目录">
-      <div className="storage-directory-header"><h2>文献目录</h2><span>{documents.length} 篇</span></div>
-      <p className="storage-directory-hint">选择文献会在新标签页打开阅读。</p>
-      {visible.length ? <ul className="storage-directory-list">{visible.map(document => <li key={document.id}>
-        <button type="button" onClick={() => onOpenDocument(document)} title={`打开阅读：${document.title || document.original_name}`}>
-          <strong>{document.title || document.original_name}</strong><small>{document.original_name}</small>
-        </button>
-      </li>)}</ul> : <p>没有匹配的文献。</p>}
+      <div className="storage-directory-header"><h2>文献目录</h2><span>{directDocuments(documents,selectedFolder).length} 篇</span></div>
+      <LibraryDirectory documents={directDocuments(documents,selectedFolder)} folders={folders} busy={busy} selected={selectedFolder} onSelect={setSelectedFolder} onChange={()=>{setFolderRevision(v=>v+1);void window.yorw.documents.list().then(r=>{if(r.ok)setDocuments(r.value.items)})}} onOpen={onOpenDocument} onMetadata={d=>onOpenTool('resource',d)} onEdit={d=>onOpenTool('metadata',d)} onRemove={d=>void remove(d)} onImport={()=>void importPdfs()}/>
+
     </aside>}
+    {!storageDirectoryCollapsed&&<DirectorySplitter width={directoryWidth.width} onResize={directoryWidth.update}/>}
     <div className="storage-content">
       <div className="storage-content-bar"><span>文献列表</span><button onClick={onToggleStorageDirectory}>{storageDirectoryCollapsed ? '展开目录' : '收起目录'}</button></div>
       <div className="library-view">
-        <div className="library-toolbar">
-          <button className="import-button" disabled={busy} onClick={() => void importPdfs()}>导入文献</button>
+        <p className="library-current-path">{['根目录',...folderPath(folders,selectedFolder).map(f=>f.name)].join(' / ')}</p>
+      <div className="library-toolbar">
           <label className="library-search"><span>搜索文献</span><input aria-label="搜索文献" type="search" placeholder="搜索标题、文件名、作者、标签…" value={query} onChange={event => setQuery(event.target.value)} /></label>
-          <span>{visible.length === documents.length ? `${documents.length} 篇文献` : `显示 ${visible.length} / ${documents.length} 篇`} · 可多选 · PDF、DOCX、DOC、MD、TXT · 单文件上限 50 MiB；旧 DOC 需可选 LibreOffice，其余格式可使用内置处理</span>
+          <span>{visible.length} 篇文献</span>
         </div>
         <p role="status">{message}</p>
         {imports.length > 0 && <ImportResults items={imports} onOrganize={organize} onOpen={onOpenDocument} onDismiss={() => setImports([])} />}
-        {loaded && !documents.length && <section className="library-empty card"><h2>从一篇论文开始</h2><p>导入 PDF、DOCX、DOC、Markdown 或纯文本，保存自己的研究材料。PDF 使用原文阅读器，其他格式使用结构化阅读视图。</p></section>}
-        {documents.length > 0 && !visible.length && <section className="library-empty card"><h2>没有匹配的文献</h2><p>尝试文件名、标题、作者或标签中的其他关键词。</p><button onClick={() => setQuery('')}>清除搜索</button></section>}
+        {loaded && !documents.length && <section className="library-empty card"><h2>从一篇论文开始</h2><p>导入 PDF、DOCX、DOC、Markdown 或纯文本，保存自己的研究材料。PDF 使用原文阅读器，其他格式使用原件预览。</p></section>}
+        {documents.length > 0 && !visible.length && <section className="library-empty card"><h2>{query.trim()?'没有匹配的文献':'当前目录暂无文献'}</h2>{query.trim()&&<><p>尝试其他文件名、标题、作者或标签。</p><button onClick={() => setQuery('')}>清除搜索</button></>}</section>}
         <div className="document-list">{visible.map(document => {
           const parseStatus = document.parse_status
           const parsing = ['pending', 'running'].includes(document.extraction_status) || ['pending', 'running'].includes(parseStatus ?? '') || document.task?.status === 'running'
