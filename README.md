@@ -8,11 +8,9 @@
 
 ## 当前状态
 
-**v0.3.0 阶段一及整改已于 2026-10-29 由 osako review 通过。** 当前分支 `feature/multi-format-import`，应用版本仍为 0.2.0，SQLite schema 19；分支提交、推送和合并由用户完成，阶段二尚未开始。当前状态与集成顺序见 [PLAN](PLAN.md)，实施及验收见[阶段一记录](docs/history/v0.3.0-phase1.md)。
+**阶段一已 review 通过并合并到 main（PR #18 / ed65e79 / schema 19）。** 当前阶段二分支 `feature/document-enrichment-rag` 增加可关闭的 AI 文献整理、已有专题建议和试用元数据辅助检索，schema 20；应用版本仍为 0.2.0，已完成实现与本地验证，等待用户 review，不代表公开发布。状态见 [PLAN](PLAN.md)，证据见[阶段二记录](docs/history/v0.3.0-phase2.md)。
 
-PDF、DOCX、Markdown、TXT 的基础处理无需另装解析组件；旧 DOC、OCR 与 Word 版式转换的可选组件配置见[使用指南](docs/user-guide.md#house内置能力与可选解析组件)。引用先展示依据，能够唯一匹配时辅助定位原文。
-
-本次核对的本地 main 和缓存 origin/main 均为 `746b1b5`（v0.2.0 / schema 15），未联网刷新。用户 review、Git 合并、应用发布和线上核验分别记录；真实模型质量与独立干净 Windows 验收仍未完成。内容导出不是完整备份。
+PDF、DOCX、Markdown、TXT 基础处理无需外装解析组件；旧 DOC、OCR 和 Word 版式转换的可选配置见[使用指南](docs/user-guide.md#house内置能力与可选解析组件)。自动整理需用户授权和聊天模型，不阻塞阅读；元数据辅助检索默认关闭，仍返回原文依据。真实模型质量和独立干净 Windows 验收后置。内容导出不是完整备份。
 
 ## 10分钟极速复现指南
 
@@ -35,12 +33,12 @@ PDF、DOCX、Markdown、TXT 的基础处理无需另装解析组件；旧 DOC、
 
 ### 获取源码并启动
 
-下面是 v0.2.0 历史发布基线的固定复现命令，不包含本地阶段一的新功能。阶段一分支当前由用户准备推送/合并，合并后应在此补充实际合并提交作为新固定复现点，不预先编造哈希。已有本地阶段一仓库可跳过 clone/checkout，核对分支与工作区后从环境配置、依赖安装和 pnpm dev 继续。不要在有未提交修改的其他工作区直接切换版本。
+下面固定到已合并、review 通过的阶段一提交，包含多格式基础阅读；尚未合并的阶段二需在当前开发分支体验。已有本地开发仓库可跳过 clone/checkout，先核对分支和工作区。不要在有未提交修改时直接切换版本。
 
 ```powershell
 git clone https://github.com/Osak0/Yorw.git
 Set-Location Yorw
-git checkout 78648a36dab3bfd9da6b1c901fd1f565d046ed55
+git checkout ed65e7956714329beb1637be89a45107c54fb58c
 git rev-parse HEAD
 node --version
 pnpm --version
@@ -61,7 +59,7 @@ pnpm dev
 
 ### 导入原文并保存笔记
 
-在 Storage 点击“导入 PDF”，选择 `.cache/quickstart-fixtures/fixture.pdf`。打开后应有两页原文，第一页文字是 `Yorw fixed English fixture evidence.`。在笔记中写入“这是复现笔记”，保存后切换标签再打开，确认内容仍在。样例目录还包含四份文字 PDF 和三个负例文件，负例不要求文字抽取成功。
+在 Storage 点击“导入文献”，选择 `.cache/quickstart-fixtures/fixture.pdf`。打开后应有两页原文，第一页文字是 `Yorw fixed English fixture evidence.`。在笔记中写入“这是复现笔记”，保存后切换标签再打开，确认内容仍在。样例目录还包含四份文字 PDF 和三个负例文件，负例不要求文字抽取成功。
 
 ### 体验检索问答和专题草稿
 
@@ -129,6 +127,7 @@ pnpm dev
 | --- | --- |
 | [PLAN](PLAN.md) | 当前集成状态、下一步和后置范围。 |
 | [v0.3.0 计划](PLAN_v0_3_0.md) | 已确认范围、14个实施步骤、阶段 review 与验收。 |
+| [v0.3.0 阶段二记录](docs/history/v0.3.0-phase2.md) | 自动整理、元数据检索、固定评估与验证证据。 |
 | [v0.3.0 阶段一记录](docs/history/v0.3.0-phase1.md) | 阶段一提交、关键整改、review 结论与验证证据索引。 |
 | [产品约定](docs/product.md) | 三个空间、体验原则与视觉。 |
 | [架构](docs/architecture.md) | 现役模块、数据、来源和 AI 工作流。 |

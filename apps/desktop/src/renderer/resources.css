@@ -41,3 +41,12 @@
 .import-results-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .import-results-head h2{margin:0;font-size:16px}
 .import-results .actions{display:flex;gap:8px;flex:none}
+
+/* The document page has one scroll owner; cards must not become flex siblings. */
+.document-tool-body.resource-tool>.document-resource-page{flex:1;min-height:0;overflow:auto;padding:22px 26px 36px;background:#f8fafc}
+.document-resource-page>.document-resource-view{height:auto;overflow:visible;padding:0;background:transparent}
+.document-resource-page>.resource-topic-links{margin:16px 0 0;padding:0}
+.enrichment-panel{overflow-wrap:anywhere}
+.enrichment-panel dl{margin:12px 0}.enrichment-panel dt{font-weight:600;margin-top:10px}.enrichment-panel dd{margin:4px 0;color:#526174;white-space:pre-wrap}
+.enrichment-panel details{margin-top:12px}.enrichment-panel button{margin:4px 8px 4px 0}
+.enrichment-panel [role=status]{white-space:normal;overflow-wrap:anywhere}

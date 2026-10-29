@@ -37,7 +37,9 @@ def write_pdf(path, title, pages, *, encrypted=False, columns=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output',type=Path)
-    output = parser.parse_args().output.resolve()
+    parser.add_argument('--enrichment-docx', action='store_true', help='Also generate the Chinese synthetic event budget DOCX')
+    args = parser.parse_args()
+    output = args.output.resolve()
     # Preserve earlier evidence and avoid overwriting any user-selected file.
     output.mkdir(parents=True,exist_ok=False)
     spec = json.loads((Path(__file__).parents[1]/'services/api/tests/fixtures/retrieval.json').read_text(encoding='utf-8'))
@@ -58,6 +60,14 @@ def main():
         path = output/name
         write_pdf(path,title,pages,columns=columns)
         files.append({'name':name,'title':title,'pages':len(pages),'sha256':sha256(path.read_bytes()).hexdigest()})
+    if args.enrichment_docx:
+        from zipfile import ZipFile
+        from xml.sax.saxutils import escape
+        paragraphs = ['活动名称：新生杯。', '活动总额：946.2元。', '这是 Yorw 自编写的活动决算测试材料，不是真实用户文件。']
+        path = output/'phase2.docx'
+        with ZipFile(path, 'w') as archive:
+            archive.writestr('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + ''.join('<w:p><w:r><w:t>'+escape(text)+'</w:t></w:r></w:p>' for text in paragraphs) + '</w:body></w:document>')
+        files.append({'name':path.name,'title':'Synthetic event budget','sha256':sha256(path.read_bytes()).hexdigest()})
     negative = output/'negative';negative.mkdir()
     write_pdf(negative/'encrypted.pdf','Encrypted fixture',['Encrypted fixture'],encrypted=True)
     write_pdf(negative/'no-text.pdf','No-text fixture',[''])

@@ -1,0 +1,943 @@
+{
+  "version": 1,
+  "license": "CC0-1.0; original synthetic fixtures by Yorw contributors",
+  "documents": [
+    {
+      "id": "d01",
+      "format": "txt",
+      "title": "肺部筛查",
+      "text": "Study d01: low dose chest imaging. The protocol uses cohort 100 with threshold 20. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "肺部筛查: low dose chest imaging",
+        "tags": [
+          "LDCT",
+          "低剂量胸部成像"
+        ],
+        "synonyms": [
+          "LDCT",
+          "低剂量胸部成像"
+        ],
+        "method": "low dose chest imaging"
+      }
+    },
+    {
+      "id": "d02",
+      "format": "md",
+      "title": "眼底筛查",
+      "text": "Study d02: retinal photography. The protocol uses cohort 101 with threshold 21. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "眼底筛查: retinal photography",
+        "tags": [
+          "DR",
+          "糖网筛查"
+        ],
+        "synonyms": [
+          "DR",
+          "糖网筛查"
+        ],
+        "method": "retinal photography"
+      }
+    },
+    {
+      "id": "d03",
+      "format": "docx",
+      "title": "心脏检测",
+      "text": "Study d03: cardiac ultrasound. The protocol uses cohort 102 with threshold 22. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "心脏检测: cardiac ultrasound",
+        "tags": [
+          "ECHO",
+          "超声心动"
+        ],
+        "synonyms": [
+          "ECHO",
+          "超声心动"
+        ],
+        "method": "cardiac ultrasound"
+      }
+    },
+    {
+      "id": "d04",
+      "format": "pdf",
+      "title": "肝脏检测",
+      "text": "Study d04: liver elastography. The protocol uses cohort 103 with threshold 23. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "肝脏检测: liver elastography",
+        "tags": [
+          "LSM",
+          "肝硬度"
+        ],
+        "synonyms": [
+          "LSM",
+          "肝硬度"
+        ],
+        "method": "liver elastography"
+      }
+    },
+    {
+      "id": "d05",
+      "format": "txt",
+      "title": "皮肤检测",
+      "text": "Study d05: dermoscopy. The protocol uses cohort 104 with threshold 24. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "皮肤检测: dermoscopy",
+        "tags": [
+          "DERM",
+          "皮肤镜"
+        ],
+        "synonyms": [
+          "DERM",
+          "皮肤镜"
+        ],
+        "method": "dermoscopy"
+      }
+    },
+    {
+      "id": "d06",
+      "format": "md",
+      "title": "骨骼检测",
+      "text": "Study d06: bone densitometry. The protocol uses cohort 105 with threshold 25. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "骨骼检测: bone densitometry",
+        "tags": [
+          "DXA",
+          "骨密度"
+        ],
+        "synonyms": [
+          "DXA",
+          "骨密度"
+        ],
+        "method": "bone densitometry"
+      }
+    },
+    {
+      "id": "d07",
+      "format": "docx",
+      "title": "脑部检测",
+      "text": "Study d07: brain magnetic resonance. The protocol uses cohort 106 with threshold 26. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "脑部检测: brain magnetic resonance",
+        "tags": [
+          "MRI",
+          "磁共振"
+        ],
+        "synonyms": [
+          "MRI",
+          "磁共振"
+        ],
+        "method": "brain magnetic resonance"
+      }
+    },
+    {
+      "id": "d08",
+      "format": "pdf",
+      "title": "血糖监测",
+      "text": "Study d08: continuous glucose monitoring. The protocol uses cohort 107 with threshold 27. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "血糖监测: continuous glucose monitoring",
+        "tags": [
+          "CGM",
+          "连续血糖"
+        ],
+        "synonyms": [
+          "CGM",
+          "连续血糖"
+        ],
+        "method": "continuous glucose monitoring"
+      }
+    },
+    {
+      "id": "d09",
+      "format": "txt",
+      "title": "心电监测",
+      "text": "Study d09: electrocardiogram. The protocol uses cohort 108 with threshold 28. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "心电监测: electrocardiogram",
+        "tags": [
+          "ECG",
+          "心电图"
+        ],
+        "synonyms": [
+          "ECG",
+          "心电图"
+        ],
+        "method": "electrocardiogram"
+      }
+    },
+    {
+      "id": "d10",
+      "format": "md",
+      "title": "血压监测",
+      "text": "Study d10: ambulatory blood pressure. The protocol uses cohort 109 with threshold 29. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "血压监测: ambulatory blood pressure",
+        "tags": [
+          "ABPM",
+          "动态血压"
+        ],
+        "synonyms": [
+          "ABPM",
+          "动态血压"
+        ],
+        "method": "ambulatory blood pressure"
+      }
+    },
+    {
+      "id": "d11",
+      "format": "docx",
+      "title": "文本检索",
+      "text": "Study d11: sparse lexical retrieval. The protocol uses cohort 110 with threshold 30. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "文本检索: sparse lexical retrieval",
+        "tags": [
+          "BM25",
+          "关键词匹配"
+        ],
+        "synonyms": [
+          "BM25",
+          "关键词匹配"
+        ],
+        "method": "sparse lexical retrieval"
+      }
+    },
+    {
+      "id": "d12",
+      "format": "pdf",
+      "title": "语义检索",
+      "text": "Study d12: dense vector retrieval. The protocol uses cohort 111 with threshold 31. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "语义检索: dense vector retrieval",
+        "tags": [
+          "DVR",
+          "向量召回"
+        ],
+        "synonyms": [
+          "DVR",
+          "向量召回"
+        ],
+        "method": "dense vector retrieval"
+      }
+    },
+    {
+      "id": "d13",
+      "format": "txt",
+      "title": "排序融合",
+      "text": "Study d13: reciprocal rank fusion. The protocol uses cohort 112 with threshold 32. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "排序融合: reciprocal rank fusion",
+        "tags": [
+          "RRF",
+          "倒数排名融合"
+        ],
+        "synonyms": [
+          "RRF",
+          "倒数排名融合"
+        ],
+        "method": "reciprocal rank fusion"
+      }
+    },
+    {
+      "id": "d14",
+      "format": "md",
+      "title": "文档识别",
+      "text": "Study d14: optical character recognition. The protocol uses cohort 113 with threshold 33. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "文档识别: optical character recognition",
+        "tags": [
+          "OCR",
+          "光学字符识别"
+        ],
+        "synonyms": [
+          "OCR",
+          "光学字符识别"
+        ],
+        "method": "optical character recognition"
+      }
+    },
+    {
+      "id": "d15",
+      "format": "docx",
+      "title": "幻觉评估",
+      "text": "Study d15: visual grounding evaluation. The protocol uses cohort 114 with threshold 34. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "幻觉评估: visual grounding evaluation",
+        "tags": [
+          "VGE",
+          "视觉证据核查"
+        ],
+        "synonyms": [
+          "VGE",
+          "视觉证据核查"
+        ],
+        "method": "visual grounding evaluation"
+      }
+    },
+    {
+      "id": "d16",
+      "format": "pdf",
+      "title": "图像分割",
+      "text": "Study d16: region delineation. The protocol uses cohort 115 with threshold 35. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "图像分割: region delineation",
+        "tags": [
+          "SEG",
+          "区域分割"
+        ],
+        "synonyms": [
+          "SEG",
+          "区域分割"
+        ],
+        "method": "region delineation"
+      }
+    },
+    {
+      "id": "d17",
+      "format": "txt",
+      "title": "标签保护",
+      "text": "Study d17: manual annotation preservation. The protocol uses cohort 116 with threshold 36. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "标签保护: manual annotation preservation",
+        "tags": [
+          "MAP",
+          "人工标注保护"
+        ],
+        "synonyms": [
+          "MAP",
+          "人工标注保护"
+        ],
+        "method": "manual annotation preservation"
+      }
+    },
+    {
+      "id": "d18",
+      "format": "md",
+      "title": "专题推荐",
+      "text": "Study d18: topic association ranking. The protocol uses cohort 117 with threshold 37. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "专题推荐: topic association ranking",
+        "tags": [
+          "TAR",
+          "关联专题"
+        ],
+        "synonyms": [
+          "TAR",
+          "关联专题"
+        ],
+        "method": "topic association ranking"
+      }
+    },
+    {
+      "id": "d19",
+      "format": "docx",
+      "title": "隐私计算",
+      "text": "Study d19: local privacy processing. The protocol uses cohort 118 with threshold 38. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "隐私计算: local privacy processing",
+        "tags": [
+          "LPP",
+          "本地隐私"
+        ],
+        "synonyms": [
+          "LPP",
+          "本地隐私"
+        ],
+        "method": "local privacy processing"
+      }
+    },
+    {
+      "id": "d20",
+      "format": "pdf",
+      "title": "恢复任务",
+      "text": "Study d20: interrupted job recovery. The protocol uses cohort 119 with threshold 39. The method reduces review delay; limitations include a single site.",
+      "metadata": {
+        "overview": "恢复任务: interrupted job recovery",
+        "tags": [
+          "IJR",
+          "中断恢复"
+        ],
+        "synonyms": [
+          "IJR",
+          "中断恢复"
+        ],
+        "method": "interrupted job recovery"
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "d01-literal",
+      "query": "low dose chest imaging threshold",
+      "expected": [
+        "d01"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d01-metadata",
+      "query": "LDCT",
+      "expected": [
+        "d01"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d01-scope",
+      "query": "low dose chest imaging",
+      "expected": [],
+      "scope": [
+        "d02"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d02-literal",
+      "query": "retinal photography threshold",
+      "expected": [
+        "d02"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d02-metadata",
+      "query": "糖网筛查",
+      "expected": [
+        "d02"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d02-scope",
+      "query": "retinal photography",
+      "expected": [],
+      "scope": [
+        "d03"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d03-literal",
+      "query": "cardiac ultrasound threshold",
+      "expected": [
+        "d03"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d03-metadata",
+      "query": "ECHO",
+      "expected": [
+        "d03"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d03-scope",
+      "query": "cardiac ultrasound",
+      "expected": [],
+      "scope": [
+        "d04"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d04-literal",
+      "query": "liver elastography threshold",
+      "expected": [
+        "d04"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d04-metadata",
+      "query": "肝硬度",
+      "expected": [
+        "d04"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d04-scope",
+      "query": "liver elastography",
+      "expected": [],
+      "scope": [
+        "d05"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d05-literal",
+      "query": "dermoscopy threshold",
+      "expected": [
+        "d05"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d05-metadata",
+      "query": "DERM",
+      "expected": [
+        "d05"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d05-scope",
+      "query": "dermoscopy",
+      "expected": [],
+      "scope": [
+        "d06"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d06-literal",
+      "query": "bone densitometry threshold",
+      "expected": [
+        "d06"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d06-metadata",
+      "query": "骨密度",
+      "expected": [
+        "d06"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d06-scope",
+      "query": "bone densitometry",
+      "expected": [],
+      "scope": [
+        "d07"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d07-literal",
+      "query": "brain magnetic resonance threshold",
+      "expected": [
+        "d07"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d07-metadata",
+      "query": "MRI",
+      "expected": [
+        "d07"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d07-scope",
+      "query": "brain magnetic resonance",
+      "expected": [],
+      "scope": [
+        "d08"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d08-literal",
+      "query": "continuous glucose monitoring threshold",
+      "expected": [
+        "d08"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d08-metadata",
+      "query": "连续血糖",
+      "expected": [
+        "d08"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d08-scope",
+      "query": "continuous glucose monitoring",
+      "expected": [],
+      "scope": [
+        "d09"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d09-literal",
+      "query": "electrocardiogram threshold",
+      "expected": [
+        "d09"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d09-metadata",
+      "query": "ECG",
+      "expected": [
+        "d09"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d09-scope",
+      "query": "electrocardiogram",
+      "expected": [],
+      "scope": [
+        "d10"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d10-literal",
+      "query": "ambulatory blood pressure threshold",
+      "expected": [
+        "d10"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d10-metadata",
+      "query": "动态血压",
+      "expected": [
+        "d10"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d10-scope",
+      "query": "ambulatory blood pressure",
+      "expected": [],
+      "scope": [
+        "d11"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d11-literal",
+      "query": "sparse lexical retrieval threshold",
+      "expected": [
+        "d11"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d11-metadata",
+      "query": "BM25",
+      "expected": [
+        "d11"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d11-scope",
+      "query": "sparse lexical retrieval",
+      "expected": [],
+      "scope": [
+        "d12"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d12-literal",
+      "query": "dense vector retrieval threshold",
+      "expected": [
+        "d12"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d12-metadata",
+      "query": "向量召回",
+      "expected": [
+        "d12"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d12-scope",
+      "query": "dense vector retrieval",
+      "expected": [],
+      "scope": [
+        "d13"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d13-literal",
+      "query": "reciprocal rank fusion threshold",
+      "expected": [
+        "d13"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d13-metadata",
+      "query": "RRF",
+      "expected": [
+        "d13"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d13-scope",
+      "query": "reciprocal rank fusion",
+      "expected": [],
+      "scope": [
+        "d14"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d14-literal",
+      "query": "optical character recognition threshold",
+      "expected": [
+        "d14"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d14-metadata",
+      "query": "光学字符识别",
+      "expected": [
+        "d14"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d14-scope",
+      "query": "optical character recognition",
+      "expected": [],
+      "scope": [
+        "d15"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d15-literal",
+      "query": "visual grounding evaluation threshold",
+      "expected": [
+        "d15"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d15-metadata",
+      "query": "VGE",
+      "expected": [
+        "d15"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d15-scope",
+      "query": "visual grounding evaluation",
+      "expected": [],
+      "scope": [
+        "d16"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d16-literal",
+      "query": "region delineation threshold",
+      "expected": [
+        "d16"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d16-metadata",
+      "query": "区域分割",
+      "expected": [
+        "d16"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d16-scope",
+      "query": "region delineation",
+      "expected": [],
+      "scope": [
+        "d17"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d17-literal",
+      "query": "manual annotation preservation threshold",
+      "expected": [
+        "d17"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d17-metadata",
+      "query": "MAP",
+      "expected": [
+        "d17"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d17-scope",
+      "query": "manual annotation preservation",
+      "expected": [],
+      "scope": [
+        "d18"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d18-literal",
+      "query": "topic association ranking threshold",
+      "expected": [
+        "d18"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d18-metadata",
+      "query": "关联专题",
+      "expected": [
+        "d18"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d18-scope",
+      "query": "topic association ranking",
+      "expected": [],
+      "scope": [
+        "d19"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d19-literal",
+      "query": "local privacy processing threshold",
+      "expected": [
+        "d19"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d19-metadata",
+      "query": "LPP",
+      "expected": [
+        "d19"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d19-scope",
+      "query": "local privacy processing",
+      "expected": [],
+      "scope": [
+        "d20"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "d20-literal",
+      "query": "interrupted job recovery threshold",
+      "expected": [
+        "d20"
+      ],
+      "scope": null,
+      "subset": "literal"
+    },
+    {
+      "id": "d20-metadata",
+      "query": "中断恢复",
+      "expected": [
+        "d20"
+      ],
+      "scope": null,
+      "subset": "metadata"
+    },
+    {
+      "id": "d20-scope",
+      "query": "interrupted job recovery",
+      "expected": [],
+      "scope": [
+        "d01"
+      ],
+      "subset": "scope"
+    },
+    {
+      "id": "none-0",
+      "query": "火星植树",
+      "expected": [],
+      "scope": null,
+      "subset": "unanswerable"
+    },
+    {
+      "id": "none-1",
+      "query": "quasar plutonium",
+      "expected": [],
+      "scope": null,
+      "subset": "unanswerable"
+    },
+    {
+      "id": "none-2",
+      "query": "极地鲸鱼",
+      "expected": [],
+      "scope": null,
+      "subset": "unanswerable"
+    },
+    {
+      "id": "none-3",
+      "query": "volcanic zirconium",
+      "expected": [],
+      "scope": null,
+      "subset": "unanswerable"
+    },
+    {
+      "id": "none-4",
+      "query": "海底光缆",
+      "expected": [],
+      "scope": null,
+      "subset": "unanswerable"
+    }
+  ]
+}

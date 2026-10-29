@@ -54,7 +54,7 @@ def test_schema15_upgrade_backfills_blocks_and_keeps_legacy_citations(tmp_path):
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 19
+        assert upgraded.version == 20
         document = upgraded.connection.execute(
             'SELECT format,media_type,parse_version,parse_status,extraction_version FROM documents').fetchone()
         assert document == ('pdf', 'application/pdf', 1, 'ready', 1)

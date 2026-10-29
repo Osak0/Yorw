@@ -1,3 +1,4 @@
+import {EnrichmentSettingsPanel} from './EnrichmentPanel'
 import React, { useEffect, useState } from 'react'
 import type { ParserCapability, ParserSettings, ParserStatus, ProviderConfig, ProviderKind } from '../shared/status'
 import {WorkspacePanel} from './WorkspacePanel'
@@ -56,11 +57,11 @@ function ProviderForm({ kind, saved, onSaved }: { kind: ProviderKind; saved?: Pr
 }
 function AiSettings({active}:{active:boolean}){ const [saved,setSaved]=useState<AiPreferences|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('')
  useEffect(()=>{let alive=true;if(active)void window.yorw.ai.preferences().then(result=>{if(alive&&result.ok)setSaved(result.value)}).catch(()=>{if(alive)setNotice('检索设置加载失败，请重试。')});return()=>{alive=false}},[active])
- async function change(enabled:boolean){if(!saved)return;setBusy(true);setNotice('')
-  try{const result=await window.yorw.ai.savePreferences({...saved,semantic_enabled:enabled});if(result.ok){setSaved(result.value);setNotice('已保存。')}else setNotice(messages[result.code]??'设置未保存，请重试。')}
+ async function change(enabled:boolean,metadata=saved?.metadata_enabled??false){if(!saved)return;setBusy(true);setNotice('')
+  try{const result=await window.yorw.ai.savePreferences({...saved,semantic_enabled:enabled,metadata_enabled:metadata});if(result.ok){setSaved(result.value);setNotice('已保存。')}else setNotice(messages[result.code]??'设置未保存，请重试。')}
   catch{setNotice('设置未保存，请重试。')}finally{setBusy(false)}
  }
- return <section className="provider"><h2>检索</h2><label className="check"><input aria-label="语义检索" type="checkbox" checked={saved?.semantic_enabled??true} disabled={!saved||busy} onChange={event=>void change(event.target.checked)}/>语义检索</label><p>结合问题含义查找相关内容。关闭后使用本地文字匹配。</p><p role="status">{notice}</p></section>
+ return <section className="provider"><h2>检索</h2><label className="check"><input aria-label="语义检索" type="checkbox" checked={saved?.semantic_enabled??true} disabled={!saved||busy} onChange={event=>void change(event.target.checked)}/>语义检索</label><p>结合问题含义查找相关内容。关闭后使用本地文字匹配。</p><label className="check"><input aria-label="元数据辅助检索" type="checkbox" checked={saved?.metadata_enabled??false} disabled={!saved||busy} onChange={event=>void change(saved?.semantic_enabled??false,event.target.checked)}/>元数据辅助检索（试用）</label><p>使用标题、人工资料和未过期 AI 整理辅助查找，仍返回原文证据。固定夹具已通过，真实模型质量尚待评估，默认关闭。</p><p role="status">{notice}</p></section>
 }
 const parserStateLabel: Record<ParserCapability['state'], string> = {
   builtin: '内置可用', external: '外部可用', component_missing: '组件缺失', unsupported: '不支持'
@@ -158,5 +159,5 @@ export function House({active=true, page, onOpen}:{active?:boolean;page?:string;
   }
   useEffect(() => { void load() }, [])
   if(!page)return <div className="house-entries">{Object.entries(houseTitles).map(([id,title])=><button key={id} onClick={()=>onOpen?.(id)}><strong>{title}</strong><small>{id==='parsers'?'内置解析、外部组件、OCR 与原件预览':id==='chat'?'聊天服务与连接测试':id==='retrieval'?'语义检索、Embedding 服务与测试':'数据位置与已保存内容导出'}</small></button>)}</div>
-  return <>{page==='parsers'&&<ParserPanel active={active}/>} {page==='retrieval'&&<AiSettings active={active}/>}{notice&&<p role="status">{notice}</p>}{configs&&(page==='chat'||page==='retrieval')&&<ProviderForm kind={page==='chat'?'chat':'embedding'} saved={configs.find(config=>config.kind===(page==='chat'?'chat':'embedding'))} onSaved={saved=>setConfigs(previous=>[...(previous??[]).filter(config=>config.kind!==saved.kind),saved])}/>} {page==='data'&&<WorkspacePanel active={active}/>}</>
+  return <>{page==='parsers'&&<><ParserPanel active={active}/><EnrichmentSettingsPanel/></>} {page==='retrieval'&&<AiSettings active={active}/>}{notice&&<p role="status">{notice}</p>}{configs&&(page==='chat'||page==='retrieval')&&<ProviderForm kind={page==='chat'?'chat':'embedding'} saved={configs.find(config=>config.kind===(page==='chat'?'chat':'embedding'))} onSaved={saved=>setConfigs(previous=>[...(previous??[]).filter(config=>config.kind!==saved.kind),saved])}/>} {page==='data'&&<WorkspacePanel active={active}/>}</>
 }

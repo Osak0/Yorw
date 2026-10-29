@@ -1,3 +1,4 @@
+import {EnrichmentPanel} from './EnrichmentPanel'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { DocumentRecord, DocumentResource, DocumentSummary, ReaderTarget, Topic } from '../shared/status'
 import './resources.css'
@@ -19,9 +20,10 @@ const historyStatus = (status: string) => ({
 
 type Candidate = DocumentSummary & { shared_tags: string[] }
 
-export function DocumentResourceSections({ resource, topics, notice, busy, candidates, candidateQuery, candidateDescription,
+export function DocumentResourceSections({ children, resource, topics, notice, busy, candidates, candidateQuery, candidateDescription,
   onEditMetadata, onAddTopic, onRemoveTopic, onSearchCandidates, onAddRelation, onRemoveRelation, onOpenNotes,
   onOpenSearch, onOpenChat, onNavigate, onDeleteHistory, onClearHistory, onRunSearch, onCandidateQuery, onCandidateDescription }: {
+  children?: React.ReactNode
   resource: DocumentResource
   topics: Topic[]
   notice: string
@@ -55,6 +57,7 @@ export function DocumentResourceSections({ resource, topics, notice, busy, candi
         <p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.page_count ?? '—'} 页</p></div>
       <button disabled={busy} onClick={onEditMetadata}>编辑元数据</button>
     </header>
+    {children}
     {notice && <p role="status" className="resource-notice">{notice}</p>}
     <section className="resource-section" aria-label="人工总结">
       <h3>人工总结 <small>{document.summary_source === 'manual' ? '人工编辑' : document.summary_source === 'ai' ? 'AI 生成，已人工确认' : '尚未记录'}{document.summary_updated_at ? ` · ${document.summary_updated_at}` : ''}</small></h3>
@@ -181,7 +184,7 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
     } catch { setNotice('重新检索失败，请重试。') } finally { setBusy(false) }
   }
   if (!resource) return <div className="document-resource-view" aria-label="文献资料"><p role="status">正在加载文献资料…</p><p role="status">{notice}</p></div>
-  return <>
+  return <div className="document-resource-page">
     <DocumentResourceSections resource={resource} topics={topics} notice={notice} busy={busy} candidates={candidates}
       candidateQuery={candidateQuery} candidateDescription={candidateDescription}
       onEditMetadata={onEditMetadata}
@@ -194,7 +197,9 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
       onDeleteHistory={historyId => void action(() => window.yorw.resources.deleteSearchHistory({ document_id: document.id, history_id: historyId }), '已删除这条检索历史。')}
       onClearHistory={() => void action(() => window.yorw.resources.clearSearchHistory(document.id), '已清空检索历史；笔记和对话保持不变。')}
       onRunSearch={query => void runSearch(query)}
-      onCandidateQuery={setCandidateQuery} onCandidateDescription={setCandidateDescription} />
+      onCandidateQuery={setCandidateQuery} onCandidateDescription={setCandidateDescription}>
+      <EnrichmentPanel key={document.id} id={document.id} onNavigate={onNavigate} onChanged={()=>void load()}/>
+    </DocumentResourceSections>
     <div className="resource-topic-links" aria-label="打开所属专题">{resource.topics.map(item => <button key={item.topic.id} onClick={() => onOpenTopic(item.topic)}>打开专题：{item.topic.title}</button>)}</div>
-  </>
+  </div>
 }

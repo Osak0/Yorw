@@ -11,7 +11,8 @@ export class Intelligence{
  preferences(){return this.backend.request('/v1/ai/preferences')}
  savePreferences(input:AiPreferences){
   if(!input||typeof input.semantic_enabled!=='boolean'||!Number.isSafeInteger(input.version)||input.version<1)throw new Error('INVALID_INPUT')
-  return this.backend.request('/v1/ai/preferences','PUT',{semantic_enabled:input.semantic_enabled,version:input.version})
+  if(input.metadata_enabled!==undefined&&typeof input.metadata_enabled!=='boolean')throw new Error('INVALID_INPUT')
+  return this.backend.request('/v1/ai/preferences','PUT',{semantic_enabled:input.semantic_enabled,metadata_enabled:input.metadata_enabled??false,version:input.version})
  }
  get(identity:unknown){return this.backend.request(`/v1/ai/tasks/${uuid(identity)}`)}
  cancel(identity:unknown){return this.backend.request(`/v1/ai/tasks/${uuid(identity)}/cancel`,'POST',{})}
