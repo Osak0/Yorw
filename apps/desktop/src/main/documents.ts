@@ -1,6 +1,6 @@
-import { dialog } from 'electron'
-import { readFile, stat } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { app, shell, dialog } from 'electron'
+import { readFile, stat, mkdtemp, writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import type { Backend } from './backend'
 
 function id(value: unknown): string {
@@ -10,6 +10,29 @@ function id(value: unknown): string {
 export class Documents {
   constructor(private backend: Backend) {}
   readPdf(identity: unknown) { return this.backend.readPdf(id(identity)) }
+  preview(input: any) {
+    const identity = id(input?.id)
+    if (input.action === 'start') return this.backend.request(`/v1/documents/${identity}/preview`, 'POST', {})
+    if (input.action === 'original') return this.backend.request(`/v1/documents/${identity}/original-view`)
+    if (input.action === 'text') return this.backend.request(`/v1/documents/${identity}/original-text`)
+    const preview = id(input.preview)
+    const base = `/v1/documents/${identity}/preview/${preview}`
+    if (input.action === 'status') return this.backend.request(base)
+    if (input.action === 'cancel') return this.backend.request(`${base}/cancel`, 'POST', {})
+    if (input.action === 'location') return this.backend.request(`${base}/location/${id(input.block)}`)
+    if (input.action === 'read') return this.backend.readPdf(identity, preview)
+    throw new Error('INVALID_INPUT')
+  }
+  async openOriginal(identity: unknown) {
+    const document = await this.backend.request(`/v1/documents/${id(identity)}`)
+    if (!['pdf','doc','docx','md','txt'].includes(document.format)) throw new Error('INVALID_INPUT')
+    const folder = await mkdtemp(join(app.getPath('temp'), 'yorw-original-'))
+    const path = join(folder, `original.${document.format}`)
+    await writeFile(path, await this.backend.readPdf(id(identity)), {flag:'wx'})
+    const error = await shell.openPath(path)
+    if (error) throw new Error('OPERATION_FAILED')
+    return {opened:true}
+  }
   blocks(identity: unknown) { return this.backend.request(`/v1/documents/${id(identity)}/blocks`) }
   savePosition(input: any) {
     if (!input || !Number.isInteger(input.page) || input.page < 1) throw new Error('INVALID_PAGE')

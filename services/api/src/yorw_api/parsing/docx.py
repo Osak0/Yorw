@@ -130,7 +130,7 @@ class DocxParser:
                     elif level is not None:
                         while headings and headings[-1][0] >= level:
                             headings.pop()
-                        add('heading', value, level=level)
+                        add('heading', value, level=min(level, 6))
                         headings.append((level, value))
                     else:
                         add('paragraph', value)
@@ -192,7 +192,7 @@ class DocxParser:
         if outline is not None:
             try:
                 level = int(outline) + 1
-                if 1 <= level <= 6:
+                if 1 <= level <= 9:
                     return level
             except ValueError:
                 pass
@@ -211,7 +211,7 @@ class DocxParser:
             if info.get('outline') is not None:
                 try:
                     level = int(info['outline']) + 1
-                    if 1 <= level <= 6:
+                    if 1 <= level <= 9:
                         return level
                 except ValueError:
                     pass

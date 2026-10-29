@@ -7,7 +7,7 @@ const errorText = (code?: string) => ({
   NOT_PDF: '内容不是 PDF，未导入。',
   UNSUPPORTED_FORMAT: '不支持的文件格式；请使用 PDF、DOCX、DOC、MD 或 TXT。',
   FILE_CLEANUP_PENDING: '旧副本仍在清理，请重启知栖后重试。',
-  COMPONENT_MISSING: '缺少解析组件；文件已保存，可在 House 配置后重新解析。',
+  COMPONENT_MISSING: '文件已保存。旧 DOC 文字处理需可选 LibreOffice，也可另存为 DOCX 后使用内置处理；其它支持格式无需外部解析组件。',
   INVALID_FILE: '文件损坏或格式无效。',
   DECODE_FAILED: '文本编码无法可靠识别。',
   IMPORT_FAILED: '导入失败。'

@@ -111,7 +111,7 @@ export function DocumentResourceSections({ resource, topics, notice, busy, candi
           const target = item.physical_page ? { page: item.physical_page } : block ? { block_id: block } : undefined
           const place = item.physical_page ? `第 ${item.physical_page} 页` : item.evidence[0]?.section_path?.length ? item.evidence[0].section_path.join(' / ') : '内容块'
           return <li key={item.id}><p>{item.snippet}</p><small>{place}{!item.available && ' · 来源已失效'}</small>
-            <button disabled={!item.available || !target} onClick={() => target && onNavigate(target)}>查看原文</button></li>
+            <button disabled={!item.available || !target} onClick={() => target && onNavigate({...target,evidence:item.snippet,section_path:item.evidence[0]?.section_path})}>查看依据</button></li>
         })}</ul>}
       </li>)}</ul> : <p className="resource-empty">还没有检索历史。</p>}
     </section>

@@ -40,8 +40,9 @@ def test_generic_import_creates_format_blocks_and_managed_files(library):
 
 
 def test_generic_import_deduplicates_and_rejects_unknown_extensions(library):
-    first = import_document(library, 'fixture.docx', fixtures.docx_bytes())
-    duplicate = library.import_document(BytesIO(fixtures.docx_bytes()), 'renamed.docx')
+    data = fixtures.docx_bytes()
+    first = import_document(library, 'fixture.docx', data)
+    duplicate = library.import_document(BytesIO(data), 'renamed.docx')
     assert duplicate['deduplicated'] is True and duplicate['document']['id'] == first['id']
     with pytest.raises(HTTPException) as error:
         library.import_document(BytesIO(b'unknown'), 'fixture.xyz')

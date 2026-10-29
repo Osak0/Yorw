@@ -136,7 +136,7 @@ class DoclingParser:
                     result = (False, '', f'Docling 版本检测失败（退出码 {completed.returncode}）')
             except (OSError, subprocess.TimeoutExpired) as error:
                 result = (False, '', f'Docling 版本检测失败（{type(error).__name__}）')
-        self._detection, self._detected_at = result, now
+        self._detection, self._detected_at = result, time.monotonic()
         return result
 
     def _executable(self) -> str | None:

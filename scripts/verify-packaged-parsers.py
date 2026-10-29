@@ -22,7 +22,7 @@ def api(base: str, token: str, path: str, method: str = 'GET', body=None):
     request = urllib.request.Request(base + path, data=data, method=method,
                                      headers={'Authorization': 'Bearer ' + token,
                                               'Content-Type': 'application/json'})
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=90) as response:
         return json.load(response)
 
 
@@ -72,17 +72,25 @@ def main() -> int:
             except (OSError, urllib.error.URLError):
                 time.sleep(.1)
         current = api(base, token, '/v1/parsers')['settings']
-        settings = {'enhanced_enabled': True, 'docling_executable': args.docling,
+        settings = {'approved': True, 'enhanced_enabled': True, 'docling_executable': args.docling,
                     'docling_prefix': [], 'libreoffice_executable': args.libreoffice,
                     'timeout_seconds': 600, 'ocr_enabled': True, 'ocr_mode': 'full_page',
                     'ocr_engine': 'rapidocr', 'version': current['version']}
         api(base, token, '/v1/parsers', 'PUT', settings)
-        capabilities = api(base, token, '/v1/parsers')['capabilities']
+        capabilities = api(base, token, '/v1/parsers/test', 'POST', {})['capabilities']
         items = []
         for name in ('fixture.docx', 'fixture-scanned.pdf'):
             path = args.samples / name
             imported = upload(base, token, path)
             identity = imported['document']['id']
+            # Baseline import is builtin; enhanced parsing is an explicit opt-in.
+            initial_end = time.monotonic() + 60
+            while time.monotonic() < initial_end:
+                initial = api(base, token, f'/v1/documents/{identity}')
+                if initial.get('parse_status') not in ('pending', 'running'):
+                    break
+                time.sleep(.2)
+            api(base, token, f'/v1/documents/{identity}/reparse', 'POST', {'processor':'enhanced'})
             deadline = time.monotonic() + 240
             document = imported['document']
             while time.monotonic() < deadline:

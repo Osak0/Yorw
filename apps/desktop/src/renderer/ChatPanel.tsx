@@ -25,7 +25,7 @@ export function ChatPanel({documentId,onPage,onNavigate,onNote}:{documentId:stri
  async function note(id:string){try{const result=await window.yorw.chat.note(id);if(result.ok){setNotice('已保存到笔记。');onNote(result.value.id)}else setNotice(aiError(result.code))}catch{setNotice('保存失败，请重试。')}}
  async function stop(){try{if(job.running){await job.cancel();return}const active=messages.find(message=>message.status==='running');if(active)await window.yorw.chat.cancel(active.id)}catch{setNotice('停止未完成，请重试。')}}
  async function send(){const submitted=question.trim();setNotice('');if(!submitted||running)return;setAtBottom(true);if(await job.start(submitted)){if(sessionStore().document(documentId).chatQuestion===question)sessionStore().updateDocument(documentId,{chatQuestion:''});requestAnimationFrame(scrollToLatest)}}
- const go=(source:ChatSource)=>{if(onNavigate)onNavigate({page:source.physical_page??undefined,block_id:source.block_id??undefined});else if(source.physical_page)onPage?.(source.physical_page)}
+ const go=(source:ChatSource)=>{if(onNavigate)onNavigate({page:source.physical_page??undefined,block_id:source.block_id??undefined,evidence:source.text,section_path:source.section_path});else if(source.physical_page)onPage?.(source.physical_page)}
  const place=(source:ChatSource)=>source.physical_page?`第 ${source.physical_page} 页`:source.section_path?.length?source.section_path.join(' / '):'内容块'
  function retry(message:ChatMessage){setQuestion(message.question);setNotice('');setAtBottom(true);void job.start(message.question).then(started=>{if(started)requestAnimationFrame(scrollToLatest)})}
  function onComposeKeyDown(event:React.KeyboardEvent<HTMLTextAreaElement>){if(event.key!=='Enter'||event.shiftKey)return;if(composing.current||event.nativeEvent.isComposing||event.keyCode===229)return;event.preventDefault();void send()}
@@ -40,7 +40,7 @@ export function ChatPanel({documentId,onPage,onNavigate,onNote}:{documentId:stri
       {message.body_md?<MarkdownPreview body={message.body_md}/>:message.status!=='running'&&<p className="chat-progress">没有生成正文。</p>}
       <div className="chat-citations">{message.citations.map(n=><button key={n} disabled={!message.sources[n-1]?.available} onClick={()=>message.sources[n-1]&&go(message.sources[n-1])}>[S{n}] · {message.sources[n-1]?place(message.sources[n-1]):'—'}{!message.sources[n-1]?.available?'（来源失效）':''}</button>)}</div>
       {message.status!=='running'&&<div className="chat-actions"><button disabled={running} onClick={()=>retry(message)}>重新回答</button>{message.status==='completed'&&<button onClick={()=>void note(message.id)}>{message.note_id?'打开笔记':'保存到笔记'}</button>}</div>}
-      {!!message.sources.length&&<details className="chat-sources"><summary>查看来源</summary>{message.sources.map((source,index)=><div key={source.id}><p>[S{index+1}] · {place(source)}{!source.available&&' · 来源已失效'}</p><p>{source.text}</p><button disabled={!source.available||(!source.physical_page&&!source.block_id)} onClick={()=>go(source)}>查看原文</button></div>)}</details>}
+      {!!message.sources.length&&<details className="chat-sources"><summary>查看来源</summary>{message.sources.map((source,index)=><div key={source.id}><p>[S{index+1}] · {place(source)}{!source.available&&' · 来源已失效'}</p><p>{source.text}</p><button disabled={!source.available||(!source.physical_page&&!source.block_id)} onClick={()=>go(source)}>查看依据</button></div>)}</details>}
      </div>
     </article>)}
     {!messages.length&&!running&&<p className="chat-empty">向当前文献提问。回答只使用本文检索到的原文证据。</p>}

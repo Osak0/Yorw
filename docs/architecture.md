@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-适用分支 `feature/multi-format-import` 的 v0.3.0 阶段一 / schema 18；main 发布基线仍为 v0.2.0 / schema 15。这里描述现役分支代码；环境和复现见[开发指南](development.md)，阶段一证据见[v0.3.0 记录](history/v0.3.0-phase1.md)，历史取舍见[AI 改进](history/v0.2.0.md)与[工作区改进](history/v0.2.0-workspace.md)。
+适用分支 `feature/multi-format-import` 的 v0.3.0 阶段一 / schema 19；main 发布基线仍为 v0.2.0 / schema 15。这里描述现役分支代码；环境和复现见[开发指南](development.md)，阶段一证据见[v0.3.0 记录](history/v0.3.0-phase1.md)，历史取舍见[AI 改进](history/v0.2.0.md)与[工作区改进](history/v0.2.0-workspace.md)。
 
 ## 模块与通信
 
@@ -12,7 +12,7 @@ React renderer → 受限 preload IPC → Electron main → 本地 FastAPI → S
 | --- | --- |
 | `apps/desktop/src/main/` | 窗口、原生对话框、safeStorage 密钥、Python 生命周期、业务 IPC、工作区布局校验/写入，以及 `resources.ts` 的资料/关系/检索历史转发。 |
 | `apps/desktop/src/preload/`、`src/shared/` | 固定桥接操作和手写 TypeScript 合同（含 `layout:load/save`、`resources:*`）；变更时与 Python DTO 同步。 |
-| `apps/desktop/src/renderer/` | Storage/Garden/House、工作标签与布局、PDF.js、结构化阅读视图、CodeMirror、Markdown 预览、按实体会话状态、文献资料与关联材料视图。 |
+| `apps/desktop/src/renderer/` | Storage/Garden/House、工作标签与布局、PDF.js、原件与转换预览、CodeMirror、Markdown 预览、按实体会话状态、文献资料与关联材料视图。 |
 | `services/api/src/yorw_api/` | 按业务文件组织 FastAPI/Pydantic、有限并发任务、模型协议和持久化；`resources.py` 管资料聚合与关系，`search_history.py` 管检索快照，`parsers.py` 管处理器设置、能力检测和显式重解析。 |
 | `services/api/src/yorw_api/parsing/` | 版本化解析合同、能力表、注册表、内置 PDF/TXT/Markdown/DOCX 解析器、外部 Docling 适配器和 DOC LibreOffice 转换。业务只消费 `ParseResult`/内容块，不读取解析器私有结构。 |
 | `storage/`、`migrations/` | 受管路径、SQLite 事务、完整性检查和顺序迁移。 |
@@ -48,7 +48,7 @@ AI 优化的材料范围默认是当前专题及子专题，显式切换到全�
 - `documents` 保存格式、媒体类型、活动抽取版本、解析版本/状态、解析器与配置指纹；`document_blocks` 保存按版本和顺序排列的内容块、类型、章节路径、物理页（仅 PDF/OCR 有真实页）和定位。旧 `chunks` 继续作为 PDF 兼容索引，内容块 ID 与对应 chunk ID 一致；旧引用快照不重写，来源可用性按活动版本动态计算。
 - 解析版本与活动版本分离：尝试解析递增 `parse_version`；成功才切换 `extraction_version` 并删除/失效派生索引；失败保留上一活动版本和其内容块，记录 `parse_status/parse_warning`。重新解析成功后旧内容块仍可按版本读取，但不再作为当前来源。
 - `parser_settings` 保存增强解析开关、Docling/LibreOffice 路径、超时、OCR 开关/模式/引擎和版本；能力检测与测试只读取独立用户环境，不把组件装进 Yorw 运行时。
-- 当前 schema 由 001–018 迁移组成：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
+- 当前 schema 由 001–019 迁移组成：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎，019 增加 document_previews 和 preview_locations。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
 - 正文保存比较 base_revision_id，目录修改比较 version。追加保留旧正文，合并原始来源并重排新增 S 编号；替换及回退创建新修订。动态 available 状态不写回不可变来源。
 
 ## 统一 AI 工作流
@@ -73,10 +73,30 @@ AI 优化的材料范围默认是当前专题及子专题，显式切换到全�
 
 ## 导入与资料整理
 
-导入在 main 通过固定的多选文件对话框读取本地 PDF/DOCX/DOC/MD/TXT，逐个上传到后端；后端按扩展名选择内置解析器，单个文件的大小、格式或后端错误只记录在该文件的导入结果中，不中止整批。每个结果显示成功、重复复用或失败原因；成功项提供非阻塞的“整理资料”入口和“打开阅读”；“整理资料”打开独立“整理文献”标签，不覆盖文献库。PDF 使用现有 PDF.js 阅读器；其他格式使用结构化视图显示章节、段落、列表、代码和基础表格，引用跳转定位到内容块。导入完成不会请求总结模型，AI 总结任务与技术方案仍后置。
+导入在 main 通过固定的多选文件对话框读取本地 PDF/DOCX/DOC/MD/TXT，逐个上传到后端；后端按扩展名选择内置解析器，单个文件的大小、格式或后端错误只记录在该文件的导入结果中，不中止整批。每个结果显示成功、重复复用或失败原因；成功项提供非阻塞的“整理资料”入口和“打开阅读”；“整理资料”打开独立“整理文献”标签，不覆盖文献库。PDF 使用现有 PDF.js 阅读器；DOCX 直接读取原文件展示基础预览，Markdown/TXT 读取原始文本；Word 版式转换为用户主动选择的可选功能。引用首先显示依据，能匹配时辅助定位。导入完成不会请求总结模型，AI 总结任务与技术方案仍后置。
 
 ## 导出与扩展边界
 
 内容导出在同一数据库锁内创建快照，ZIP 的 Markdown 与已保存正文一致，来源独立列入清单并补充文件格式与物理页/内容块定位；main 通过系统对话框保存，临时文件加 rename。导出仍只含已保存笔记和 Wiki 当前修订，不包含文献标签/总结、关系、检索历史或完整工作区。没有完整工作区恢复、云同步或外部 Markdown 双向同步。
 
 旧检索/选材 API 保留兼容；现役界面走统一工作流。PDF 使用内置 pypdf 文字抽取，非 PDF 使用内置 TXT/Markdown/DOCX 解析或用户配置的 Docling；扫描 PDF 的 OCR 由 Docling 可选引擎完成，DOC 经用户安装的 LibreOffice 转换。图像语义理解、复杂版面和公式识别仍后置。
+
+
+## 原件预览与设置隔离（阶段一整改）
+
+`previews.DocumentPreviewProvider` 定义生成、状态、取消入口；`Previews` 使用独立单线程队列与取消事件，转换独立于 RAG 解析。原件仍不可变。预览缓存键由原件 SHA256、LibreOffice 路径、程序与版本文件指纹以及转换配置组成；新转换在独立临时目录完成后原子发布。预览只按文献 ID 和预览 ID 提供受控资源，删除文献同步取消并清理派生文件。中断转换可重试；失效缓存可重建，不作为正文权威。
+
+转换 PDF 保存逐页文本，规范化匹配保留原始字符偏移，并排除重复页边文字；跨页匹配返回多个页内范围。只确认唯一的精确匹配；表格仅去除结构分隔符，重复或缺失内容明确未匹配。映射键包含预览 ID、内容块 ID 和 extraction_version；来源快照不被转换页号覆盖。PDF.js 在匹配页文本层高亮。搜索和问答继续使用 ReaderTarget；笔记、专题和修订来源通过 SourceNavigationContext 进入同一阅读入口。
+
+House 的 settings 标签采用固定类别 ID，持久化只保存类别与标签状态；不保存表单或密钥草稿。表单组件保持挂载以保留草稿，关闭标签复用保存/放弃确认。main 通过原生文件选择与确认建立程序授权并在 main 私有文件保存组件指纹；重启时仅恢复文件未变化的授权；仅批准的组件路径可保存。Docling 启动参数固定为空或 Python 的 `-m docling`，后端也拒绝其他前缀；旧配置不会在启动或状态读取时执行。测试用脚本进程通过测试内部注入，不作为可配置产品功能。
+
+解析任务在排队时捕获配置快照，导入请求不执行组件版本探测；实际解析在工作线程验证组件能力，避免外部程序阻塞数据库写事务。
+
+
+## 基础能力独立（2026-10-29 再次整改）
+
+`original_view.original_docx` 直接读取原始 OOXML，返回受限的展示树（段落/run/表格/栅格图片），不读取 SQLite 检索块来构建全文。压缩包条目、解压体积、节点深度、文字和图片总量受限；DTD/实体、外部关系、SVG 及任意 HTML 不进入视图。renderer 通过 React 文本/静态元素呈现，图片仅为受管 PNG/JPEG data URL。基础预览不是完整 Word 排版引擎，未覆盖页眉页脚、脚注和复杂分页。
+
+导入固定走内置接口；旧 enhanced_enabled 字段为兼容设置保留，不再影响导入选择。增强解析仅显式重解析使用，LibreOffice 版式转换仅点击可选入口使用。旧 DOC 需要外部转换的边界明确提示，不虚报成无需依赖的完整 DOC 解析。
+
+ReaderTarget 增加 evidence 与 section_path，引用操作首先显示依据；原件定位只是有条件的辅助行为。即使预览错误或来源块版本不可用，保存的依据也可以独立展示。DOCX 基础视图对唯一匹配节点做标记，转换页定位继续使用独立预览映射，不互相依赖。

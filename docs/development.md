@@ -97,7 +97,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## v0.2.0 发布准备
 
-当前 main 发布版本号为 0.2.0，SQLite schema 15；开发分支 `feature/multi-format-import` 的应用版本号仍为 0.2.0，schema 18。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
+当前 main 发布版本号为 0.2.0，SQLite schema 15；开发分支 `feature/multi-format-import` 的应用版本号仍为 0.2.0，schema 19。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -105,4 +105,26 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 4. 合并后，确认目标提交与候选源码树一致；若源码、锁文件或包内帮助变化，重建并重新验证。标签应指向最终合并提交，不能仅凭同版本文件名选择资产。
 5. 用户决定发布后上传对应安装器与 SHA256SUMS.txt；核对 GitHub Release 的标签、目标提交、资产和线上校验清单。公开发布及线上核验尚未完成时保持 pending。
 
-本次候选输出与验证结果见[v0.2.0 发布说明](releases/v0.2.0.md)和[发布准备记录](history/v0.2.0-release-preparation.md)。该记录说明本机证据及未完成的验收，不代替真实模型质量、干净 Windows 或公开发布。
+阶段一最新候选及 review 结论见[v0.3.0 阶段一记录](history/v0.3.0-phase1.md)；v0.2.0 的旧候选来源另见[历史发布准备](history/v0.2.0-release-preparation.md)。不要按相同应用版本号混选制品。
+
+
+### 阶段一整改验收
+
+`--rectification-smoke`（兼容旧 `--multiformat-smoke` 名称）需同时使用 `--yorw-smoke --reader-smoke --report-dir=<绝对目录> --preview-soffice="<用户安装的 soffice.exe>"`。目录内准备自编写 `fixture.pdf/docx/doc/md/txt`。脚本在隔离工作区操作 House 设置、转换预览与原件阅读，输出 `rectification-smoke.json`、`word-preview.png` 和 `house-home.png`。原生文件选择与确认由测试桩提供；授权边界另由 main 单元测试验证，不能声称已自动操作真实原生对话框。
+
+源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。当前开发分支 schema 19，应用版本仍为 0.2.0。
+
+
+`--builtin-reading-smoke` 使用 `--yorw-smoke --reader-smoke --report-dir=<新绝对目录>`，不传解析组件路径、不设置解析器配置。目录准备自编写 fixture.pdf/docx/md/txt。它验证内置 DOCX 表格/只读展示、缺失可选组件提示、关键词检索依据与原件标记、问答依据；问答使用进程内自有 loopback 模型协议夹具，不代表真实模型质量。输出 builtin-reading-smoke.json 与 builtin-reading.png。可选 LibreOffice 的 --rectification-smoke 另行执行，Word 需主动点击可选版式预览。
+
+
+## 阶段一 review 后的集成与阶段二入口
+
+2026-10-29 阶段一及整改已由用户 review 通过。本轮只有文档整理；提交、推送与合并由用户完成，不等于应用公开发布。
+
+1. 用户检查暂存与未暂存差异，将需集成的源码、测试、迁移和本次文档一起纳入分支；不要只推送此前 9664fd6 而遗漏整改。`.cache/`、`release/`、用户数据和密钥不纳入 Git。
+2. 推送分支并完成合并后，记录实际合并提交。新 Agent 先核对分支、工作区、锁文件、schema 19 与用户授权；不要擅自切换有本地修改的检出目录。
+3. 基于合并后的源码按本文运行适当回归；源码、依赖或包内帮助改变时重新构建候选。README 的历史固定复现仍是 v0.2.0，待合并后替换为实际新基线。
+4. 再开始 PLAN_v0_3_0.md 的步骤 8：先冻结输入、标签和 Recall@5/MRR@5 等评估基线，再做自动整理及检索改进；新迁移从 020 追加。阶段二交付后仍需用户 review。
+
+现有候选是本地完整目录，未重建 NSIS、签名或核验线上资产；这些不属于本次分支整理。

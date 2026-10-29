@@ -80,6 +80,7 @@ class Library:
         with self.db.write() as conn:
             conn.execute("UPDATE tasks SET status='interrupted',stage='INTERRUPTED',updated_at=? WHERE status IN ('running','queued')", (now(),))
             conn.execute("UPDATE documents SET extraction_status='failed',warning='INTERRUPTED' WHERE extraction_status IN ('pending','running')")
+            conn.execute("UPDATE documents SET parse_status='failed',parse_warning='INTERRUPTED' WHERE parse_status IN ('pending','running')")
         self.reconcile()
 
     def rows(self, sql, values=()):
@@ -170,10 +171,9 @@ class Library:
             return False
 
     def processor_for_import(self, format: str) -> str:
-        if not self.parser_service or not self.parser_service.settings()['enhanced_enabled']:
-            return 'builtin'
-        capability = self.parser_service.capability('enhanced', format)
-        return 'enhanced' if capability and capability['state'] == 'external' else 'builtin'
+        # Imports always have the same lightweight baseline. Optional adapters
+        # are selected explicitly for a reparse, never required by saved settings.
+        return 'builtin'
 
     @staticmethod
     def format_for_name(original_name):
@@ -235,7 +235,7 @@ class Library:
                 # Reconciliation will only remove files with an owned receipt, never arbitrary files.
                 self.reconcile()
                 raise
-            self.pool.submit(self.extract, identity, task_id, parse_version, processor)
+            self.pool.submit(self.extract, identity, task_id, parse_version, processor, self.parser_service.docling_config() if self.parser_service else None)
             return {"document": self.document(identity), "task": self.task(task_id), "deduplicated": False}
 
     def import_pdf(self, source, original_name):
@@ -261,7 +261,7 @@ class Library:
                 cancel.set()
                 return
 
-    def extract(self, identity, task_id, parse_version=None, processor=None):
+    def extract(self, identity, task_id, parse_version=None, processor=None, config=None):
         if parse_version is None or processor is None:
             task = self.task(task_id)
             parse_version = parse_version or (task.get('input') or {}).get('parse_version') or self.document(identity)['parse_version']
@@ -274,15 +274,9 @@ class Library:
                 conn.execute("UPDATE tasks SET status='running',stage='PARSING',updated_at=? WHERE id=?", (now(),task_id))
                 conn.execute("UPDATE documents SET parse_status='running',parse_updated_at=? WHERE id=? AND parse_version=?", (now(),identity,parse_version))
             document = self.document(identity)
-            registry, parser_name = self.parsers, None
-            if processor == 'enhanced' and self.parser_service:
-                registry = self.parser_service.registry()
-                capability = self.parser_service.capability('enhanced', document['format'])
-                if capability and capability['state'] == 'external':
-                    parser_name = 'docling'
-                elif capability and capability['state'] == 'component_missing':
-                    raise ParseError('COMPONENT_MISSING', capability.get('detail', ''),
-                                     diagnostic={'install_hint': capability.get('install_hint')})
+            registry, parser_name = (default_registry(config, include_external=processor == 'enhanced') if config else self.parser_service.registry() if self.parser_service else self.parsers), None
+            if processor == 'enhanced':
+                parser_name = 'docling'
             extension = document['format'] or 'pdf'
             request = ParseRequest(path=self.workspace.document_path(identity, extension), document_id=identity,
                                    extraction_version=parse_version, format=document['format'] or 'pdf',
@@ -315,7 +309,7 @@ class Library:
         """Switch the active version on success; keep the last usable version on failure."""
         with self.db.write() as conn:
             document = self.document(identity)
-            if document['parse_version'] != parse_version:
+            if document['parse_version'] != parse_version or not self.active(identity, task_id):
                 return False
             timestamp = now()
             success = result.status in ('ready', 'partial') and bool(result.blocks)
@@ -381,7 +375,7 @@ class Library:
     def fail_parse(self, identity, task_id, parse_version, code, message=''):
         with self.db.write() as conn:
             document = self.document(identity)
-            if document['parse_version'] != parse_version:
+            if document['parse_version'] != parse_version or not self.active(identity, task_id):
                 return False
             timestamp = now()
             active = conn.execute('SELECT count(*) FROM document_blocks WHERE document_id=? AND extraction_version=?',
@@ -453,6 +447,8 @@ class Library:
                 conn.execute('DELETE FROM search_documents WHERE document_id=?', (identity,))
                 conn.execute("UPDATE search_history SET status='cancelled',error_code='DOCUMENT_REMOVED',updated_at=? WHERE task_id IN (SELECT id FROM tasks WHERE target_id=? AND status IN ('queued','running'))", (timestamp,identity))
                 conn.execute("UPDATE tasks SET status='cancelled',stage='DOCUMENT_REMOVED',updated_at=? WHERE target_id=? AND status IN ('queued','running')", (timestamp,identity))
+            if getattr(self, 'previews', None):
+                self.previews.remove(identity)
             return {"removed": True, "cleanup_pending": not self.cleanup_deleted(identity)}
 
     def retry(self, task_id):
@@ -477,7 +473,7 @@ class Library:
             processor = (task.get('input') or {}).get('processor') or 'builtin'
             conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)",
                          (identity_task, identity, json.dumps({'parse_version': parse_version, 'processor': processor}), timestamp, timestamp))
-        self.pool.submit(self.extract, identity, identity_task, parse_version, processor)
+        self.pool.submit(self.extract, identity, identity_task, parse_version, processor, self.parser_service.docling_config() if self.parser_service else None)
         return self.task(identity_task)
 
     def reparse(self, identity, processor='builtin'):
@@ -487,8 +483,7 @@ class Library:
             if processor not in ('builtin', 'enhanced'):
                 raise HTTPException(422, detail='INVALID_INPUT')
             if processor == 'enhanced':
-                capability = self.parser_service.capability('enhanced', document['format']) if self.parser_service else None
-                if not capability or capability['state'] != 'external':
+                if not self.parser_service or not self.parser_service.enhanced_available(document['format']):
                     raise HTTPException(409, detail='COMPONENT_MISSING')
             if self.rows("SELECT id FROM tasks WHERE target_id=? AND status IN ('queued','running')", (identity,)):
                 raise HTTPException(409, detail='TASK_RUNNING')
@@ -504,7 +499,7 @@ class Library:
             identity_task = str(uuid4())
             conn.execute("INSERT INTO tasks(id,kind,target_id,status,stage,input_json,created_at,updated_at) VALUES(?,'extract',?,'queued','QUEUED',?,?,?)",
                          (identity_task, identity, json.dumps({'parse_version': parse_version, 'processor': processor}), timestamp, timestamp))
-        self.pool.submit(self.extract, identity, identity_task, parse_version, processor)
+        self.pool.submit(self.extract, identity, identity_task, parse_version, processor, self.parser_service.docling_config() if self.parser_service else None)
         return self.task(identity_task)
 
     def file(self, identity: str):

@@ -54,7 +54,7 @@ def test_schema15_upgrade_backfills_blocks_and_keeps_legacy_citations(tmp_path):
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 18
+        assert upgraded.version == 19
         document = upgraded.connection.execute(
             'SELECT format,media_type,parse_version,parse_status,extraction_version FROM documents').fetchone()
         assert document == ('pdf', 'application/pdf', 1, 'ready', 1)
@@ -185,3 +185,32 @@ def test_notes_and_search_history_accept_block_evidence(library):
     assert Notes(library.db)._get('note')['sources'][0]['available'] is True
     history = SearchHistory(library.db).list(identity)['items'][0]
     assert history['items'][0]['available'] is True
+
+
+def test_cancelled_parse_cannot_publish_or_fail(library):
+    document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'fixture.pdf'))
+    identity = document['id']
+    version = library.begin_parse(identity, increment=True)
+    create_task(library, identity, 'cancel-race', version)
+    library.cancel('cancel-race')
+    assert library.finish_parse(identity, 'cancel-race', version, parse_result(identity, version)) is False
+    assert library.fail_parse(identity, 'cancel-race', version, 'PARSER_FAILED') is False
+    assert library.task('cancel-race')['status'] == 'cancelled'
+    assert library.document(identity)['extraction_version'] == document['extraction_version']
+
+
+def test_restart_clears_pending_parse_preserving_active_version(library):
+    from yorw_api.library import Library
+    document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'fixture.pdf'))
+    library.begin_parse(document['id'], increment=True)
+    create_task(library, document['id'], 'restart-parse', 2)
+    recovered = Library(library.db)
+    try:
+        assert recovered.task('restart-parse')['status'] == 'interrupted'
+        current = recovered.document(document['id'])
+        assert current['parse_status'] == 'failed'
+        assert current['parse_warning'] == 'INTERRUPTED'
+        assert current['extraction_version'] == document['extraction_version']
+        assert current['extraction_status'] == 'ready'
+    finally:
+        recovered.pool.shutdown(wait=True)

@@ -15,7 +15,7 @@ def test_accept_restore_export_and_restart(frozen,tmp_path):
     workspace=tmp_path/'workspace'
     with provider() as (url,received):
         with running(frozen,workspace) as (request,upload):
-            assert request('/v1/health')['schema_version']==18
+            assert request('/v1/health')['schema_version']==19
             doc=upload(pdf_bytes())
             note=request('/v1/notes','POST',{'id':str(uuid4()),'document_id':doc,'body_md':'Saved note 中文\n'})
             topic=request('/v1/topics','POST',{'id':str(uuid4()),'title':'Review export','parent_id':None});tid=topic['topic']['id']

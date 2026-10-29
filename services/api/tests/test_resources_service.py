@@ -28,7 +28,7 @@ def test_stage_b_http_metadata_relations_materials_and_history(frozen, tmp_path)
     if frozen and not (Path(__file__).resolve().parents[1] / 'dist/yorw-api/yorw-api.exe').exists():
         pytest.skip('Build backend first')
     with running(frozen, tmp_path / 'workspace') as (request, upload):
-        assert request('/v1/health')['schema_version'] == 18
+        assert request('/v1/health')['schema_version'] == 19
         first = upload_document(upload, 'first')
         second = upload_document(upload, 'second')
         preserved = upload_document(upload, 'preserved')

@@ -64,7 +64,7 @@ export class Backend {
     if (this.status.state !== 'ready') throw new Error('BACKEND_NOT_READY')
     const response = await fetch(`http://127.0.0.1:${this.port}${path}`, {
       method, headers: { Authorization: `Bearer ${this.token}`, ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'X-Provider-Key': key } : {}), ...(credentials?{'X-Chat-Key':credentials.chat.key,'X-Embedding-Key':credentials.embedding.key,'X-Chat-Version':String(credentials.chat.version),'X-Embedding-Version':String(credentials.embedding.version)}:{}) },
-      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body), signal: AbortSignal.timeout(20000)
+      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body), signal: AbortSignal.timeout(path === '/v1/parsers/test' || path.endsWith('/reparse') ? 90000 : 20000)
     })
     if (!response.ok) {
       const data = await response.json().catch(() => null)
@@ -72,9 +72,9 @@ export class Backend {
     }
     return response.json()
   }
-  async readPdf(identity: string): Promise<Uint8Array> {
+  async readPdf(identity: string, preview?: string): Promise<Uint8Array> {
     if (this.status.state !== 'ready') throw new Error('BACKEND_NOT_READY')
-    const response = await fetch(`http://127.0.0.1:${this.port}/v1/documents/${identity}/file`, {
+    const response = await fetch(`http://127.0.0.1:${this.port}/v1/documents/${identity}/${preview ? `preview/${preview}/file` : 'file'}`, {
       headers: { Authorization: `Bearer ${this.token}` }, signal: AbortSignal.timeout(20000)
     })
     if (!response.ok) throw new Error(response.status === 404 ? 'DOCUMENT_FILE_MISSING' : 'BACKEND_ERROR')

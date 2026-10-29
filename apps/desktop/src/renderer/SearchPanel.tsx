@@ -10,7 +10,7 @@ export function SearchPanel({documentId,onPage,onNavigate}:{documentId:string;on
  const job=useAiTask('search',documentId)
  const result=job.task?.status==='succeeded'?job.task.result:null
  const hits=(result?.items??[]) as SearchHit[]
- const go=(hit:SearchHit)=>{if(onNavigate)onNavigate({page:hit.physical_page??undefined,block_id:hit.block_id??undefined});else if(hit.physical_page)onPage?.(hit.physical_page)}
+ const go=(hit:SearchHit)=>{if(onNavigate)onNavigate({page:hit.physical_page??undefined,block_id:hit.block_id??undefined,evidence:hit.snippet,section_path:hit.section_path});else if(hit.physical_page)onPage?.(hit.physical_page)}
  const place=(hit:SearchHit)=>hit.physical_page?`第 ${hit.physical_page} 页`:hit.section_path?.length?hit.section_path.join(' / '):'内容块'
  return <div className="search-panel">
   <form onSubmit={event=>{event.preventDefault();void job.start(query)}}>
@@ -25,7 +25,7 @@ export function SearchPanel({documentId,onPage,onNavigate}:{documentId:string;on
    {hits.map(hit=><article key={hit.id} className="search-hit">
     <h3><button className="source-title" disabled={!hit.physical_page&&!hit.block_id} onClick={()=>go(hit)}>{hit.title}</button></h3>
     <small>{place(hit)}</small><p className="search-snippet">{hit.snippet}</p>
-    <button onClick={()=>go(hit)} disabled={!hit.physical_page&&!hit.block_id}>查看原文</button>
+    <button onClick={()=>go(hit)} disabled={!hit.physical_page&&!hit.block_id}>查看依据</button>
    </article>)}
   </div>}
  </div>

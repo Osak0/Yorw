@@ -107,3 +107,12 @@ test('save rejects malformed layouts and out-of-range sidebar widths', async () 
     await expect(store.save({ ...layout, tabs: [{ kind: 'document', id: '../outside' }] })).rejects.toThrow('INVALID_LAYOUT')
   })
 })
+
+ test('House settings restore without document IDs or private fields',async()=>{
+ await withDirectory(async directory=>{
+ const store=new Layout(directory)
+ const value:WorkspaceLayout={version:1,module:'House',tabs:[{kind:'settings',id:'parsers',title:'文献解析与预览'}],activeKey:'settings:parsers',storageKey:null,gardenKey:null}
+ await store.save(value)
+ expect((await store.load()).layout).toEqual(value)
+ })
+})

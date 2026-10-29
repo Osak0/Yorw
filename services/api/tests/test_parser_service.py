@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from test_docling_adapter import fake_script
 from test_library import pdf_bytes, wait
 
+from yorw_api.parsing import DoclingConfig
 from yorw_api.library import Library
 from yorw_api.parsers import ParserService, ParserSettingsInput
 from yorw_api.storage.database import Database
@@ -17,7 +18,7 @@ from yorw_api.storage.workspace import Workspace
 
 
 def settings(**values):
-    base = {'enhanced_enabled': False, 'docling_executable': '', 'docling_prefix': [],
+    base = {'approved': True, 'enhanced_enabled': False, 'docling_executable': '', 'docling_prefix': [],
             'libreoffice_executable': '', 'timeout_seconds': 600,
             'ocr_enabled': True, 'ocr_mode': 'default', 'version': 1}
     base.update(values)
@@ -62,8 +63,8 @@ def test_capabilities_report_builtin_and_external_options(stack, tmp_path):
     script_dir = tmp_path / 'capability'
     script_dir.mkdir()
     script = fake_script(script_dir)
-    service.save(settings(enhanced_enabled=True, docling_executable=sys.executable,
-                          docling_prefix=[str(script)], version=1))
+    service.save(settings(enhanced_enabled=True, version=1))
+    service.docling_config = lambda: DoclingConfig(executable=sys.executable, prefix_args=[str(script)], timeout_seconds=20)
     status = service.status(force=True)
     rows = {(item['processor'], item['format']): item for item in status['capabilities']}
     assert rows[('builtin', 'pdf')]['state'] == 'builtin'
@@ -79,9 +80,12 @@ def test_enhanced_import_and_explicit_reparse_choose_the_requested_parser(stack,
     script_dir = tmp_path / 'enhanced'
     script_dir.mkdir()
     script = fake_script(script_dir)
-    service.save(settings(enhanced_enabled=True, docling_executable=sys.executable,
-                          docling_prefix=[str(script)], timeout_seconds=20, version=1))
+    service.save(settings(enhanced_enabled=True, version=1))
+    service.docling_config = lambda: DoclingConfig(executable=sys.executable, prefix_args=[str(script)], timeout_seconds=20)
     document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'fixture.pdf'))
+    assert document['parser_name'] == 'builtin-pdf'
+    settle(library, library.reparse(document['id'], 'enhanced'))
+    document = library.document(document['id'])
     assert document['parser_name'] == 'docling' and document['parse_status'] == 'partial'
     assert {'heading', 'paragraph', 'table'} <= {block['block_type'] for block in library.blocks(document['id'])}
     argv = json.loads((script_dir / 'argv.json').read_text(encoding='utf-8'))
@@ -102,9 +106,10 @@ def test_ocr_setting_is_passed_to_the_external_parser(stack, tmp_path):
     script_dir = tmp_path / 'ocr-off'
     script_dir.mkdir()
     script = fake_script(script_dir)
-    service.save(settings(enhanced_enabled=True, docling_executable=sys.executable,
-                          docling_prefix=[str(script)], ocr_enabled=False, version=1))
-    wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'fixture.pdf'))
+    service.save(settings(enhanced_enabled=True, version=1))
+    service.docling_config = lambda: DoclingConfig(executable=sys.executable, prefix_args=[str(script)], ocr=False,timeout_seconds=20)
+    document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'fixture.pdf'))
+    settle(library, library.reparse(document['id'], 'enhanced'))
     argv = json.loads((script_dir / 'argv.json').read_text(encoding='utf-8'))
     assert '--no-ocr' in argv and '--ocr' not in argv
 
@@ -127,8 +132,8 @@ def test_failed_enhanced_reparse_keeps_the_last_usable_version(stack, tmp_path):
     script_dir = tmp_path / 'failing'
     script_dir.mkdir()
     script = fake_script(script_dir, fail=True)
-    service.save(settings(enhanced_enabled=True, docling_executable=sys.executable,
-                          docling_prefix=[str(script)], version=1))
+    service.save(settings(enhanced_enabled=True, version=1))
+    service.docling_config = lambda: DoclingConfig(executable=sys.executable, prefix_args=[str(script)], timeout_seconds=20)
     task = settle(library, library.reparse(document['id'], 'enhanced'))
     assert task['status'] == 'failed' and task['error']['code'] == 'PARSER_FAILED'
     current = library.document(document['id'])

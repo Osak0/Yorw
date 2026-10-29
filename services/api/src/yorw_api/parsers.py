@@ -12,6 +12,7 @@ from .storage.database import Database
 
 class ParserSettingsInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    approved: bool = False
     enhanced_enabled: bool = Field(strict=True)
     docling_executable: str = Field(default='', max_length=1000)
     docling_prefix: list[str] = Field(default_factory=list, max_length=16)
@@ -31,6 +32,7 @@ class ReparseInput(BaseModel):
 class ParserService:
     def __init__(self, database: Database):
         self.db = database
+        self.approved = False
 
     def settings(self) -> dict:
         import json
@@ -49,6 +51,8 @@ class ParserService:
 
     def save(self, value: ParserSettingsInput) -> dict:
         import json
+        if value.docling_prefix not in ([], ['-m', 'docling']):
+            raise HTTPException(422, detail='INVALID_INPUT')
         with self.db.write() as conn:
             if self.settings()['version'] != value.version:
                 raise HTTPException(409, detail='CONFIG_CONFLICT')
@@ -58,18 +62,30 @@ class ParserService:
                 (int(value.enhanced_enabled), value.docling_executable.strip(),
                  json.dumps(value.docling_prefix, ensure_ascii=False), value.libreoffice_executable.strip(),
                  value.timeout_seconds, int(value.ocr_enabled), value.ocr_mode, value.ocr_engine))
+        self.approved = value.approved
         return self.settings()
 
     def docling_config(self) -> DoclingConfig:
         value = self.settings()
+        if not self.approved:
+            value = {**value, 'docling_executable': '', 'docling_prefix': [], 'libreoffice_executable': ''}
         return DoclingConfig(
             executable=value['docling_executable'], prefix_args=value['docling_prefix'],
-            libreoffice_executable=value['libreoffice_executable'] or None,
+            libreoffice_executable=value['libreoffice_executable'] if self.approved else '',
             timeout_seconds=value['timeout_seconds'], ocr=value['ocr_enabled'],
             ocr_mode=value['ocr_mode'], ocr_engine=value['ocr_engine'])
 
-    def registry(self):
-        return default_registry(self.docling_config())
+    def enhanced_available(self, format: str, automatic=False):
+        # Queuing an import must not execute a slow component probe under a DB lock.
+        # The worker validates actual capabilities against its captured config.
+        from pathlib import Path
+        config = self.docling_config()
+        return (self.approved and format in ('pdf', 'docx', 'doc', 'md')
+                and bool(config.executable) and Path(config.executable).is_file()
+                and (not automatic or self.settings()['enhanced_enabled']))
+
+    def registry(self, enhanced=False):
+        return default_registry(self.docling_config(), include_external=enhanced)
 
     def external_capability(self, format: str, parser: DoclingParser | None = None) -> dict | None:
         parser = parser or DoclingParser(self.docling_config())
@@ -81,14 +97,14 @@ class ParserService:
     def capability(self, processor: str, format: str) -> dict | None:
         if processor == 'enhanced':
             return self.external_capability(format)
-        capability = default_registry().capability(format)
+        capability = self.registry().capability(format)
         return {**capability.model_dump(mode='json'), 'processor': 'builtin'}
 
     def components(self, force=False, parser: DoclingParser | None = None) -> dict:
         parser = parser or DoclingParser(self.docling_config())
         available, version, detail = parser.detect(force=force)
         settings = self.settings()
-        soffice = find_soffice(settings['libreoffice_executable'] or None)
+        soffice = find_soffice(self.docling_config().libreoffice_executable)
         return {
             'docling': {'available': available, 'version': version, 'detail': detail},
             'libreoffice': {'available': bool(soffice), 'path': soffice or ''},
@@ -98,8 +114,12 @@ class ParserService:
         parser = DoclingParser(self.docling_config())
         if force:
             parser.detect(force=True)
-        builtins = default_registry().capabilities()
+        builtins = self.registry().capabilities()
         capabilities = [{**item.model_dump(mode='json'), 'processor': 'builtin'} for item in builtins]
+        if not force:
+            return {'settings': self.settings(), 'capabilities': capabilities, 'components': {
+                'docling': {'available': False, 'version': '', 'detail': '请授权并显式检测'},
+                'libreoffice': {'available': False, 'path': ''}}}
         for format in ('pdf', 'docx', 'doc', 'md'):
             external = self.external_capability(format, parser)
             if external:
@@ -118,11 +138,21 @@ def router(service: ParserService, library: Library):
 
     @routes.get('/v1/parsers')
     def status():
-        return service.status(force=True)
+        return service.status(force=False)
 
     @routes.put('/v1/parsers')
     def save(value: ParserSettingsInput):
         return service.save(value)
+
+    @routes.post('/v1/parsers/approve')
+    def approve(value: ParserSettingsInput):
+        current = service.settings()
+        if any(getattr(value, key) != current[key] for key in type(value).model_fields if key != 'approved'):
+            raise HTTPException(409, detail='CONFIG_CONFLICT')
+        if value.docling_prefix not in ([], ['-m', 'docling']):
+            raise HTTPException(422, detail='INVALID_INPUT')
+        service.approved = True
+        return {'approved': True}
 
     @routes.post('/v1/parsers/test')
     def test():

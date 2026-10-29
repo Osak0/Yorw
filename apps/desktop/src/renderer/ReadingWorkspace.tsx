@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { DocumentRecord } from '../shared/status'
+import type { DocumentRecord, ReaderTarget } from '../shared/status'
 import { PdfReader } from './PdfReader'
-import { StructuredReader } from './StructuredReader'
+import { OriginalReader } from './OriginalReader'
 import { NotesPanel } from './NotesPanel'
 import { notebookFor } from './notebook'
 import { ChatPanel } from './ChatPanel'
@@ -9,7 +9,7 @@ import { SearchPanel } from './SearchPanel'
 import { sessionStore, useDocumentSession, type SidebarMode } from './session-state'
 import './notes.css'
 
-interface ReaderJump { page?: number; block_id?: string; sequence: number }
+interface ReaderJump extends ReaderTarget { sequence: number }
 
 export function ReadingWorkspace({ document, onClose, onExpand, onResource, jump: externalJump, onJumpApplied }: {
   document: DocumentRecord
@@ -61,7 +61,7 @@ export function ReadingWorkspace({ document, onClose, onExpand, onResource, jump
   const pdf = (document.format ?? 'pdf') === 'pdf'
   return <div className="reading-workspace"><div className="reading-primary">{pdf
     ? <PdfReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump?.page ? { page: jump.page, sequence: jump.sequence } : undefined} onJumpApplied={externalJump ? onJumpApplied : undefined} />
-    : <StructuredReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump?.block_id ? { block_id: jump.block_id, sequence: jump.sequence } : undefined} onJumpApplied={externalJump ? onJumpApplied : undefined} />}</div>
+    : <OriginalReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump} onJumpApplied={externalJump ? onJumpApplied : undefined} />}</div>
     {open && (narrow ? <dialog className="notes-overlay" aria-label="文献笔记与检索" ref={modal} onCancel={event => { event.preventDefault(); closeNotes() }}>{contents}</dialog> : <>
       <div className="notes-resizer" role="separator" tabIndex={0} aria-label="调整笔记侧栏宽度" aria-orientation="vertical" aria-valuemin={320} aria-valuemax={480} aria-valuenow={width}
         onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault() }}
