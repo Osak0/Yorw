@@ -12,7 +12,7 @@ from .garden import Garden
 from .library import now
 from .notes import Notes
 from .providers import ProbeError
-from .source_status import source_status
+from .source_status import resolve_evidence, source_status
 
 MAX_DRAFT_CHARACTERS = 80000
 MAX_DRAFT_CONTINUATIONS = 1
@@ -133,14 +133,9 @@ class Suggestions:
             return {'items':items}
 
     def evidence(self,source):
-        chunk_id=source.get('chunk_id')
-        document_id=source.get('document_id')
-        quote=source.get('text',source.get('quote',''))
-        rows=self.library.rows('SELECT c.*,d.deleted_at,d.title,d.original_name,d.extraction_version AS live_version,d.extraction_status AS live_status FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND c.document_id=?',(chunk_id,document_id))
-        if not rows or rows[0]['deleted_at'] is not None or rows[0]['live_status'] not in ('ready','partial') or rows[0]['live_version']!=source.get('extraction_version') or not quote or quote not in rows[0]['text']:
-            raise HTTPException(409,detail='MATERIAL_CHANGED')
-        row=rows[0]
-        return {'document_id':document_id,'document_title':row['title'] or row['original_name'],'chunk_id':chunk_id,'physical_page':row['physical_page'],'quote':quote,'extraction_version':row['extraction_version']}
+        resolved=resolve_evidence(self.db,source)
+        if not resolved:raise HTTPException(409,detail='MATERIAL_CHANGED')
+        return resolved
 
     def snapshot(self,material):
         identity=str(material.id)
@@ -160,7 +155,7 @@ class Suggestions:
             if not note['document_available'] or str(note['version'])!=material.version or material.segment_ids:
                 raise HTTPException(409,detail='MATERIAL_CHANGED')
             excerpt=note['body_md']
-            evidence=[self.evidence(s) for s in note['sources'] if isinstance(s,dict) and s.get('chunk_id')]
+            evidence=[self.evidence(s) for s in note['sources'] if isinstance(s,dict) and (s.get('chunk_id') or s.get('block_id'))]
         else:
             row=self.library.rows("SELECT * FROM messages WHERE id=? AND status='completed'",(identity,))
             if not row or self.message_version(row[0])!=material.version or material.segment_ids:
@@ -291,7 +286,7 @@ class Suggestions:
                 from .retrieval import bounded_context
                 background = bounded_context(background, item['instruction'])
             question=json.dumps({'topic':title,'instruction':item['instruction'],'saved_body_for_context_only':background,'background_is_excerpt':background != item['base_body_md']},ensure_ascii=False)
-            sources=[{'text':s['excerpt'],'kind':s['kind'],'physical_page':s['evidence'][0]['physical_page'] if s['evidence'] else 0,'evidence':s['evidence']} for s in item['sources']]
+            sources=[{'text':s['excerpt'],'kind':s['kind'],'evidence':s['evidence']} for s in item['sources']]
             reasons = []
             for attempt in range(MAX_DRAFT_CONTINUATIONS + 1):
                 with self.db.write() as conn:

@@ -177,7 +177,7 @@ def test_publication_db_failure_cleans_only_owned_file(library):
 
 def test_encrypted_pdf_missing_cipher_dependency_is_reported_as_unsupported(library):
     from pypdf.errors import DependencyError
-    with patch('yorw_api.library.PdfReader', side_effect=DependencyError('cipher unavailable')):
+    with patch('yorw_api.parsing.pdf.PdfReader', side_effect=DependencyError('cipher unavailable')):
         document = wait(library, library.import_pdf(BytesIO(pdf_bytes()), 'encrypted-fixture.pdf'))
     assert document['extraction_status'] == 'unsupported'
     assert document['warning'] == 'ENCRYPTED_PDF'

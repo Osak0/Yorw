@@ -28,7 +28,11 @@ def document(service, pages):
     with service.db.write() as conn:
         conn.execute("INSERT INTO documents(id,sha256,original_name,extraction_status,page_count,created_at,updated_at) VALUES(?,?,?,'ready',?,'time','time')", (identity,identity,'Synthetic research fixture',len(pages)))
         for number,text in enumerate(pages,1):
-            conn.execute('INSERT INTO chunks VALUES(?,?,1,?,?,?)', (str(uuid4()),identity,number-1,number,text))
+            chunk_id = str(uuid4())
+            conn.execute('INSERT INTO chunks VALUES(?,?,1,?,?,?)', (chunk_id,identity,number-1,number,text))
+            conn.execute('INSERT INTO document_blocks(id,document_id,extraction_version,ordinal,block_type,text,section_path_json,physical_page,location_json,heading_level) '
+                         "VALUES(?,?,1,?,'page',?,'[]',?,?,NULL)",
+                         (chunk_id,identity,number-1,text,number,json.dumps({'kind':'page','physical_page':number,'block_ordinal':number-1})))
     return identity
 
 

@@ -1,9 +1,11 @@
-"""Workspace paths and managed files. No business-level PDF import yet."""
+"""Workspace paths and managed files. No business-level import policy here."""
 from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID, uuid4
 import os
 import shutil
+
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'md', 'txt'}
 
 
 class Workspace:
@@ -31,20 +33,24 @@ class Workspace:
         return not (path.exists() and resolved.name.casefold() == path.name.casefold()
                     and resolved.parent.samefile(path.parent))
 
-    def document_path(self, document_id: str) -> Path:
+    def document_path(self, document_id: str, extension: str = 'pdf') -> Path:
         if str(UUID(document_id)) != document_id:
             raise ValueError("Expected canonical document UUID")
-        path = self.root / "documents" / (document_id + ".pdf")
+        extension = extension.lower().lstrip('.')
+        if extension not in ALLOWED_EXTENSIONS:
+            raise ValueError("Unsupported document extension")
+        path = self.root / "documents" / f"{document_id}.{extension}"
         if self._redirects(path):
             raise ValueError("Managed path must not redirect")
         return path
 
-    def store_document(self, source: BinaryIO, document_id: str | None = None) -> str:
+    def store_document(self, source: BinaryIO, document_id: str | None = None,
+                       extension: str = 'pdf') -> str:
         """Stage then publish under a fresh ID; never replace an existing file."""
         document_id = document_id or str(uuid4())
-        self.document_path(document_id)
+        self.document_path(document_id, extension)
         staging = self.root / "tmp" / (document_id + ".part")
-        destination = self.document_path(document_id)
+        destination = self.document_path(document_id, extension)
         created = False
         try:
             with staging.open("xb") as output:
@@ -60,5 +66,5 @@ class Workspace:
             if created:
                 staging.unlink(missing_ok=True)
 
-    def remove_document(self, document_id: str) -> None:
-        self.document_path(document_id).unlink(missing_ok=True)
+    def remove_document(self, document_id: str, extension: str = 'pdf') -> None:
+        self.document_path(document_id, extension).unlink(missing_ok=True)

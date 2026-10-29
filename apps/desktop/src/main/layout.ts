@@ -5,7 +5,7 @@ import type { WorkspaceLayout, WorkspaceLayoutModule, WorkspaceLayoutSidebarMode
 
 const MODULES = new Set<WorkspaceLayoutModule>(['Storage', 'Garden', 'House'])
 const SIDEBAR_MODES = new Set<WorkspaceLayoutSidebarMode>(['notes', 'search', 'chat'])
-const TAB_KINDS = new Set(['document', 'topic', 'notes', 'search', 'chat', 'resource', 'metadata', 'ai', 'history', 'materials'])
+const TAB_KINDS = new Set(['settings', 'document', 'topic', 'notes', 'search', 'chat', 'resource', 'metadata', 'ai', 'history', 'materials'])
 const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat', 'resource', 'metadata'])
 const GARDEN_TAB_KINDS = new Set(['topic', 'ai', 'history', 'materials'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -27,7 +27,7 @@ function validate(value: unknown): WorkspaceLayout | null {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null
     const tab = item as Record<string, unknown>
     if (typeof tab.kind !== 'string' || !TAB_KINDS.has(tab.kind)) return null
-    if (typeof tab.id !== 'string' || !UUID.test(tab.id)) return null
+    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','retrieval','data'].includes(tab.id) : !UUID.test(tab.id))) return null
     if (tab.title !== undefined && (typeof tab.title !== 'string' || tab.title.length > MAX_TITLE)) return null
     const kind = tab.kind as WorkspaceLayoutTab['kind']
     const key = tabKey({ kind, id: tab.id })
@@ -38,7 +38,7 @@ function validate(value: unknown): WorkspaceLayout | null {
   if (input.activeKey !== null && typeof input.activeKey !== 'string') return null
   const activeKey = input.activeKey as string | null
   if (activeKey !== null && !keys.has(activeKey)) return null
-  if (activeKey !== null && (GARDEN_TAB_KINDS.has(activeKey.split(':')[0]) ? 'Garden' : 'Storage') !== input.module) return null
+  if (activeKey !== null && (activeKey.startsWith('settings:') ? 'House' : GARDEN_TAB_KINDS.has(activeKey.split(':')[0]) ? 'Garden' : 'Storage') !== input.module) return null
   if (input.storageKey !== null && typeof input.storageKey !== 'string') return null
   if (input.gardenKey !== null && typeof input.gardenKey !== 'string') return null
   const storageKey = input.storageKey as string | null

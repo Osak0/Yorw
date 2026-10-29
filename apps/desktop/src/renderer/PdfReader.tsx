@@ -10,7 +10,7 @@ GlobalWorkerOptions.workerSrc = workerUrl
 const asset = (directory: string) => new URL(`./pdf-assets/${directory}/`, window.location.href).href
 const errorMessage = (code: string) => ({ DOCUMENT_FILE_MISSING: '受管 PDF 副本不存在，请返回文献库重新导入。', DOCUMENT_NOT_FOUND: '文献已被移除，请返回文献库。', PAGE_COUNT_UNAVAILABLE: '当前后端尚无有效页数，阅读位置暂时无法保存。', INVALID_PAGE: '页码超出有效范围。' }[code] ?? '操作失败，请检查本地服务后重试。')
 
-export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSearch, searchOpen, onChat, chatOpen, onResource, jump, onJumpApplied }: {document: DocumentRecord; onClose(): void; onNotes(): void; notesOpen: boolean; onSearch(): void; searchOpen: boolean; onChat(): void; chatOpen:boolean; onResource(): void; jump?:{page:number;sequence:number}; onJumpApplied?(sequence:number):void}) {
+export function PdfReader({ previewId, highlight, document: record, onClose, onNotes, notesOpen, onSearch, searchOpen, onChat, chatOpen, onResource, jump, onJumpApplied }: {previewId?:string;highlight?:string;document: DocumentRecord; onClose(): void; onNotes(): void; notesOpen: boolean; onSearch(): void; searchOpen: boolean; onChat(): void; chatOpen:boolean; onResource(): void; jump?:{page:number;sequence:number}; onJumpApplied?(sequence:number):void}) {
   const session = useDocumentSession(record.id)
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [page, setPage] = useState(session.page ?? 1)
@@ -48,7 +48,7 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
     setError(''); setLoading(true); setPdf(null); setPainted(0); setSaveStatus('')
     async function load() {
       try {
-        const result = await window.yorw.documents.readPdf(record.id)
+        const result = await (previewId ? window.yorw.documents.preview({id:record.id,action:'read',preview:previewId}) : window.yorw.documents.readPdf(record.id))
         if (!active) return
         if (!result.ok) { setError(errorMessage(result.code)); setLoading(false); return }
         task = getDocument({ data: new Uint8Array(result.value), cMapUrl: asset('cmaps'), cMapPacked: true, standardFontDataUrl: asset('standard_fonts'), wasmUrl: asset('wasm'), iccUrl: asset('iccs'), enableXfa: false })
@@ -63,7 +63,7 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
     }
     void load()
     return () => { active = false; void task?.destroy() }
-  }, [record.id, retry])
+  }, [record.id, retry, previewId])
   useEffect(() => {
     if (!pdf) return
     let active = true
@@ -93,6 +93,20 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
         if (!active) return
         layer = new TextLayer({ textContentSource: content, container, viewport: view })
         await layer.render()
+        if (highlight) {
+          const needle = highlight.replace(/\s/g, '')
+          const spans = [...container.querySelectorAll('span')]
+          const joined = spans.map(span => (span.textContent ?? '').replace(/\s/g, '')).join('')
+          const index = joined.indexOf(needle)
+          if (index >= 0 && joined.indexOf(needle, index + 1) < 0) {
+            let offset = 0
+            for (const span of spans) {
+              const length = (span.textContent ?? '').replace(/\s/g, '').length
+              if (offset < index + needle.length && offset + length > index) span.style.backgroundColor = 'rgba(255,220,80,.55)'
+              offset += length
+            }
+          }
+        }
         if (!active) return
         setLoading(false); setPainted(page)
       } catch (error) {
@@ -101,9 +115,9 @@ export function PdfReader({ document: record, onClose, onNotes, notesOpen, onSea
     }
     void paint()
     return () => { active = false; render?.cancel(); layer?.cancel() }
-  }, [pdf, page, zoom, width])
+  }, [pdf, page, zoom, width, highlight])
   useEffect(() => {
-    if (!painted) return
+    if (!painted || previewId) return
     let active = true
     const sequence = ++saveSequence.current
     setSaveStatus('正在保存阅读位置…')

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import type { DocumentRecord, DocumentResource, DocumentSummary, Topic } from '../shared/status'
+import type { DocumentRecord, DocumentResource, DocumentSummary, ReaderTarget, Topic } from '../shared/status'
 import './resources.css'
 
 const explain = (code: string) => ({
@@ -38,7 +38,7 @@ export function DocumentResourceSections({ resource, topics, notice, busy, candi
   onOpenNotes(): void
   onOpenSearch(): void
   onOpenChat(): void
-  onNavigate(page: number): void
+  onNavigate(target: ReaderTarget): void
   onDeleteHistory(historyId: string): void
   onClearHistory(): void
   onRunSearch(query: string): void
@@ -106,8 +106,13 @@ export function DocumentResourceSections({ resource, topics, notice, busy, candi
       {resource.search_history.length ? <ul className="resource-history">{resource.search_history.map(entry => <li key={entry.id}>
         <div className="resource-history-head"><strong>{entry.query}</strong><small>{entry.created_at} · {historyStatus(entry.status)}{entry.error_code ? ` · ${entry.error_code}` : ''}</small>
           <button disabled={busy} onClick={() => onDeleteHistory(entry.id)}>删除</button><button disabled={busy} onClick={() => onRunSearch(entry.query)}>重新检索</button></div>
-        {!!entry.items.length && <ul>{entry.items.map(item => <li key={item.id}><p>{item.snippet}</p><small>{item.physical_page ? `第 ${item.physical_page} 页` : '无页码'}{!item.available && ' · 来源已失效'}</small>
-          <button disabled={!item.available || !item.physical_page} onClick={() => item.physical_page && onNavigate(item.physical_page)}>查看原文</button></li>)}</ul>}
+        {!!entry.items.length && <ul>{entry.items.map(item => {
+          const block = item.evidence.find(ref => ref.block_id)?.block_id
+          const target = item.physical_page ? { page: item.physical_page } : block ? { block_id: block } : undefined
+          const place = item.physical_page ? `第 ${item.physical_page} 页` : item.evidence[0]?.section_path?.length ? item.evidence[0].section_path.join(' / ') : '内容块'
+          return <li key={item.id}><p>{item.snippet}</p><small>{place}{!item.available && ' · 来源已失效'}</small>
+            <button disabled={!item.available || !target} onClick={() => target && onNavigate({...target,evidence:item.snippet,section_path:item.evidence[0]?.section_path})}>查看依据</button></li>
+        })}</ul>}
       </li>)}</ul> : <p className="resource-empty">还没有检索历史。</p>}
     </section>
     <section className="resource-section" aria-label="问答历史">
@@ -125,7 +130,7 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
   onOpenSearch(): void
   onOpenChat(): void
   onOpenTopic(topic: Topic): void
-  onNavigate(page: number): void
+  onNavigate(target: ReaderTarget): void
 }) {
   const [resource, setResource] = useState<DocumentResource | null>(null)
   const [topics, setTopics] = useState<Topic[]>([])

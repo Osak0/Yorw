@@ -1,3 +1,4 @@
+import {operationError} from './operation-errors'
 import { app, BrowserWindow, ipcMain, safeStorage, dialog } from 'electron'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -15,7 +16,10 @@ import { Workspace } from './workspace'
 import { Layout } from './layout'
 import { Intelligence } from './intelligence'
 import { Resources } from './resources'
+import { Parsers } from './parsers'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
+import {runBuiltinReadingSmoke} from './builtin-reading-smoke'
+import {runRectificationSmoke} from './rectification-smoke'
 import {runResourceRelationsSmoke,runWorkspaceChatSmoke,runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
@@ -47,7 +51,7 @@ else app.whenReady().then(async () => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !allowed(event.senderFrame.url)) throw new Error('IPC_DENIED')
     try { return { ok: true, value: await action(input) } }
     catch (error) {
-      const code = error instanceof Error && ['INVALID_CITATION','SUGGESTION_DECIDED','SUGGESTION_NOT_READY','INVALID_EXPORT_SELECTION','EXPORT_TOO_LARGE','EXPORT_UNAVAILABLE','EXPORT_DESTINATION_PROTECTED','SUGGESTION_NOT_FOUND', 'MATERIAL_CHANGED', 'MATERIAL_TOO_LARGE_OR_EMPTY', 'CONTEXT_TOO_LARGE', 'DUPLICATE_MATERIAL', 'SUGGESTION_RUNNING', 'REQUEST_CONFLICT', 'TOPIC_NOT_FOUND', 'TOPIC_CONFLICT', 'TOPIC_CYCLE', 'REVISION_CONFLICT', 'CONFIG_MISSING', 'CHAT_RUNNING', 'MESSAGE_NOT_FOUND', 'ANSWER_NOT_COMPLETE', 'TEXT_NOT_READY', 'CONFIG_CHANGED', 'KEY_MISSING', 'INDEX_TOO_LARGE', 'INDEX_SOURCE_CHANGED', 'NOTE_CONFLICT', 'NOTE_NOT_FOUND', 'DOCUMENT_FILE_MISSING', 'INVALID_PAGE', 'PAGE_COUNT_UNAVAILABLE', 'INVALID_INPUT', 'INVALID_LAYOUT', 'PDF_TOO_LARGE', 'NOT_PDF', 'DOCUMENT_CONFLICT', 'DOCUMENT_NOT_FOUND', 'TASK_RUNNING', 'FILE_CLEANUP_PENDING', 'INVALID_METADATA', 'RELATION_SELF', 'SEARCH_HISTORY_NOT_FOUND', 'SCOPE_CHANGED', 'NO_SCOPED_MATERIALS', 'INVALID_CONFIG', 'CONFIG_CONFLICT', 'KEY_REENTRY_REQUIRED', 'KEY_UNAVAILABLE', 'SECURE_STORAGE_UNAVAILABLE', 'BACKEND_NOT_READY'].includes(error.message) ? error.message : 'OPERATION_FAILED'
+      const code = operationError(error)
       return { ok: false, code }
     }
   }
@@ -85,6 +89,12 @@ else app.whenReady().then(async () => {
   const documents = new Documents(backend)
   const notes = new Notes(backend)
   const resources = new Resources(backend)
+  const parsers = new Parsers(backend, join(app.getPath('userData'),'approved-parsers.json'))
+  ipcMain.handle('parsers:choose', providerAction(input => parsers.choose(input)))
+  ipcMain.handle('parsers:status', providerAction(() => parsers.status()))
+  ipcMain.handle('parsers:save', providerAction(input => parsers.save(input)))
+  ipcMain.handle('parsers:test', providerAction(() => parsers.test()))
+  ipcMain.handle('documents:reparse', providerAction(input => documents.reparse(input)))
   ipcMain.handle('resources:resource', providerAction(input => resources.resource(input)))
   ipcMain.handle('resources:searchHistory', providerAction(input => resources.searchHistory(input)))
   ipcMain.handle('resources:deleteSearchHistory', providerAction(input => resources.deleteSearchHistory(input)))
@@ -112,7 +122,10 @@ else app.whenReady().then(async () => {
   ipcMain.handle('search:cancel', providerAction(input => search.cancel(input)))
   ipcMain.handle('notes:list', providerAction(input => notes.list(input)))
   ipcMain.handle('notes:save', providerAction(input => notes.save(input)))
+  ipcMain.handle('documents:preview', providerAction(input => documents.preview(input)))
+  ipcMain.handle('documents:openOriginal', providerAction(input => documents.openOriginal(input)))
   ipcMain.handle('documents:readPdf', providerAction(input => documents.readPdf(input)))
+  ipcMain.handle('documents:blocks', providerAction(input => documents.blocks(input)))
   ipcMain.handle('documents:savePosition', providerAction(input => documents.savePosition(input)))
   ipcMain.handle('documents:list', providerAction(() => documents.list()))
   ipcMain.handle('documents:importPdf', providerAction(() => documents.importPdf()))
@@ -135,6 +148,8 @@ else app.whenReady().then(async () => {
   if (devUrl) await window.loadURL(devUrl)
   else await window.loadFile(join(__dirname, '../renderer/index.html'))
   await backend.start()
+  // Restore only main-owned, unchanged component approvals; never launch a probe.
+  await parsers.status().catch(() => null)
   if (process.argv.includes('--yorw-smoke')) {
     const reportDir = process.argv.find(arg => arg.startsWith('--report-dir='))?.slice(13)
     if (!reportDir) { app.exit(2); return }
@@ -142,7 +157,7 @@ else app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 1100))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
-      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')&&!process.argv.includes('--tabs-citation-smoke')&&!process.argv.includes('--tabs-tool-resume-smoke')&&!process.argv.includes('--tabs-chat-smoke')) {
+      if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')&&!process.argv.includes('--tabs-citation-smoke')&&!process.argv.includes('--tabs-tool-resume-smoke')&&!process.argv.includes('--tabs-chat-smoke')&&!process.argv.includes('--multiformat-smoke')) {
         const fixture = await readFile(join(reportDir, 'fixture.pdf'))
         const upload = new FormData()
         upload.append('file', new Blob([fixture]), 'Reader fixture.pdf')
@@ -211,6 +226,16 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--builtin-reading-smoke')) {
+        const proof=await runBuiltinReadingSmoke(window,backend,providers,reportDir)
+        await writeFile(join(reportDir,'builtin-reading-smoke.json'),JSON.stringify(proof,null,2))
+      }
+      if(readerSmoke && (process.argv.includes('--rectification-smoke') || process.argv.includes('--multiformat-smoke'))) {
+        const soffice=process.argv.find(arg=>arg.startsWith('--preview-soffice='))?.slice(18)
+        if(!soffice)throw new Error('MISSING_SOFFICE')
+        const proof=await runRectificationSmoke(window,backend,reportDir,soffice)
+        await writeFile(join(reportDir,'rectification-smoke.json'),JSON.stringify(proof,null,2))
+      }
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
       await mkdir(reportDir, { recursive: true })
       await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, citationProof, chatProof, toolResumeProof, resourceProof, tabCloseProof, tabFaultProof }, null, 2))

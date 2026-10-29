@@ -140,13 +140,24 @@ class Retriever:
         for doc in documents:
             title = doc['title'] or doc['original_name']
             parts = []
-            for chunk in self.library.rows('SELECT * FROM chunks WHERE document_id=? AND extraction_version=? ORDER BY ordinal', (doc['id'], doc['extraction_version'])):
-                for start, end in spans(chunk['text']):
-                    text = chunk['text'][start:end]
-                    source = {'kind': 'document', 'source_object_id': doc['id'], 'source_version': str(doc['extraction_version']),
-                              'excerpt': text, 'evidence': [{'document_id': doc['id'], 'document_title': title,
-                              'chunk_id': chunk['id'], 'physical_page': chunk['physical_page'], 'quote': text,
-                              'extraction_version': chunk['extraction_version']}], 'start_offset': start, 'end_offset': end}
+            for block in self.library.rows(
+                    'SELECT * FROM document_blocks WHERE document_id=? AND extraction_version=? ORDER BY ordinal',
+                    (doc['id'], doc['extraction_version'])):
+                try:
+                    section_path = json.loads(block['section_path_json'])
+                except (TypeError, ValueError):
+                    section_path = []
+                for start, end in spans(block['text']):
+                    text = block['text'][start:end]
+                    evidence = {'document_id': doc['id'], 'document_title': title,
+                                'block_id': block['id'], 'block_type': block['block_type'],
+                                'section_path': section_path, 'physical_page': block['physical_page'],
+                                'quote': text, 'extraction_version': block['extraction_version'],
+                                'chunk_id': block['id'] if doc['format'] == 'pdf' else None}
+                    source = {'kind': 'document', 'source_object_id': doc['id'],
+                              'source_version': str(doc['extraction_version']),
+                              'excerpt': text, 'evidence': [evidence],
+                              'start_offset': start, 'end_offset': end}
                     parts.append((text, source))
             records.append(('document', doc['id'], f"{doc['extraction_version']}:{doc['version']}", title, parts))
         if document_id:
@@ -185,7 +196,7 @@ class Retriever:
         for ref in source['evidence']:
             if not isinstance(ref, dict):
                 continue
-            if ref.get('chunk_id'):
+            if ref.get('chunk_id') or ref.get('block_id'):
                 evidence.append({**ref, 'quote': ref.get('quote', ref.get('text', ''))})
             else:
                 evidence.extend(ref.get('evidence', []))

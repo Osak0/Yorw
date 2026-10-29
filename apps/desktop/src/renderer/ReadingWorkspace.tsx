@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { DocumentRecord } from '../shared/status'
+import type { DocumentRecord, ReaderTarget } from '../shared/status'
 import { PdfReader } from './PdfReader'
+import { OriginalReader } from './OriginalReader'
 import { NotesPanel } from './NotesPanel'
 import { notebookFor } from './notebook'
 import { ChatPanel } from './ChatPanel'
@@ -8,7 +9,7 @@ import { SearchPanel } from './SearchPanel'
 import { sessionStore, useDocumentSession, type SidebarMode } from './session-state'
 import './notes.css'
 
-interface ReaderJump { page: number; sequence: number }
+interface ReaderJump extends ReaderTarget { sequence: number }
 
 export function ReadingWorkspace({ document, onClose, onExpand, onResource, jump: externalJump, onJumpApplied }: {
   document: DocumentRecord
@@ -54,10 +55,13 @@ export function ReadingWorkspace({ document, onClose, onExpand, onResource, jump
       <div className="notes-heading-actions"><button title="展开为标签" onClick={() => onExpand(mode)}>展开为标签</button><button aria-label="关闭文献侧栏" onClick={closeNotes}>关闭</button></div>
     </div>
     {mode === 'notes' && <div className="workspace-panel-body notes-body"><NotesPanel documentId={document.id} /></div>}
-    {mode === 'search' && <div className="workspace-panel-body search-body"><SearchPanel documentId={document.id} onPage={page => { setLocalJump({ page, sequence: Date.now() }); if (narrow) closeNotes() }} /></div>}
-    {mode === 'chat' && <div className="workspace-panel-body chat-body"><ChatPanel documentId={document.id} onPage={page => { setLocalJump({ page, sequence: Date.now() }); if (narrow) closeNotes() }} onNote={id => { void notebookFor(document.id).importSaved(id).then(() => setMode('notes')).catch(() => window.alert('笔记已保存，加载失败；请重新打开文献。')) }} /></div>}
+    {mode === 'search' && <div className="workspace-panel-body search-body"><SearchPanel documentId={document.id} onNavigate={target => { setLocalJump({ ...target, sequence: Date.now() }); if (narrow) closeNotes() }} /></div>}
+    {mode === 'chat' && <div className="workspace-panel-body chat-body"><ChatPanel documentId={document.id} onNavigate={target => { setLocalJump({ ...target, sequence: Date.now() }); if (narrow) closeNotes() }} onNote={id => { void notebookFor(document.id).importSaved(id).then(() => setMode('notes')).catch(() => window.alert('笔记已保存，加载失败；请重新打开文献。')) }} /></div>}
   </>
-  return <div className="reading-workspace"><div className="reading-primary"><PdfReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump} onJumpApplied={externalJump ? onJumpApplied : undefined} /></div>
+  const pdf = (document.format ?? 'pdf') === 'pdf'
+  return <div className="reading-workspace"><div className="reading-primary">{pdf
+    ? <PdfReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump?.page ? { page: jump.page, sequence: jump.sequence } : undefined} onJumpApplied={externalJump ? onJumpApplied : undefined} />
+    : <OriginalReader document={document} onClose={onClose} onNotes={() => openPanel('notes')} notesOpen={open && mode === 'notes'} onSearch={() => openPanel('search')} searchOpen={open && mode === 'search'} onChat={() => openPanel('chat')} chatOpen={open && mode === 'chat'} onResource={onResource} jump={jump} onJumpApplied={externalJump ? onJumpApplied : undefined} />}</div>
     {open && (narrow ? <dialog className="notes-overlay" aria-label="文献笔记与检索" ref={modal} onCancel={event => { event.preventDefault(); closeNotes() }}>{contents}</dialog> : <>
       <div className="notes-resizer" role="separator" tabIndex={0} aria-label="调整笔记侧栏宽度" aria-orientation="vertical" aria-valuemin={320} aria-valuemax={480} aria-valuenow={width}
         onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault() }}

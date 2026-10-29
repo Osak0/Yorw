@@ -76,7 +76,7 @@ AI 草稿与正式正文分开存储。用户可以编辑、追加、替换或�
 | Electron 与 electron-vite | Windows 桌面窗口、构建、受限 IPC 和后端生命周期管理。 |
 | React 与 TypeScript 及 CSS | Storage Garden House 页面、工作标签、会话状态与界面交互。 |
 | FastAPI 与 Pydantic | 本地 API、输入校验和业务服务组织。 |
-| SQLite 与追加式 SQL 迁移 | 正文、元数据、来源、任务、修订及关系的持久化，目前 schema 15。 |
+| SQLite 与追加式 SQL 迁移 | 正文、元数据、来源、任务、修订及关系的持久化；main 发布版 schema 15，v0.3.0 阶段一开发分支 schema 18。 |
 | PDF.js 与 pypdf | PDF 阅读和物理页定位，以及后端逐页文字抽取。 |
 | FTS5 与 embedding 及 NumPy | 关键词和语义召回、结果融合与本地向量计算。 |
 | Chat Completions 兼容接口 | 候选筛选、流式问答和草稿生成，模型由用户配置。 |

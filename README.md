@@ -2,17 +2,17 @@
 
 **Your own research workplace.** Windows 本地优先的科研阅读与知识工作区，将文献、带来源问答、笔记和专题 Wiki 连接起来。
 
-- **Storage**：批量导入 PDF，以目录和搜索管理文献；阅读、检索、问答与笔记可在侧栏或独立标签中使用，资料页集中管理元数据和关系。
+- **Storage**：批量导入 PDF、DOCX、DOC、Markdown 和 TXT，以目录和搜索管理文献；阅读、检索、问答与笔记可在侧栏或独立标签中使用，资料页集中管理元数据和关系。
 - **Garden**：组织专题与关联文献，编辑 Wiki；AI 默认根据当前专题及子专题材料生成可编辑草稿，由用户追加或替换并保留修订。
 - **House**：配置聊天与检索服务、语义检索偏好，查看数据位置并导出已保存内容。
 
 ## 当前状态
 
-**当前代码为 v0.2.0，schema 15。** 原定 v0.2.1 的工作区改进（阶段 A/B/C，步骤 1–12）统一纳入 v0.2.0。2026年10月28日本地核对：A/B/C 均已合并 main，当前源码基线为 `78648a36dab3bfd9da6b1c901fd1f565d046ed55`（PR #17）。历史发布准备文档保留当时状态，不能据此判断当前线上安装包内容；本次没有重新核验远端发布资产。
+**v0.3.0 阶段一及整改已于 2026-10-29 由 osako review 通过。** 当前分支 `feature/multi-format-import`，应用版本仍为 0.2.0，SQLite schema 19；分支提交、推送和合并由用户完成，阶段二尚未开始。当前状态与集成顺序见 [PLAN](PLAN.md)，实施及验收见[阶段一记录](docs/history/v0.3.0-phase1.md)。
 
-变化与候选包状态见 [v0.2.0 发布说明](docs/releases/v0.2.0.md)，使用与能力边界见[使用指南](docs/user-guide.md)。真实模型逐题质量及独立干净 Windows 验收仍待补充。数据默认本地保存，云端模型会接收任务所需文本；内容导出不是完整备份。
+PDF、DOCX、Markdown、TXT 的基础处理无需另装解析组件；旧 DOC、OCR 与 Word 版式转换的可选组件配置见[使用指南](docs/user-guide.md#house内置能力与可选解析组件)。引用先展示依据，能够唯一匹配时辅助定位原文。
 
-下一版本的多格式导入、自动整理与 RAG 改进见 [PLAN_v0_3_0.md](PLAN_v0_3_0.md)。目前仅完成计划交接，尚未开发；当前可用能力仍以 v0.2.0 为准。
+本次核对的本地 main 和缓存 origin/main 均为 `746b1b5`（v0.2.0 / schema 15），未联网刷新。用户 review、Git 合并、应用发布和线上核验分别记录；真实模型质量与独立干净 Windows 验收仍未完成。内容导出不是完整备份。
 
 ## 10分钟极速复现指南
 
@@ -35,7 +35,7 @@
 
 ### 获取源码并启动
 
-在用于存放项目的目录执行，已有仓库可跳过 clone；不要在有未提交修改的个人工作区直接切换版本。下面固定到本稿核对的提交，避免 main 后续变化影响复现。
+下面是 v0.2.0 历史发布基线的固定复现命令，不包含本地阶段一的新功能。阶段一分支当前由用户准备推送/合并，合并后应在此补充实际合并提交作为新固定复现点，不预先编造哈希。已有本地阶段一仓库可跳过 clone/checkout，核对分支与工作区后从环境配置、依赖安装和 pnpm dev 继续。不要在有未提交修改的其他工作区直接切换版本。
 
 ```powershell
 git clone https://github.com/Osak0/Yorw.git
@@ -129,15 +129,16 @@ pnpm dev
 | --- | --- |
 | [PLAN](PLAN.md) | 当前集成状态、下一步和后置范围。 |
 | [v0.3.0 计划](PLAN_v0_3_0.md) | 已确认范围、14个实施步骤、阶段 review 与验收。 |
+| [v0.3.0 阶段一记录](docs/history/v0.3.0-phase1.md) | 阶段一提交、关键整改、review 结论与验证证据索引。 |
 | [产品约定](docs/product.md) | 三个空间、体验原则与视觉。 |
 | [架构](docs/architecture.md) | 现役模块、数据、来源和 AI 工作流。 |
 | [开发指南](docs/development.md) | 环境、回归、打包与复现。 |
 | [使用指南](docs/user-guide.md) | 使用方法、异常处理及能力边界。 |
-| [作品介绍源稿](docs/project-introduction.md) / [Word 版](docs/作品介绍.docx) | 项目详情、使用方式、亮点、AI 测试落地、图片与原创声明。 |
-| [技术文档源稿](docs/technical-report.md) / [Word 版](docs/技术文档.docx) | 意图控制、上下文与 Prompt、架构约束及可复现性论证。 |
+| [作品介绍源稿](docs/project-introduction.md) / [Word 版](docs/作品介绍.docx) | v0.2.0 作品材料底稿：项目、AI 测试、图片与原创声明；不作为 v0.3.0 现役说明。 |
+| [技术文档源稿](docs/technical-report.md) / [Word 版](docs/技术文档.docx) | v0.2.0 技术材料底稿：意图控制、Prompt、架构与可复现性；后续按真实对话导出更新。 |
 | [v0.2.0](docs/releases/v0.2.0.md) / [v0.1.0](docs/releases/v0.1.0.md) | 版本变化和发布状态。 |
 | [设计历史](docs/history/design.md) / [v0.1.0 开发记录](docs/history/v0.1.0.md) | 原始设计与 MVP 实施证据。 |
 | [v0.2.0 AI 改进](docs/history/v0.2.0.md) / [工作区改进](docs/history/v0.2.0-workspace.md) | AI 流程和原 v0.2.1 计划、A/B/C 实施记录。 |
-| [v0.2.0 发布准备](docs/history/v0.2.0-release-preparation.md) | 本轮整理、候选制品与验收证据。 |
+| [v0.2.0 发布准备](docs/history/v0.2.0-release-preparation.md) | v0.2.0 历史候选制品、发布准备与验收证据。 |
 
 后续 Agent 从 [AGENTS](AGENTS.md) 进入。历史是发生时的证据，无需全部作为当前开发指令加载。自动化测试、必要夹具和复现工具继续维护；测试 PDF、数据库、报告和制品在忽略目录中按需生成。
