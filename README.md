@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**阶段一已 review 通过并合并到 main（PR #18 / ed65e79 / schema 19）。** 当前阶段二分支 `feature/document-enrichment-rag` 增加可关闭的 AI 文献整理、已有专题建议和试用元数据辅助检索，schema 20；应用版本仍为 0.2.0，已完成实现与本地验证，等待用户 review，不代表公开发布。状态见 [PLAN](PLAN.md)，证据见[阶段二记录](docs/history/v0.3.0-phase2.md)。
+**阶段一、阶段二均已 review 通过并合并到 main（PR #19 / 639509b / schema 20）。** 应用版本仍为 0.2.0，不代表新的公开发布。v0.3.0 继续进行[文献管理与工作区体验改进](PLAN_v0_3_0.md)，当前完成整改阶段一，等待 review。状态见 [PLAN](PLAN.md)，已完成能力与验证边界见[阶段二记录](docs/history/v0.3.0-phase2.md)。
 
 PDF、DOCX、Markdown、TXT 基础处理无需外装解析组件；旧 DOC、OCR 和 Word 版式转换的可选配置见[使用指南](docs/user-guide.md#house内置能力与可选解析组件)。自动整理需用户授权和聊天模型，不阻塞阅读；元数据辅助检索默认关闭，仍返回原文依据。真实模型质量和独立干净 Windows 验收后置。内容导出不是完整备份。
 
@@ -33,12 +33,12 @@ PDF、DOCX、Markdown、TXT 基础处理无需外装解析组件；旧 DOC、OCR
 
 ### 获取源码并启动
 
-下面固定到已合并、review 通过的阶段一提交，包含多格式基础阅读；尚未合并的阶段二需在当前开发分支体验。已有本地开发仓库可跳过 clone/checkout，先核对分支和工作区。不要在有未提交修改时直接切换版本。
+下面固定到已合并、review 通过的阶段二提交，包含多格式基础阅读与可选 AI 文献整理。已有本地开发仓库可跳过 clone/checkout，先核对分支和工作区。不要在有未提交修改时直接切换版本。
 
 ```powershell
 git clone https://github.com/Osak0/Yorw.git
 Set-Location Yorw
-git checkout ed65e7956714329beb1637be89a45107c54fb58c
+git checkout 639509bc61e53051889352c8a1c3745aeaad70c1
 git rev-parse HEAD
 node --version
 pnpm --version

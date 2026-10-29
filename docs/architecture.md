@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-适用阶段二分支 `feature/document-enrichment-rag` / schema 20，基础来自已合并阶段一 ed65e79 / schema 19；应用版本仍为 0.2.0。环境与命令见[开发指南](development.md)，当前证据见[阶段二记录](history/v0.3.0-phase2.md)。
+适用已合并 main（PR #19 / 639509b）/ schema 20；应用版本仍为 0.2.0。环境与命令见[开发指南](development.md)，当前证据见[阶段二记录](history/v0.3.0-phase2.md)。
 
 ## 模块与通信
 

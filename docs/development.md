@@ -95,9 +95,9 @@ services/api/.venv/Scripts/python.exe scripts/verify-docling.py `
 
 CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和命令。历史版本名 v0.2.1 仅用于说明原计划与旧验证现场，当前统一发布版本为 v0.2.0。
 
-## v0.2.0 发布准备
+## 候选制品与发布流程
 
-历史 v0.2.0 发布候选为 schema 15；阶段一已合并 main（ed65e79 / schema 19），本轮阶段二分支 feature/document-enrichment-rag 为 schema 20，应用版本仍为 0.2.0。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
+历史 v0.2.0 发布候选为 schema 15；阶段一已合并 main（ed65e79 / schema 19），当前 main 已合并阶段二（PR #19 / 639509b），schema 20，应用版本仍为 0.2.0。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -112,7 +112,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 `--rectification-smoke`（兼容旧 `--builtin-reading-smoke` 名称）需同时使用 `--yorw-smoke --reader-smoke --report-dir=<绝对目录> --preview-soffice="<用户安装的 soffice.exe>"`。目录内准备自编写 `fixture.pdf/docx/doc/md/txt`。脚本在隔离工作区操作 House 设置、转换预览与原件阅读，输出 `rectification-smoke.json`、`word-preview.png` 和 `house-home.png`。原生文件选择与确认由测试桩提供；授权边界另由 main 单元测试验证，不能声称已自动操作真实原生对话框。
 
-源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。当前阶段二开发分支 schema 20，应用版本仍为 0.2.0。
+源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。当前 main schema 20，应用版本仍为 0.2.0。
 
 
 `--builtin-reading-smoke` 使用 `--yorw-smoke --reader-smoke --report-dir=<新绝对目录>`，不传解析组件路径、不设置解析器配置。目录准备自编写 fixture.pdf/docx/md/txt。它验证内置 DOCX 表格/只读展示、缺失可选组件提示、关键词检索依据与原件标记、问答依据；问答使用进程内自有 loopback 模型协议夹具，不代表真实模型质量。输出 builtin-reading-smoke.json 与 builtin-reading.png。可选 LibreOffice 的 --rectification-smoke 另行执行，Word 需主动点击可选版式预览。
@@ -135,6 +135,6 @@ services/api/.venv/Scripts/python.exe scripts/evaluate-retrieval.py --mode metad
 
 阶段二窗口烟测：`Yorw.exe --yorw-smoke --reader-smoke --enrichment-smoke --report-dir=<新绝对目录>`。目录先准备 make-mvp-fixtures 生成的 fixture.pdf；程序使用隔离 profile 与自有 loopback 模型夹具，实际操作 House 授权开关、导入、AI 资料、确认专题、原文依据，并验证元数据搜索输出原文；生成 enrichment-smoke.json/enrichment.png。旧无外部组件阅读烟测仍通过 --builtin-reading-smoke 单独执行。
 
-阶段二代码、冻结后端、窗口及评估证据集中在[阶段二记录](history/v0.3.0-phase2.md)。完成后等待用户 review，不自动提交/推送/合并/发布。独立干净 Windows、真实模型质量、NSIS 与签名继续分别验收。
+阶段二代码、冻结后端、窗口及评估证据集中在[阶段二记录](history/v0.3.0-phase2.md)。阶段二已 review 并合并；后续改动按 PLAN 验收，不自动提交/推送/合并/发布。独立干净 Windows、真实模型质量、NSIS 与签名继续分别验收。
 
 DOCX 整理/布局回归：先用 `scripts/make-mvp-fixtures.py .cache/<新目录> --enrichment-docx` 生成自编写中文活动决算文件，再运行上述 --enrichment-smoke 命令并增加 --enrichment-docx-smoke。报告同时断言空值/文字列表响应只调用一次模型即可处理，资料页只有一个滚动区，AI 卡片随整页滚动，1280×720/1024×768 无横向溢出，并保存资料页截图。

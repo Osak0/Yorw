@@ -1,5 +1,8 @@
 # 知栖 Yorw 作品介绍
 
+> 本文为 v0.2.0 作品材料快照，正文与配套 Word 保留当时范围和测试数字；不作为当前开发状态。v0.3.0 当前能力见[使用指南](user-guide.md)，状态见[PLAN](../PLAN.md)，整理及后续改进见[总计划](../PLAN_v0_3_0.md)。
+
+
 作者 osako　版本 v0.2.0　更新日期 2026年10月28日
 
 ## 项目概述
@@ -76,7 +79,7 @@ AI 草稿与正式正文分开存储。用户可以编辑、追加、替换或�
 | Electron 与 electron-vite | Windows 桌面窗口、构建、受限 IPC 和后端生命周期管理。 |
 | React 与 TypeScript 及 CSS | Storage Garden House 页面、工作标签、会话状态与界面交互。 |
 | FastAPI 与 Pydantic | 本地 API、输入校验和业务服务组织。 |
-| SQLite 与追加式 SQL 迁移 | 正文、元数据、来源、任务、修订及关系的持久化；main 发布版 schema 15，v0.3.0 阶段一开发分支 schema 18。 |
+| SQLite 与追加式 SQL 迁移 | 正文、元数据、来源、任务、修订及关系的持久化；当时 main 发布版 schema 15、阶段一开发分支 schema 18（历史快照）。 |
 | PDF.js 与 pypdf | PDF 阅读和物理页定位，以及后端逐页文字抽取。 |
 | FTS5 与 embedding 及 NumPy | 关键词和语义召回、结果融合与本地向量计算。 |
 | Chat Completions 兼容接口 | 候选筛选、流式问答和草稿生成，模型由用户配置。 |

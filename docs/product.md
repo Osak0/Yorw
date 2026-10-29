@@ -6,7 +6,7 @@ Yorw（Your own research workplace，知栖）面向持续阅读一个研究方�
 
 | 入口 | 职责 |
 | --- | --- |
-| Storage | 管理和阅读 PDF，检索当前原文，进行有来源的问答，保存 Markdown 笔记。 |
+| Storage | 管理和阅读 PDF、DOCX、DOC、Markdown、TXT，检索当前原文，进行有来源的问答，保存 Markdown 笔记。 |
 | Garden | 组织专题目录，编辑 Wiki，从工作区材料生成独立草稿，由用户追加或替换正文并保留修订。 |
 | House | 配置聊天与检索服务、检索偏好，查看数据位置并导出已保存内容。 |
 
