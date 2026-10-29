@@ -118,7 +118,7 @@ def test_one_submit_search_followup_draft_append_export_and_restart(frozen, tmp_
             doc = upload(pdf_bytes())
             for kind in ('chat', 'embedding'):
                 request('/v1/providers/' + kind, 'PUT', {'base_url': url, 'model': 'fixture', 'version': 0})
-            assert request('/v1/ai/preferences') == {'semantic_enabled': True, 'version': 1}
+            assert request('/v1/ai/preferences') == {'semantic_enabled': True, 'metadata_enabled': False, 'version': 1}
             search, _ = submit(request, 'search', doc, 'English evidence')
             assert search['result']['items'][0]['document_id'] == doc
             assert len(search['result']['items'][0]['snippet']) <= 220

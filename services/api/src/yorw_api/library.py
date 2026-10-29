@@ -420,6 +420,9 @@ class Library:
                     sources[changed] = 'user'
             if tags is not None:
                 sources['tags'] = 'user'
+                retained = {tag.casefold() for tag in tags}
+                conn.executemany('INSERT OR IGNORE INTO enrichment_decisions VALUES(?,?,?)',
+                    [(identity,doc['extraction_version'],'tag:'+tag.casefold()) for tag in doc['tags'] if tag.casefold() not in retained])
             if summary_changed:
                 sources['summary'] = 'user'
             conn.execute(

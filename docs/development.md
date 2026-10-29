@@ -69,7 +69,7 @@ services/api/.venv/Scripts/python.exe scripts/verify-docling.py `
 
 - `make-format-fixtures.py` 生成 DOCX、DOC、MD、TXT、文字 PDF 和扫描 PDF；目标目录必须不存在。
 - 扫描 PDF 使用 Docling RapidOCR 时需要 `onnxruntime`；本机网络需设置 `HF_ENDPOINT=https://hf-mirror.com` 和 `HF_HUB_DISABLE_XET=1`，并在启动 Yorw 前保留这些环境变量。
-- 打包窗口多格式烟测：`Yorw.exe --yorw-smoke --reader-smoke --multiformat-smoke --report-dir=<新绝对目录>`；报告目录需含 `fixture.docx`、`fixture.md`、`fixture.txt`。
+- 打包窗口多格式烟测：`Yorw.exe --yorw-smoke --reader-smoke --builtin-reading-smoke --report-dir=<新绝对目录>`；报告目录需含 `fixture.docx`、`fixture.md`、`fixture.txt`。
 - 随包冻结后端外部解析：`services/api/.venv/Scripts/python.exe scripts/verify-packaged-parsers.py --backend release/desktop/win-unpacked/resources/backend/yorw-api/yorw-api.exe --samples <样例目录> --report <新报告>.json --workspace <新工作区> --docling <docling.exe> --libreoffice <soffice.exe>`。
 
 ## 如何解读结果
@@ -97,7 +97,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## v0.2.0 发布准备
 
-当前 main 发布版本号为 0.2.0，SQLite schema 15；开发分支 `feature/multi-format-import` 的应用版本号仍为 0.2.0，schema 19。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
+历史 v0.2.0 发布候选为 schema 15；阶段一已合并 main（ed65e79 / schema 19），本轮阶段二分支 feature/document-enrichment-rag 为 schema 20，应用版本仍为 0.2.0。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -110,21 +110,31 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ### 阶段一整改验收
 
-`--rectification-smoke`（兼容旧 `--multiformat-smoke` 名称）需同时使用 `--yorw-smoke --reader-smoke --report-dir=<绝对目录> --preview-soffice="<用户安装的 soffice.exe>"`。目录内准备自编写 `fixture.pdf/docx/doc/md/txt`。脚本在隔离工作区操作 House 设置、转换预览与原件阅读，输出 `rectification-smoke.json`、`word-preview.png` 和 `house-home.png`。原生文件选择与确认由测试桩提供；授权边界另由 main 单元测试验证，不能声称已自动操作真实原生对话框。
+`--rectification-smoke`（兼容旧 `--builtin-reading-smoke` 名称）需同时使用 `--yorw-smoke --reader-smoke --report-dir=<绝对目录> --preview-soffice="<用户安装的 soffice.exe>"`。目录内准备自编写 `fixture.pdf/docx/doc/md/txt`。脚本在隔离工作区操作 House 设置、转换预览与原件阅读，输出 `rectification-smoke.json`、`word-preview.png` 和 `house-home.png`。原生文件选择与确认由测试桩提供；授权边界另由 main 单元测试验证，不能声称已自动操作真实原生对话框。
 
-源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。当前开发分支 schema 19，应用版本仍为 0.2.0。
+源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。当前阶段二开发分支 schema 20，应用版本仍为 0.2.0。
 
 
 `--builtin-reading-smoke` 使用 `--yorw-smoke --reader-smoke --report-dir=<新绝对目录>`，不传解析组件路径、不设置解析器配置。目录准备自编写 fixture.pdf/docx/md/txt。它验证内置 DOCX 表格/只读展示、缺失可选组件提示、关键词检索依据与原件标记、问答依据；问答使用进程内自有 loopback 模型协议夹具，不代表真实模型质量。输出 builtin-reading-smoke.json 与 builtin-reading.png。可选 LibreOffice 的 --rectification-smoke 另行执行，Word 需主动点击可选版式预览。
 
 
-## 阶段一 review 后的集成与阶段二入口
+## 阶段二复现与验收
 
-2026-10-29 阶段一及整改已由用户 review 通过。本轮只有文档整理；提交、推送与合并由用户完成，不等于应用公开发布。
+阶段一已通过 PR #18 合并 ed65e79。阶段二从干净 main 创建 feature/document-enrichment-rag，追加 020，锁文件不变。源码和冻结后端分别测试；不要把模型夹具当成真实论文质量。
 
-1. 用户检查暂存与未暂存差异，将需集成的源码、测试、迁移和本次文档一起纳入分支；不要只推送此前 9664fd6 而遗漏整改。`.cache/`、`release/`、用户数据和密钥不纳入 Git。
-2. 推送分支并完成合并后，记录实际合并提交。新 Agent 先核对分支、工作区、锁文件、schema 19 与用户授权；不要擅自切换有本地修改的检出目录。
-3. 基于合并后的源码按本文运行适当回归；源码、依赖或包内帮助改变时重新构建候选。README 的历史固定复现仍是 v0.2.0，待合并后替换为实际新基线。
-4. 再开始 PLAN_v0_3_0.md 的步骤 8：先冻结输入、标签和 Recall@5/MRR@5 等评估基线，再做自动整理及检索改进；新迁移从 020 追加。阶段二交付后仍需用户 review。
+```powershell
+# 每个输出文件用新名称；报告以独占写保护。
+services/api/.venv/Scripts/python.exe scripts/evaluate-retrieval.py --mode baseline --report .cache/<新基线>.json
+services/api/.venv/Scripts/python.exe scripts/evaluate-retrieval.py --mode keywords --report .cache/<新关键词>.json
+services/api/.venv/Scripts/python.exe scripts/evaluate-retrieval.py --mode metadata --report .cache/<新元数据>.json
+```
 
-现有候选是本地完整目录，未重建 NSIS、签名或核验线上资产；这些不属于本次分支整理。
+固定语料 services/api/tests/fixtures/retrieval_phase2.json 是 CC0 自编写数据，20 份文档 / 65 问题，PDF/DOCX/MD/TXT 均经过真实内置解析。报告含语料 SHA256、全部失败、正例 Recall@5/MRR@5、元数据子集、范围和证据违规、无答案误召回、延迟及调用量。metadata 模式使用固定人工标注的元数据，不使用真实模型，因此不能证明生成质量或语义模型效果；embedding/chat 关闭，模型调用为 0。评估不写入用户工作区，临时库位于 .cache 并在结束后清理。
+
+构建命令沿用上文。若当前进程策略阻止脚本，可仅对构建进程使用 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-backend.ps1`，不修改系统策略。打包采用新的 `release/<本轮候选>` 完整目录，不覆盖阶段一唯一验证制品。
+
+阶段二窗口烟测：`Yorw.exe --yorw-smoke --reader-smoke --enrichment-smoke --report-dir=<新绝对目录>`。目录先准备 make-mvp-fixtures 生成的 fixture.pdf；程序使用隔离 profile 与自有 loopback 模型夹具，实际操作 House 授权开关、导入、AI 资料、确认专题、原文依据，并验证元数据搜索输出原文；生成 enrichment-smoke.json/enrichment.png。旧无外部组件阅读烟测仍通过 --builtin-reading-smoke 单独执行。
+
+阶段二代码、冻结后端、窗口及评估证据集中在[阶段二记录](history/v0.3.0-phase2.md)。完成后等待用户 review，不自动提交/推送/合并/发布。独立干净 Windows、真实模型质量、NSIS 与签名继续分别验收。
+
+DOCX 整理/布局回归：先用 `scripts/make-mvp-fixtures.py .cache/<新目录> --enrichment-docx` 生成自编写中文活动决算文件，再运行上述 --enrichment-smoke 命令并增加 --enrichment-docx-smoke。报告同时断言空值/文字列表响应只调用一次模型即可处理，资料页只有一个滚动区，AI 卡片随整页滚动，1280×720/1024×768 无横向溢出，并保存资料页截图。

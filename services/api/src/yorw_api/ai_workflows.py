@@ -17,6 +17,7 @@ from .search_history import SearchHistory
 class Preferences(BaseModel):
     model_config = ConfigDict(extra='forbid')
     semantic_enabled: bool = Field(strict=True)
+    metadata_enabled: bool = Field(default=False,strict=True)
     version: int = Field(ge=1, strict=True)
 
 
@@ -44,14 +45,14 @@ class Workflows:
             conn.execute("UPDATE search_history SET status='interrupted',error_code='INTERRUPTED',updated_at=? WHERE status IN ('queued','running')", (timestamp,))
 
     def preferences(self):
-        row = self.library.rows('SELECT semantic_enabled,version FROM ai_preferences WHERE singleton=1')[0]
-        return {**row, 'semantic_enabled': bool(row['semantic_enabled'])}
+        row = self.library.rows('SELECT semantic_enabled,metadata_enabled,version FROM ai_preferences WHERE singleton=1')[0]
+        return {**row, 'semantic_enabled': bool(row['semantic_enabled']), 'metadata_enabled': bool(row['metadata_enabled'])}
 
     def save_preferences(self, value):
         with self.db.write() as conn:
             if self.preferences()['version'] != value.version:
                 raise HTTPException(409, detail='CONFIG_CONFLICT')
-            conn.execute('UPDATE ai_preferences SET semantic_enabled=?,version=version+1 WHERE singleton=1', (int(value.semantic_enabled),))
+            conn.execute('UPDATE ai_preferences SET semantic_enabled=?,metadata_enabled=?,version=version+1 WHERE singleton=1', (int(value.semantic_enabled),int(value.metadata_enabled)))
             return self.preferences()
 
     def configs(self):
@@ -169,7 +170,7 @@ class Workflows:
             if value.kind == 'draft':
                 topic = self.suggestions.garden.get(target)
                 query = (topic['topic']['title'] + ' ' + value.text)[:1000]
-            found = self.retriever.retrieve(query, document_id=target if value.kind != 'draft' else None,
+            found = self.retriever.retrieve(query, strategy='metadata' if prefs['metadata_enabled'] else 'baseline', document_id=target if value.kind != 'draft' else None,
                 exclude_topic=target if value.kind == 'draft' else None, limit={'search': 5, 'chat': 8, 'draft': 12}[value.kind],
                 scope=draft_scope if value.kind == 'draft' else None,
                 semantic=prefs['semantic_enabled'], embedding_config=configs['embedding'], embedding_key=embedding_key,

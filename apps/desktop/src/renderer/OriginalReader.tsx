@@ -66,6 +66,7 @@ export function OriginalReader(props:Props){
   void (async()=>{
    const result=jump.block_id?await window.yorw.documents.blocks(record.id):null
    if(!alive)return
+   if(loading){setNotice('已展示依据；正在读取原件以辅助定位。');return}
    const block=result?.ok?result.value.items.find(item=>item.id===jump.block_id):undefined
    const evidence=block?.text||jump.evidence||''
    setBasis(evidence);setPlace(block?.section_path.join(' / ')||jump.section_path?.join(' / ')||'文献内容')
@@ -86,7 +87,7 @@ export function OriginalReader(props:Props){
    props.onJumpApplied?.(jump.sequence)
   })().catch(()=>{if(alive){setNotice('已展示保存的依据；原件定位暂不可用。');props.onJumpApplied?.(jump.sequence)}})
   return()=>{alive=false}
- },[jump?.sequence,original,body,conversion,preview?.status,record.id])
+ },[jump?.sequence,original,body,conversion,preview?.status,record.id,loading])
  async function openOriginal(){try{const result=await window.yorw.documents.openOriginal(record.id);if(!result.ok)setNotice('系统应用未能打开原件，请检查文件关联。')}catch{setNotice('系统应用未能打开原件，请检查文件关联。')}}
  const index=basis?body.indexOf(basis):-1
  return <div className="original-reader">

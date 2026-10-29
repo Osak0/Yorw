@@ -1,3 +1,5 @@
+import {runEnrichmentSmoke} from './enrichment-smoke'
+import {Enrichment} from './enrichment'
 import {operationError} from './operation-errors'
 import { app, BrowserWindow, ipcMain, safeStorage, dialog } from 'electron'
 import { join, resolve } from 'node:path'
@@ -57,6 +59,16 @@ else app.whenReady().then(async () => {
   }
   const suggestions = new Suggestions(backend,providers)
   const intelligence = new Intelligence(backend,providers)
+  const enrichment = new Enrichment(backend,providers)
+  const enrichmentTimer = setInterval(()=>void enrichment.scan(),3000)
+  enrichmentTimer.unref()
+  app.once('will-quit',()=>clearInterval(enrichmentTimer))
+  ipcMain.handle('enrichment:settings',providerAction(()=>enrichment.settings()))
+  ipcMain.handle('enrichment:save',providerAction(input=>enrichment.save(input)))
+  ipcMain.handle('enrichment:view',providerAction(input=>enrichment.view(input)))
+  ipcMain.handle('enrichment:generate',providerAction(input=>enrichment.generate(input)))
+  ipcMain.handle('enrichment:cancel',providerAction(input=>enrichment.cancel(input)))
+  ipcMain.handle('enrichment:decide',providerAction(input=>enrichment.decide(input)))
   const layout = new Layout(readerSmoke ? smokeReport! : app.getPath('userData'))
   ipcMain.handle('layout:load',providerAction(()=>layout.load()))
   ipcMain.handle('layout:save',providerAction(input=>layout.save(input)))
@@ -226,6 +238,10 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--enrichment-smoke')) {
+        const proof=await runEnrichmentSmoke(window,backend,providers,reportDir)
+        await writeFile(join(reportDir,'enrichment-smoke.json'),JSON.stringify(proof,null,2))
+      }
       if(readerSmoke && process.argv.includes('--builtin-reading-smoke')) {
         const proof=await runBuiltinReadingSmoke(window,backend,providers,reportDir)
         await writeFile(join(reportDir,'builtin-reading-smoke.json'),JSON.stringify(proof,null,2))

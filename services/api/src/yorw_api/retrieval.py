@@ -16,6 +16,8 @@ from .embedding import embed
 from .providers import ProbeError
 from .search import tokens, fingerprint
 from .source_status import source_status
+from .retrieval_adapters import SQLiteLexicalRetriever, SQLiteNumpyVectorIndex
+from .metadata_retrieval import keyword_terms, metadata_ranking
 
 SEGMENT_VERSION = 'paragraph-sentence-800-v2'
 MAX_SEGMENT = 800
@@ -111,12 +113,14 @@ def json_completion(config, key, instruction, value, max_tokens=2048):
         raise ProbeError('INVALID_RESPONSE') from None
 
 
-class Retriever:
+class EvidenceRetriever:
     def __init__(self, suggestions):
         self.suggestions = suggestions
         self.db, self.library = suggestions.db, suggestions.library
         # Concurrent consumers share the same build/cache instead of paying twice.
         self.index_lock = Lock()
+        self.lexical = SQLiteLexicalRetriever(self.library)
+        self.vector_index = SQLiteNumpyVectorIndex(self.library)
 
     def available(self, source):
         with self.db.lock:
@@ -246,7 +250,7 @@ class Retriever:
         return [row for row in rows if self.available(row['source'])['available']]
 
     def retrieve(self, query, *, document_id=None, exclude_topic=None, limit=5, scope=None,
-                 semantic=True, embedding_config=None, embedding_key='', chat_config=None, chat_key='', check=lambda phase: None):
+                 strategy='baseline', semantic=True, embedding_config=None, embedding_key='', chat_config=None, chat_key='', check=lambda phase: None):
         while not self.index_lock.acquire(timeout=.1):
             check('PREPARING')
         try:
@@ -258,8 +262,7 @@ class Retriever:
                 if not reason and rows:
                     try:
                         config_hash = fingerprint(embedding_config)
-                        for row in self.library.rows('SELECT * FROM knowledge_vectors WHERE config_hash=?', (config_hash,)):
-                            vectors[row['segment_id']] = np.frombuffer(row['vector'], dtype='<f4')
+                        vectors = self.vector_index.load(config_hash, {row['id'] for row in rows})
                         missing = [row for row in rows if row['id'] not in vectors]
                         dimension = len(next(iter(vectors.values()))) if vectors else None
                         for offset in range(0, len(missing), 16):
@@ -272,7 +275,7 @@ class Retriever:
                                 for row, vector in zip(batch, embedded):
                                     if not self.available(row['source'])['available']:
                                         raise ProbeError('MATERIAL_CHANGED')
-                                    conn.execute('INSERT OR REPLACE INTO knowledge_vectors VALUES(?,?,?,?)', (row['id'], config_hash, len(vector), vector.tobytes()))
+                                    self.vector_index.write(conn, row['id'], config_hash, vector)
                                     vectors[row['id']] = vector
                     except ProbeError as error:
                         if error.code in ('CANCELLED', 'CONFIG_CHANGED', 'INTERRUPTED', 'MATERIAL_CHANGED'):
@@ -283,10 +286,8 @@ class Retriever:
             self.index_lock.release()
         check('SEARCHING')
         by_id = {row['id']: row for row in rows}
-        words = query_terms(query)
-        expression = ' OR '.join('"' + word + '"' for word in words)
-        lexical = self.library.rows('SELECT id,bm25(knowledge_fts) AS score FROM knowledge_fts WHERE knowledge_fts MATCH ? ORDER BY score', (expression,)) if expression else []
-        lexical = [row['id'] for row in lexical if row['id'] in by_id]
+        words = query_terms(query) if strategy == 'baseline' else keyword_terms(query)
+        lexical = self.lexical.query(words, set(by_id))
         original_order = {identity: rank for rank, identity in enumerate(lexical)}
         phrase = re.sub(r'[^a-z0-9\u3400-\u9fff]', '', FILLER.sub('', query.casefold()))
         lexical.sort(key=lambda identity: (
@@ -300,13 +301,14 @@ class Retriever:
                 dimension = len(vectors[rows[0]['id']])
                 query_vector = embed(embedding_config, embedding_key, [query], dimension)[0]
                 check('SEARCHING')
-                dense = sorted(by_id, key=lambda identity: (-float(np.dot(vectors[identity], query_vector)), identity))[:40]
+                dense = self.vector_index.query(vectors, query_vector, set(by_id))
             except ProbeError as error:
                 if error.code in ('CANCELLED', 'CONFIG_CHANGED', 'INTERRUPTED'):
                     raise
                 reason = error.code
         scores = {}
-        for ranking in (lexical, dense):
+        hints = metadata_ranking(self.library, rows, query) if strategy == 'metadata' else []
+        for ranking in (lexical, dense, hints):
             for rank, identity in enumerate(ranking, 1):
                 scores[identity] = scores.get(identity, 0) + 1 / (60 + rank)
         ranked = sorted(scores, key=lambda identity: (-scores[identity], identity))
@@ -359,3 +361,7 @@ class Retriever:
             result.append({'id': identity, 'kind': row['kind'], 'object_id': row['object_id'], 'title': row['title'],
                            'text': row['text'], 'source': source, **excerpt(row['text'], query, sentence_id)})
         return {'query': query, 'items': result, 'reason': reason, 'filtered': filtering}
+
+
+# Compatibility for existing workflow/test consumers.
+Retriever = EvidenceRetriever

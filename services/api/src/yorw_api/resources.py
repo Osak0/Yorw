@@ -148,14 +148,18 @@ class DocumentResources:
             paths = self._topic_paths()
             return [{'topic': row, 'path': paths.get(row['id'], [row['title']])} for row in rows]
 
-    def add_document_topic(self, document_id: str, topic_id: str) -> dict:
+    def add_document_topic_with(self, conn, document_id: str, topic_id: str) -> dict:
+        """Shared relation invariant for callers already holding a transaction."""
         self.library.document(document_id)
         if not self.library.rows('SELECT id FROM topics WHERE id=?', (topic_id,)):
             raise HTTPException(404, detail='TOPIC_NOT_FOUND')
-        with self.db.write() as conn:
-            conn.execute('INSERT OR IGNORE INTO document_topics(document_id,topic_id,created_at) VALUES(?,?,?)',
-                         (document_id, topic_id, now()))
+        conn.execute('INSERT OR IGNORE INTO document_topics(document_id,topic_id,created_at) VALUES(?,?,?)',
+                     (document_id, topic_id, now()))
         return {'linked': True}
+
+    def add_document_topic(self, document_id: str, topic_id: str) -> dict:
+        with self.db.write() as conn:
+            return self.add_document_topic_with(conn, document_id, topic_id)
 
     def remove_document_topic(self, document_id: str, topic_id: str) -> dict:
         with self.db.write() as conn:

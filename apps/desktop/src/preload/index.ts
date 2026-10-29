@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('yorw', Object.freeze({
+  enrichment:Object.freeze({settings:()=>ipcRenderer.invoke('enrichment:settings'),save:(input:unknown)=>ipcRenderer.invoke('enrichment:save',input),view:(id:unknown)=>ipcRenderer.invoke('enrichment:view',id),generate:(id:unknown)=>ipcRenderer.invoke('enrichment:generate',id),cancel:(id:unknown)=>ipcRenderer.invoke('enrichment:cancel',id),decide:(input:unknown)=>ipcRenderer.invoke('enrichment:decide',input)}),
   ai:Object.freeze({preferences:()=>ipcRenderer.invoke('ai:preferences'),savePreferences:(input:unknown)=>ipcRenderer.invoke('ai:savePreferences',input),run:(input:unknown)=>ipcRenderer.invoke('ai:run',input),get:(id:unknown)=>ipcRenderer.invoke('ai:get',id),latest:(input:unknown)=>ipcRenderer.invoke('ai:latest',input),cancel:(id:unknown)=>ipcRenderer.invoke('ai:cancel',id)}),
   workspace:Object.freeze({info:()=>ipcRenderer.invoke('workspace:info'),catalog:()=>ipcRenderer.invoke('workspace:catalog'),create:(input:unknown)=>ipcRenderer.invoke('workspace:create',input),save:(id:unknown)=>ipcRenderer.invoke('workspace:save',id)}),
   getStatus: () => ipcRenderer.invoke('app:getStatus'),
