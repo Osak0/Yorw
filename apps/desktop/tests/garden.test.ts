@@ -75,3 +75,38 @@ test('refresh keeps dirty management edits but updates clean baselines',async()=
  expect(book.getSnapshot().manage[id]).toMatchObject({title:'Local edit',version:2,baseTitle:'Remote'})
  expect(book.manageDirty(id)).toBe(true)
 })
+
+test('removal guards drafts and conflicts, then clears only the removed topic',async()=>{
+ const {bridge,book}=setup()
+ bridge.remove=vi.fn().mockResolvedValue({ok:true,value:{removed:true,items:[]}})
+ await book.select(id);book.edit(id,'keep me')
+ await expect(book.remove(view().topic)).rejects.toThrow('未保存')
+ expect(bridge.remove).not.toHaveBeenCalled()
+ book.discardTopic(id);book.manage(id);book.editManage(id,'title','renamed')
+ await expect(book.remove(view().topic)).rejects.toThrow('未保存')
+ book.discardManage(id)
+ vi.mocked(bridge.remove).mockResolvedValueOnce({ok:false,code:'TOPIC_CONFLICT'})
+ await expect(book.remove(view().topic)).rejects.toThrow('目录已更新')
+ expect(book.getSnapshot().drafts[id]).toBeDefined()
+ await book.remove(view().topic)
+ expect(bridge.remove).toHaveBeenLastCalledWith({id,version:1})
+ expect(book.getSnapshot().topics).toEqual([]);expect(book.getSnapshot().drafts[id]).toBeUndefined()
+ await book.refresh();expect(book.getSnapshot().topics).toEqual([])
+})
+
+test('late topic load cannot resurrect a successfully removed topic',async()=>{
+ const {bridge,book}=setup();await book.refresh()
+ let finish!:(result:Result<TopicView>)=>void
+ vi.mocked(bridge.get).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const loading=book.select(id)
+ bridge.remove=vi.fn().mockResolvedValue({ok:true,value:{removed:true,items:[]}})
+ await book.remove(view().topic);finish({ok:true,value:view()});await loading
+ expect(book.getSnapshot().topics).toEqual([]);expect(book.getSnapshot().drafts[id]).toBeUndefined()
+})
+
+test('main validates topic deletion identity and version before calling the backend',()=>{
+ const request=vi.fn(),garden=new Garden({request} as unknown as Backend)
+ for(const input of [{id:'../escape',version:1},{id,version:0},{id,version:1.5}])expect(()=>garden.remove(input)).toThrow('INVALID_INPUT')
+ expect(request).not.toHaveBeenCalled()
+ garden.remove({id,version:2});expect(request).toHaveBeenCalledWith(`/v1/topics/${id}`,'DELETE',{version:2})
+})

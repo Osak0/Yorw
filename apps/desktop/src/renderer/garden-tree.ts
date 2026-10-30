@@ -35,6 +35,12 @@ export function topicPathLabel(topics: Topic[], id: string): string {
   return path.length ? path.join(' / ') : '根目录'
 }
 
+/** 路径列表第二行：只显示当前位置（不含专题自身），根专题返回“根目录”。 */
+export function topicLocationLabel(topics: Topic[], id: string): string {
+  const parents = topicPath(topics, id).slice(0, -1).map(topic => topic.title)
+  return ['根目录', ...parents].join(' › ')
+}
+
 export function collectAncestors(topics: Topic[], id: string): Set<string> {
   return new Set(topicPath(topics, id).slice(0, -1).map(topic => topic.id))
 }

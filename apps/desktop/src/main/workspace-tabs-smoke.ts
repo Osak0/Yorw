@@ -682,8 +682,22 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   if (!(longTopic as any).ok) throw new Error('GARDEN_LONG_TOPIC_CREATE_FAILED')
   const longTopicId = (longTopic as any).id as string
   await ui(`document.querySelector('.module-nav button:nth-child(2)').click();await wait(()=>document.querySelector('.garden-home')&&!document.querySelector('.garden-directory'),'GARDEN_HOME');await wait(()=>!button('刷新').disabled,'REFRESH_READY');button('刷新').click();await wait(()=>document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'LONG_TOPIC')`)
+  await ui(`button('层级').click();await wait(()=>document.querySelector('.garden-tree'),'TREE_VIEW')`)
+  for (const [width, height] of [[1024, 768], ...sizes] as Array<[number, number]>) {
+    window.setContentSize(width, height)
+    await pause(600)
+    await writeFile(join(reportDir, `garden-home-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
+  }
+  window.setContentSize(1024, 768)
+  await pause(600)
+  await ui(`button('路径').click();await wait(()=>document.querySelector('.garden-path-list'),'PATH_VIEW_1024')`)
+  await writeFile(join(reportDir, 'garden-home-paths-1024x768.png'), (await window.webContents.capturePage()).toPNG())
+  await ui(`button('层级').click();await wait(()=>document.querySelector('.garden-tree'),'TREE_VIEW_1024')`)
+  window.setContentSize(1280, 720)
+  await pause(600)
   await ui(`button('路径').click();await wait(()=>document.querySelector('.garden-path-list'),'PATH_VIEW')`)
   const pathView = await window.webContents.executeJavaScript(`(() => { const rows=[...document.querySelectorAll('.garden-path-list [data-topic-id]')];const row=rows.find(item=>item.textContent.includes('layout verification'));return {rows:rows.length,longPath:row?.querySelector('small')?.textContent??''} })()`)
+  await writeFile(join(reportDir, 'garden-home-paths-1280x720.png'), (await window.webContents.capturePage()).toPNG())
   await ui(`button('层级').click();await wait(()=>document.querySelector('.garden-tree'),'TREE_VIEW')`)
   const setSearch = async (value: string) => window.webContents.executeJavaScript(`(() => { const input=document.querySelector('.garden-home input[aria-label="搜索专题"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true})) })()`)
   await setSearch('layout verification')
@@ -949,4 +963,66 @@ export async function runWorkspaceTabsResumeSmoke(window: BrowserWindow): Promis
       sidebar: [...document.querySelectorAll('.workspace-panel-tabs button')].find(button => button.getAttribute('aria-pressed') === 'true')?.textContent ?? ''
     }
   })()`)
+}
+
+/** Real menu interaction, using only disposable topics in the isolated smoke workspace. */
+export async function runTopicMenuSmoke(window:BrowserWindow,reportDir:string):Promise<unknown>{
+ const seed=await window.webContents.executeJavaScript(`(async()=>{
+  const wait=async(test)=>{const end=Date.now()+15000;while(Date.now()<end){if(test())return;await new Promise(r=>setTimeout(r,80))}throw new Error('TOPIC_MENU_TIMEOUT')}
+  const a=crypto.randomUUID(),b=crypto.randomUUID()
+  const parent=await window.yorw.garden.create({id:a,title:'Menu deletion fixture',parent_id:null})
+  const child=await window.yorw.garden.create({id:b,title:'Retained menu child',parent_id:a})
+  if(!parent.ok||!child.ok)throw new Error('TOPIC_MENU_CREATE')
+  document.querySelector('.module-nav button:nth-child(2)').click()
+  await wait(()=>document.querySelector('.garden-home'))
+  ;[...document.querySelectorAll('.garden-home-toolbar button')].find(el=>el.textContent==='刷新').click()
+  await wait(()=>document.querySelector('.garden-tree-name[data-topic-id="'+a+'"]'))
+  const row=document.querySelector('.garden-tree-name[data-topic-id="'+a+'"]')
+  row.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:innerWidth-3,clientY:innerHeight-3}))
+  await wait(()=>document.querySelector('.topic-context-menu'))
+  const rect=document.querySelector('.topic-context-menu').getBoundingClientRect()
+  if(rect.right>innerWidth||rect.bottom>innerHeight)throw new Error('TOPIC_MENU_OVERFLOW')
+  return {a,b,menuFits:true}
+ })()`)
+ await writeFile(join(reportDir,'topic-context-menu.png'),(await window.webContents.capturePage()).toPNG())
+ const proof=await window.webContents.executeJavaScript(`(async()=>{
+  const {a,b}=${JSON.stringify(seed)}
+  const wait=async(test)=>{const end=Date.now()+15000;while(Date.now()<end){if(test())return;await new Promise(r=>setTimeout(r,80))}throw new Error('TOPIC_MENU_FLOW_TIMEOUT')}
+  const menuItem=text=>[...document.querySelectorAll('.topic-context-menu button')].find(el=>el.textContent===text)
+  const open=(selector)=>document.querySelector(selector).dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:200,clientY:300}))
+  document.querySelector('.topic-context-menu').dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Escape'}))
+  await wait(()=>!document.querySelector('.topic-context-menu'))
+  const row=document.querySelector('.garden-tree-name[data-topic-id="'+a+'"]')
+  row.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'F10',shiftKey:true}))
+  await wait(()=>menuItem('打开专题'))
+  menuItem('打开专题').click()
+  await wait(()=>document.querySelector('.topic-body-header h2')?.textContent==='Menu deletion fixture')
+  open('.garden-directory .garden-tree-name[data-topic-id="'+a+'"]')
+  await wait(()=>menuItem('修订历史'));menuItem('修订历史').click()
+  await wait(()=>document.querySelector('[aria-label="修订历史"].topic-tool-view'))
+  document.querySelector('.module-nav button:nth-child(2)').click()
+  await wait(()=>document.querySelector('.garden-home'))
+  ;[...document.querySelectorAll('.garden-view-switch button')].find(el=>el.textContent==='路径').click()
+  await wait(()=>document.querySelector('.garden-path-item[data-topic-id="'+a+'"]'))
+  open('.garden-path-item[data-topic-id="'+a+'"]')
+  await wait(()=>menuItem('删除专题'));menuItem('删除专题').click()
+  await wait(()=>document.querySelector('.topic-delete-dialog[open]'))
+  document.querySelector('.topic-delete-dialog button').click()
+  await wait(()=>!document.querySelector('.topic-delete-dialog'))
+  if(!(await window.yorw.garden.get(a)).ok)throw new Error('TOPIC_MENU_CANCEL_LOST_TOPIC')
+  open('.garden-path-item[data-topic-id="'+a+'"]')
+  await wait(()=>menuItem('删除专题'));menuItem('删除专题').click()
+  await wait(()=>document.querySelector('.topic-delete-dialog[open]'))
+  document.querySelector('.topic-delete-dialog .danger').click()
+  await wait(()=>!document.querySelector('.topic-delete-dialog')&&!document.querySelector('[data-topic-id="'+a+'"]'))
+  const child=await window.yorw.garden.get(b)
+  if(!child.ok||child.value.topic.parent_id!==null)throw new Error('TOPIC_MENU_CHILD_LOST')
+  if(document.querySelector('[data-tab-key="topic:'+a+'"]')||document.querySelector('[data-tab-key="history:'+a+'"]'))throw new Error('TOPIC_MENU_TABS_NOT_CLOSED')
+  const removed=await window.yorw.garden.get(a)
+  if(removed.ok)throw new Error('TOPIC_MENU_NOT_REMOVED')
+  // Remove only our remaining fixture; leave the original tab smoke topics intact.
+  await window.yorw.garden.remove({id:b,version:child.value.topic.version})
+  return {tree:true,paths:true,sidebar:true,keyboard:true,cancel:true,removed:true,childPromoted:true,tabsClosed:true}
+ })()`)
+ return {...seed,...proof}
 }

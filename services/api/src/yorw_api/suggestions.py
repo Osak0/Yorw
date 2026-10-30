@@ -68,21 +68,21 @@ class Suggestions:
         with self.db.lock:
             descendants = sorted({row['id'] for row in self.library.rows(
                 'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
                 ' SELECT id FROM descendants', (topic_id,))})
             documents = [row['id'] for row in self.library.rows(
                 'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
                 ' SELECT DISTINCT dt.document_id AS id FROM document_topics dt '
                 'JOIN descendants ds ON ds.id=dt.topic_id '
                 'JOIN documents d ON d.id=dt.document_id '
                 'WHERE d.deleted_at IS NULL ORDER BY dt.document_id', (topic_id,))]
             notes = [row['id'] for row in self.library.rows(
                 'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
                 ' SELECT DISTINCT n.id FROM notes n '
                 'JOIN documents d ON d.id=n.document_id '
                 'JOIN document_topics dt ON dt.document_id=n.document_id '
@@ -98,8 +98,8 @@ class Suggestions:
         with self.db.lock:
             rows = self.library.rows(
                 'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
                 ' SELECT ('
                 " EXISTS(SELECT 1 FROM documents d JOIN document_topics dt ON dt.document_id=d.id "
                 ' JOIN descendants ds ON ds.id=dt.topic_id '

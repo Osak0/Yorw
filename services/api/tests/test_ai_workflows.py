@@ -1,3 +1,4 @@
+from legacy_garden import PreRemovalGarden
 """Workflow control and provenance tests, not model-quality benchmarks."""
 from io import BytesIO
 import json
@@ -479,12 +480,12 @@ def test_schema9_upgrade_and_preferences_preserve_research_assets(tmp_path):
         shutil.copy2(path, scripts/path.name)
     workspace = Workspace(tmp_path/'workspace')
     old = Database(workspace, scripts)
-    topic = Garden(old).create(CreateTopic(id=uuid4(), title='Retained research'))
-    saved = Garden(old).save(topic['topic']['id'], SaveBody(base_revision_id=topic['revision']['id'], body_md='Original saved synthesis'))
+    topic = PreRemovalGarden(old).create(CreateTopic(id=uuid4(), title='Retained research'))
+    saved = PreRemovalGarden(old).save(topic['topic']['id'], SaveBody(base_revision_id=topic['revision']['id'], body_md='Original saved synthesis'))
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 22
+        assert upgraded.version == 23
         assert Garden(upgraded).get(topic['topic']['id']) == saved
         assert upgraded.connection.execute('SELECT semantic_enabled,version FROM ai_preferences').fetchone() == (1, 1)
         assert len(list((workspace.root/'backups').glob('*.sqlite3'))) == 1

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { Topic } from '../src/shared/status'
-import { collectAncestors, defaultExpanded, parentOptions, searchTopics, topicChildren, topicDescendants, topicPath, topicPathLabel } from '../src/renderer/garden-tree'
+import { collectAncestors, defaultExpanded, parentOptions, searchTopics, topicChildren, topicDescendants, topicLocationLabel, topicPath, topicPathLabel } from '../src/renderer/garden-tree'
 
 const topic = (id: string, title: string, parent_id: string | null = null): Topic => ({
   id, title, parent_id, current_revision_id: '', version: 1, created_at: '', updated_at: ''
@@ -31,6 +31,13 @@ test('search keeps ancestors, matches duplicate names and returns the whole tree
   expect([...methods.matches].sort()).toEqual(['a', 'e'])
   expect([...methods.visible].sort()).toEqual(['a', 'd', 'e'])
   expect([...searchTopics(topics, '').visible].sort()).toEqual(['a', 'b', 'c', 'd', 'e'])
+})
+
+test('location labels show ancestors under the root without repeating the topic', () => {
+  expect(topicLocationLabel(topics, 'a')).toBe('根目录')
+  expect(topicLocationLabel(topics, 'b')).toBe('根目录 › Methods')
+  expect(topicLocationLabel(topics, 'c')).toBe('根目录 › Methods › Imaging')
+  expect(topicLocationLabel(topics, 'missing')).toBe('根目录')
 })
 
 test('parent options exclude the topic and its descendants and use full paths', () => {

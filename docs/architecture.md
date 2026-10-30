@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-已合并基线 main 为 PR #19 / 639509b / schema 20；当前 feature/library-workspace-polish 追加到 schema 22，整改阶段二已 review，阶段三等待 review；应用版本仍为 0.2.0。环境与命令见[开发指南](development.md)，当前证据见[阶段二记录](history/v0.3.0-phase2.md)。
+main 已通过 PR #20 合并（d42bd37），为 schema 22；应用版本仍为 0.2.0。后续 v0.3.0 开发在 feature/Garden-interface-refine 分支进行。环境与命令见[开发指南](development.md)，当前状态见[PLAN](../PLAN.md)，阶段二证据见[阶段二记录](history/v0.3.0-phase2.md)。
 
 ## 模块与通信
 
@@ -137,6 +137,8 @@ workspace-ui.css 管理当前工作区的颜色、字号、按钮和密度；目
 
 首页使用 `.garden-home`，正文使用 `.garden-workspace` + 可收起 `.garden-directory`，工具/新建/管理页不渲染重复目录。视图、展开状态、目录收起和标签均走现有布局/IPC，不新增数据库迁移或专属 API。
 
+首页专题展示使用 `topicLocationLabel` 计算路径：层级树按根/一级/深层使用 18/16/14px 字号、600/500/400 字重与 24px 缩进，不使用专题图标；路径列表为单行式，16px 专题名在左、12px“根目录 › 父级”路径在右。chevron 仅表示展开状态；增强样式限定在 `.garden-index`，正文 `.garden-directory` 保持 13px 紧凑目录；不改变数据、IPC 或业务合同。
+
 
 ### 生成历史与元数据采纳（schema 22）
 
@@ -145,3 +147,12 @@ workspace-ui.css 管理当前工作区的颜色、字号、按钮和密度；目
 ModelDocumentEnricher 在每批与汇总请求加入 current_metadata，作为参考而非证据；建议标题、作者和年份可省略，标签/总结沿用结果字段。enrichment:apply 仅接受白名单字段、文献/结果 ID、预期版本和 replace/append，main 不接收路径或模型密钥。服务在同一写事务检查文献与解析版本、验证字段、更新统一元数据、写入 enrichment_applications 前后值审计。追加标签按 casefold 去重，追加总结保留现有内容；来源标记 ai_confirmed。替换需用户确认，自动生成不执行采纳。
 
 前端历史选择时禁止在切换未完成的记录上采纳；元数据编辑与采纳均使用乐观版本保护。资料页保留生成记录及活动，不重复提供字段或关系表单。菜单与目录归类不变更原件路径、解析版本和引用 ID。
+
+
+### 单专题删除（schema 23）
+
+`TopicActions` 复用文献目录的菜单视觉与键盘约定，通过 Context 为首页树/路径及正文侧栏提供实体操作；上方工具栏职责不变。删除确认使用原生模态 dialog；`GardenBook.remove` 阻止脏草稿与保存中删除，成功移除本专题的缓存并记录已删 ID，阻断晚到加载/刷新恢复已删项；App 清理对应 Garden 标签与当前项。
+
+preload 仅暴露 `garden.remove({id,version})`，main 校验 UUID 与正整数版本，固定转发 `DELETE /v1/topics/{id}`。后端在同一写事务内检查版本，设置 `topics.deleted_at`，将直接子专题移动到原父级并递增其版本，解除目标 `document_topics` 关系、清理其派生知识索引。修订不可变触发器保持不变，不物理删除历史。schema 23 仅追加迁移，升级前沿用数据库备份机制。
+
+专题列表、正文、父级校验、材料树、自动专题推荐、检索及来源可用性统一过滤已删除项。旧来源快照不改写，`source_status` 返回不可用；延迟保存/采纳通过 Garden 存活检查和事务拒绝。导出目录沿用有效专题列表，已删专题不作为新导出候选；已有导出快照保留。此轮不提供恢复/批量删除或递归删除。

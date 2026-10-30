@@ -129,7 +129,7 @@ def source_status(database, sources):
             row = conn.execute('SELECT m.body_md,m.sources_json,m.status,d.deleted_at FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN documents d ON d.id=c.document_id WHERE m.id=?', (identity,)).fetchone()
             valid = bool(row and row[2] == 'completed' and row[3] is None and sha256((row[0]+'\n'+row[1]).encode()).hexdigest() == version)
         elif kind == 'wiki':
-            row = conn.execute('SELECT current_revision_id FROM topics WHERE id=?', (identity,)).fetchone()
+            row = conn.execute('SELECT current_revision_id FROM topics WHERE id=? AND deleted_at IS NULL', (identity,)).fetchone()
             valid = bool(row and row[0] == version)
         for ref in evidence:
             if not isinstance(ref, dict):

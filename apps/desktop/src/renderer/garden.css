@@ -3,7 +3,7 @@
 .garden-home-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:4px 2px 14px;border-bottom:1px solid #dce2ea}
 .garden-home-header h1{font-size:26px;line-height:1.25;margin:0;font-weight:650;letter-spacing:-.01em}
 .garden-home-header p{margin:5px 0 0;color:#64748b;font-size:13px}
-.garden-home-count{flex:none;color:#64748b;font-size:12px}
+.garden-home-count{flex:none;color:#64748b;font-size:12px;font-variant-numeric:tabular-nums}
 .garden-home-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 2px}
 .garden-home-toolbar>.primary{background:#3158c9;color:#fff;border-color:#3158c9}
 .garden-view-switch{display:flex;border:1px solid #cbd4e1;border-radius:6px;overflow:hidden}
@@ -18,22 +18,38 @@
 .garden-home-error{color:#b42318}.garden-home-error button{margin-left:10px}
 .garden-tree{list-style:none;margin:0;padding:0}
 .garden-tree-children{list-style:none;margin:0 0 0 20px;padding:0;border-left:1px solid #e3e9f2}
-.garden-tree-row{display:flex;align-items:center;gap:1px;min-height:34px;padding-right:12px;border-left:2px solid transparent}
+.garden-tree-row{display:flex;align-items:stretch;gap:1px;min-height:34px;padding:0 12px 0 8px;border-left:2px solid transparent}
 .garden-tree-row:hover{background:#f6f8fc}
 .garden-tree-row[data-active=true]{background:#eef3ff;border-left-color:#3158c9}
-.garden-tree-toggle{flex:none;width:24px;min-height:30px;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:#7c8ca2;font-size:12px;line-height:1}
+.garden-tree-toggle{flex:none;width:24px;min-height:30px;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:#7c8ca2;display:grid;place-items:center}
 .garden-tree-toggle:hover{background:#eaf0ff;color:#3158c9}
+.garden-tree-toggle svg{transform:rotate(0);transform-origin:center}
+.garden-tree-toggle[aria-expanded=false] svg{transform:rotate(-90deg)}
 .garden-tree-spacer{flex:none;width:24px}
-.garden-tree-name{flex:1;min-width:0;min-height:30px;margin:0;padding:6px 8px;border:0;border-radius:0;background:transparent;text-align:left;overflow-wrap:anywhere;color:#334155;font-size:13px}
+.garden-tree-name{flex:1;min-width:0;min-height:30px;margin:0;padding:6px 8px;border:0;border-radius:0;background:transparent;text-align:left;color:#334155;font-size:13px;display:flex;align-items:center;gap:8px}
+.garden-tree-label{display:flex;align-items:center;gap:6px;min-width:0}
+.garden-tree-title{min-width:0;overflow-wrap:anywhere}
 .garden-tree-name:hover{color:#3158c9}
 .garden-tree-name[aria-current=true]{color:#3158c9;font-weight:600}
-.garden-tree-dirty{margin-left:6px;color:#8a5700;font-size:10px}
-.garden-path-list{display:flex;flex-direction:column;padding:4px 8px}
-.garden-path-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:0;margin:0;padding:8px 12px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;text-align:left}
+.garden-tree-dirty{flex:none;color:#8a5700;font-size:10px}
+.garden-index .garden-tree-children{margin-left:24px}
+.garden-index .garden-tree-row{min-height:40px;padding-right:16px}
+.garden-index .garden-tree-row[data-depth="0"]{min-height:48px}
+.garden-index .garden-tree-row[data-depth="1"]{min-height:44px}
+.garden-index .garden-tree-name{padding:8px 10px 8px 4px;color:#475569;font-size:14px;font-weight:400;line-height:1.35}
+.garden-index .garden-tree-row[data-depth="0"] .garden-tree-name{color:#1e293b;font-size:18px;font-weight:600}
+.garden-index .garden-tree-row[data-depth="1"] .garden-tree-name{color:#26364a;font-size:16px;font-weight:500}
+.garden-index .garden-tree-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.garden-index .garden-tree-name:focus-visible,.garden-index .garden-tree-toggle:focus-visible{outline-offset:-2px}
+.garden-path-list{display:flex;flex-direction:column;padding:6px 10px}
+.garden-path-item{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1fr);align-items:center;gap:24px;width:100%;min-height:50px;margin:0;padding:12px 18px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;text-align:left}
+.garden-path-item+.garden-path-item{box-shadow:inset 0 1px 0 #edf1f6}
 .garden-path-item:hover{background:#f6f8fc}
-.garden-path-item[aria-current=true]{background:#eef3ff;border-left-color:#3158c9}
-.garden-path-item strong{color:#26364a;font-size:13px;font-weight:500;overflow-wrap:anywhere}
-.garden-path-item small{color:#7c8ca2;font-size:12px;overflow-wrap:anywhere}
+.garden-path-item[aria-current=true]{background:#eaf0ff;border-left-color:#3158c9}
+.garden-path-item strong{display:flex;align-items:center;gap:6px;min-width:0;color:#1e293b;font-size:16px;font-weight:600;line-height:1.35}
+.garden-path-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.garden-path-item small{min-width:0;text-align:right;color:#64748b;font-size:12px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.garden-path-item:focus-visible{outline-offset:-2px}
 
 .garden-workspace{height:100%;min-height:0;display:flex;gap:12px;align-items:stretch;max-width:none;margin:0 auto}
 .garden-directory{height:100%;width:250px;flex-shrink:0;background:#f8fafc;border:1px solid #dce2ea;border-radius:6px;padding:12px;overflow:auto}
@@ -74,3 +90,4 @@
 .wiki-review{border:1px solid #9eb4ea;background:#f8faff;padding:16px;margin:18px 0}.wiki-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.wiki-compare>div{min-width:0}.wiki-compare pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;background:white;border:1px solid #dce2ea;padding:10px;font-size:13px}.wiki-review textarea{display:block;box-sizing:border-box;width:100%;min-height:280px;font-family:Consolas,'Microsoft YaHei',monospace;resize:vertical}.wiki-review label{display:block;margin:12px 0}
 
 @media(max-width:900px){.garden-workspace{flex-direction:column}.garden-directory{width:100%;height:auto;max-height:28vh}.garden-content{width:100%;flex:1;min-height:0}.garden-home-header{align-items:flex-start;flex-direction:column;gap:6px}.garden-home-toolbar .garden-search{max-width:none;width:100%;margin-left:0}.topic-form-view{margin-top:8px;padding:18px}}
+.topic-delete-dialog p{font-size:13px;line-height:1.65;color:#526174}.topic-delete-dialog .danger{border-color:#ddabb0;color:#ae3340;background:#fff4f4}.topic-delete-dialog [role=alert]{color:#ae3340}

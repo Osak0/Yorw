@@ -16,6 +16,7 @@ export interface Revision { id:string; topic_id:string; ordinal:number; body_md:
 export interface TopicView { topic:Topic; revision:Revision }
 export interface TopicFields {title:string;parent_id:string|null}
 export interface GardenBridge {
+ remove(input:{id:string;version:number}):Promise<Result<{removed:boolean;items:Topic[]}>>;
  list():Promise<Result<{items:Topic[]}>>; get(id:string):Promise<Result<TopicView>>;
  create(input:TopicFields & {id:string}):Promise<Result<TopicView>>;
  update(input:TopicFields & {id:string;version:number}):Promise<Result<TopicView>>;

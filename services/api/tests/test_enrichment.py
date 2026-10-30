@@ -243,7 +243,7 @@ def test_migration_19_preserves_human_data_and_adds_disabled_settings(tmp_path):
     with db.write() as conn:conn.execute("INSERT INTO documents(id,sha256,original_name,summary_md,summary_source,extraction_status,created_at,updated_at) VALUES(?,?,?,'Human preserved','manual','ready','time','time')",(identity,identity,'kept.txt'))
     db.close();upgraded=Database(workspace)
     try:
-        assert upgraded.version==22
+        assert upgraded.version==23
         assert upgraded.connection.execute('SELECT summary_md FROM documents').fetchone()[0]=='Human preserved'
         assert upgraded.connection.execute('SELECT enabled FROM enrichment_preferences').fetchone()[0]==0
         assert upgraded.connection.execute('SELECT metadata_enabled FROM ai_preferences').fetchone()[0]==0

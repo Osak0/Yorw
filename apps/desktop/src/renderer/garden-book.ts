@@ -8,13 +8,14 @@ export const wikiDirty=(draft:WikiDraft)=>draft.body!==draft.savedBody
 const explain=(code:string)=>({INVALID_CITATION:'请保留至少一个有效的本轮 S 引用，不能引用未提供的编号。',MATERIAL_CHANGED:'材料已变化，请重新选材生成；比较草稿仍保留。',SCOPE_CHANGED:'专题材料范围已变化，请重新生成或核对来源后再采纳。',SUGGESTION_DECIDED:'此建议已处理，请重新打开历史核对。',SUGGESTION_NOT_READY:'请等待生成结束；已有部分内容的草稿可在结束后编辑补全。',REQUEST_CONFLICT:'请求内容已变化，请重新比较后确认。',REVISION_CONFLICT:'正文已有新修订，草稿已保留。请比较最新版本后决定。',TOPIC_CONFLICT:'目录已更新，请刷新目录后重试；输入仍保留。',TOPIC_CYCLE:'不能将专题移动到自身或其后代。',TOPIC_NOT_FOUND:'专题不存在，请刷新目录。',BACKEND_NOT_READY:'本地服务不可用，草稿已保留。',INVALID_INPUT:'输入无效或正文超过 200,000 字。'}[code]??`操作失败（${code}），草稿已保留。`)
 export class GardenBook {
  private state:Snapshot={topics:[],selected:'',drafts:{},reviews:{},create:null,manage:{},loading:false,error:''}
+ private removed=new Set<string>()
  private listeners=new Set<()=>void>()
  constructor(private bridge:GardenBridge){}
  getSnapshot=()=>this.state
  subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>{this.listeners.delete(fn)}}
  private publish(update:Partial<Snapshot>){this.state={...this.state,...update};this.listeners.forEach(fn=>fn())}
  private patch(id:string,update:Partial<WikiDraft>){const draft=this.state.drafts[id];if(draft)this.publish({drafts:{...this.state.drafts,[id]:{...draft,...update}}})}
- private topic(value:Topic){const topics=this.state.topics.filter(item=>item.id!==value.id);this.publish({topics:[...topics,value]})}
+ private topic(value:Topic){if(this.removed.has(value.id))return;const topics=this.state.topics.filter(item=>item.id!==value.id);this.publish({topics:[...topics,value]})}
  hasUnsaved(){return this.createDirty()||this.manageDirtyIds().length>0||Object.values(this.state.drafts).some(d=>wikiDirty(d)||d.saving)||Object.values(this.state.reviews).some(r=>r.body!==r.suggestion.body_md)}
  hasUnsavedDraft(id:string){const d=this.state.drafts[id];return !!d&&(wikiDirty(d)||d.saving)}
  hasUnsavedReview(id:string){const r=this.state.reviews[id];return !!r&&r.body!==r.suggestion.body_md}
@@ -55,9 +56,21 @@ export class GardenBook {
    if(clearReview)this.review(id,null);this.patch(id,{message:replace?`已保存 · 修订 ${value.revision.ordinal}`:'已拒绝建议，正文保持。'});return result.value
   }catch(e){this.patch(id,{message:e instanceof Error?e.message:'操作失败，编辑内容已保留。'});throw e}finally{this.patch(id,{saving:false})}
  }
- async refresh(){this.publish({loading:true,error:''});try{const result=await this.bridge.list();if(result.ok){const items=result.value.items,manage={...this.state.manage};for(const [id,draft] of Object.entries(manage)){const topic=items.find(item=>item.id===id);if(topic&&draft.title.trim()===draft.baseTitle&&draft.parent_id===draft.baseParent)manage[id]={title:topic.title,parent_id:topic.parent_id??'',version:topic.version,baseTitle:topic.title,baseParent:topic.parent_id??''}}this.publish({topics:items,manage})}else this.publish({error:explain(result.code)})}catch{this.publish({error:'目录加载失败，请重试。'})}finally{this.publish({loading:false})}}
- async select(id:string){this.publish({selected:id,error:''});if(this.state.drafts[id])return
-  try{const result=await this.bridge.get(id);if(result.ok){const r=result.value.revision;this.topic(result.value.topic);if(!this.state.drafts[id])this.publish({drafts:{...this.state.drafts,[id]:{id,body:r.body_md,savedBody:r.body_md,base:r.id,saving:false,conflict:false,message:'已载入保存版本'}}})}else this.publish({error:explain(result.code)})}catch{this.publish({error:'正文加载失败，请重试。'})}}
+ async remove(topic:Topic){
+  if(this.hasUnsavedDraft(topic.id)||this.hasUnsavedReview(topic.id)||this.manageDirty(topic.id))throw new Error('此专题有未保存编辑，请先保存，或关闭对应标签并放弃编辑后再删除。')
+  const result=await this.bridge.remove({id:topic.id,version:topic.version})
+  if(!result.ok)throw new Error(explain(result.code))
+  this.removed.add(topic.id)
+  const drafts={...this.state.drafts},reviews={...this.state.reviews},manage={...this.state.manage}
+  delete drafts[topic.id];delete reviews[topic.id];delete manage[topic.id]
+  // Reparented children received new versions; do not overwrite their dirty management forms.
+  for(const item of result.value.items){const d=manage[item.id];if(d&&d.title.trim()===d.baseTitle&&d.parent_id===d.baseParent)delete manage[item.id]}
+  const create=this.state.create?.parent_id===topic.id?{...this.state.create,parent_id:topic.parent_id??''}:this.state.create
+  this.publish({topics:result.value.items,drafts,reviews,manage,create,selected:this.state.selected===topic.id?'':this.state.selected})
+ }
+ async refresh(){this.publish({loading:true,error:''});try{const result=await this.bridge.list();if(result.ok){const items=result.value.items.filter(item=>!this.removed.has(item.id)),manage={...this.state.manage};for(const [id,draft] of Object.entries(manage)){const topic=items.find(item=>item.id===id);if(topic&&draft.title.trim()===draft.baseTitle&&draft.parent_id===draft.baseParent)manage[id]={title:topic.title,parent_id:topic.parent_id??'',version:topic.version,baseTitle:topic.title,baseParent:topic.parent_id??''}}this.publish({topics:items,manage})}else this.publish({error:explain(result.code)})}catch{this.publish({error:'目录加载失败，请重试。'})}finally{this.publish({loading:false})}}
+ async select(id:string){if(this.removed.has(id))return;this.publish({selected:id,error:''});if(this.state.drafts[id])return
+  try{const result=await this.bridge.get(id);if(this.removed.has(id))return;if(result.ok){const r=result.value.revision;this.topic(result.value.topic);if(!this.state.drafts[id])this.publish({drafts:{...this.state.drafts,[id]:{id,body:r.body_md,savedBody:r.body_md,base:r.id,saving:false,conflict:false,message:'已载入保存版本'}}})}else this.publish({error:explain(result.code)})}catch{this.publish({error:'正文加载失败，请重试。'})}}
  edit(id:string,body:string){this.patch(id,{body,message:''})}
  async create(title:string,parent_id:string|null,id=crypto.randomUUID()){const result=await this.bridge.create({id,title,parent_id});if(!result.ok)throw new Error(explain(result.code));this.topic(result.value.topic);await this.select(result.value.topic.id);return result.value.topic}
  async metadata(id:string,title:string,parent_id:string|null,version:number){const result=await this.bridge.update({id,title,parent_id,version});if(!result.ok)throw new Error(explain(result.code));this.topic(result.value.topic)}
