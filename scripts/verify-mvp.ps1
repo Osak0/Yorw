@@ -41,7 +41,7 @@ try {
         $mvpBytes = [IO.File]::ReadAllBytes($mvpDatabase)
         if ($mvpBytes.Length -lt 64 -or [Text.Encoding]::ASCII.GetString($mvpBytes,0,15) -ne 'SQLite format 3') { throw 'Invalid workspace database' }
         $mvpSchema = [BitConverter]::ToInt32([byte[]]@($mvpBytes[63],$mvpBytes[62],$mvpBytes[61],$mvpBytes[60]),0)
-        if ($mvpSchema -ne 15) { throw "Unexpected schema version: $mvpSchema" }
+        if ($mvpSchema -ne 23) { throw "Unexpected schema version: $mvpSchema" }
     } else {
         # Keep the original v0.1 release's embedded smoke protocol reproducible.
         $mvpState = Get-Content -LiteralPath (Join-Path $mvpReport 'mvp-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json

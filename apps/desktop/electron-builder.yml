@@ -10,8 +10,8 @@ extraResources:
     to: backend/yorw-api
   - from: ../../docs/user-guide.md
     to: help/user-guide.md
-  - from: ../../docs/releases/v0.2.0.md
-    to: help/releases/v0.2.0.md
+  - from: ../../docs/releases/v0.3.0.md
+    to: help/releases/v0.3.0.md
 win:
   target: nsis
   artifactName: Yorw-Setup-${version}-${arch}.${ext}
