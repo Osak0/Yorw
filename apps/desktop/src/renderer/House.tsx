@@ -1,3 +1,4 @@
+import {SettingsIcon} from './SettingsIcon'
 import {EnrichmentSettingsPanel} from './EnrichmentPanel'
 import React, { useEffect, useState } from 'react'
 import type { ParserCapability, ParserSettings, ParserStatus, ProviderConfig, ProviderKind } from '../shared/status'
@@ -14,14 +15,16 @@ const messages: Record<string, string> = {
   INSUFFICIENT_BALANCE: '账号余额不足，请检查服务账户', CONNECTED: '连接成功', AUTH_FAILED: '鉴权失败，请检查 API Key 与账号权限', MODEL_OR_ENDPOINT_NOT_FOUND: '模型或接口不存在，请检查地址与模型名', RATE_LIMITED: '服务限流或额度不足，请稍后重试', TIMEOUT: '连接超时，请重试', NETWORK_ERROR: '网络连接失败，请检查网络与服务地址', INVALID_RESPONSE: '服务响应格式不兼容', KEY_MISSING: '请先保存 API Key', CONFIG_MISSING: '请先保存模型配置', CONFIG_CONFLICT: '配置已更新，请重新加载后再保存', INVALID_CONFIG: '配置格式错误，请检查 URL 与模型名', KEY_REENTRY_REQUIRED: '更换服务地址时，请重新输入密钥或选择清除密钥', KEY_UNAVAILABLE: '密钥无法解密，请重新输入', SECURE_STORAGE_UNAVAILABLE: '系统安全存储不可用，无法保存密钥', BACKEND_NOT_READY: '本地服务尚未就绪，请稍后重试', OPERATION_FAILED: '操作失败，请重试；草稿已保留', UPSTREAM_HTTP_ERROR: '服务请求失败，请检查服务状态', RESPONSE_TOO_LARGE: '测试响应过大'
 }
 function ProviderForm({ kind, saved, onSaved }: { kind: ProviderKind; saved?: ProviderConfig; onSaved: (config: ProviderConfig) => void }) {
-  const [url, setUrl] = useState(saved?.base_url ?? (kind === 'chat' ? 'https://api.deepseek.com' : 'https://open.bigmodel.cn/api/paas/v4'))
-  const [model, setModel] = useState(saved?.model ?? (kind === 'chat' ? 'deepseek-flash' : 'embedding-3'))
+  const initialUrl=saved?.base_url ?? (kind==='chat'?'https://api.deepseek.com':'https://open.bigmodel.cn/api/paas/v4')
+  const initialModel=saved?.model ?? (kind==='chat'?'deepseek-flash':'embedding-3')
+  const [url, setUrl] = useState(initialUrl)
+  const [model, setModel] = useState(initialModel)
   const [key, setKey] = useState('')
   const [clearKey, setClearKey] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState(false)
-  useHouseForm(kind === 'chat' ? 'chat' : 'retrieval', url !== (saved?.base_url ?? '') || model !== (saved?.model ?? '') || !!key || clearKey, async()=>!!(await run(false)))
+  useHouseForm(kind === 'chat' ? 'chat' : 'retrieval', url !== initialUrl || model !== initialModel || !!key || clearKey, async()=>!!(await run(false)))
   const dirty = url !== saved?.base_url || model !== saved?.model || !!key || clearKey
   async function run(test: boolean):Promise<boolean> {
     setBusy(true); setNotice(test ? '正在测试连接…' : '正在保存…'); setError(false)
@@ -134,7 +137,7 @@ function ParserPanel({ active }: { active: boolean }) {
       <label>OCR 引擎<select aria-label="OCR 引擎" value={form.ocr_engine} onChange={event => update('ocr_engine', event.target.value as ParserSettings['ocr_engine'])}><option value="auto">自动（Docling 选择）</option><option value="easyocr">EasyOCR</option><option value="rapidocr">RapidOCR（无需 GitHub 模型下载）</option><option value="tesseract">Tesseract</option></select></label>
       </details><div className="actions"><button className="primary" onClick={() => void save()}>保存解析配置</button><button disabled={JSON.stringify(form)!==JSON.stringify(status?.settings)} onClick={() => void test()}>检测组件能力</button></div>
     </fieldset>}
-    {status && <div className="parser-status"><p>Docling：{status.components.docling.available ? `可用（${status.components.docling.version}）` : `不可用 · ${status.components.docling.detail}`}；LibreOffice：{status.components.libreoffice.available ? '可用' : '不可用'}。</p>
+    {status && <details className="parser-diagnostics"><summary>组件状态与格式支持</summary><div className="parser-status"><p>Docling：{status.components.docling.available ? `可用（${status.components.docling.version}）` : `不可用 · ${status.components.docling.detail}`}；LibreOffice：{status.components.libreoffice.available ? '可用' : '不可用'}。</p>
       <table className="parser-capabilities"><thead><tr><th>格式</th><th>内置</th><th>增强（Docling）</th></tr></thead><tbody>
         {parserFormats.map(format => {
           const builtin = status.capabilities.find(item => item.format === format && item.processor === 'builtin')
@@ -145,7 +148,7 @@ function ParserPanel({ active }: { active: boolean }) {
           </tr>
         })}
       </tbody></table>
-    </div>}
+    </div></details>}
     <p role="status" className={notice && !notice.startsWith('检测完成') && !notice.endsWith('已保存。') ? 'failed' : ''}>{notice}</p>
   </section>
 }
@@ -158,6 +161,10 @@ export function House({active=true, page, onOpen}:{active?:boolean;page?:string;
     catch { setNotice('加载失败，请重试') }
   }
   useEffect(() => { void load() }, [])
-  if(!page)return <div className="house-entries">{Object.entries(houseTitles).map(([id,title])=><button key={id} onClick={()=>onOpen?.(id)}><strong>{title}</strong><small>{id==='parsers'?'内置解析、外部组件、OCR 与原件预览':id==='chat'?'聊天服务与连接测试':id==='retrieval'?'语义检索、Embedding 服务与测试':'数据位置与已保存内容导出'}</small></button>)}</div>
-  return <>{page==='parsers'&&<><ParserPanel active={active}/><EnrichmentSettingsPanel/></>} {page==='retrieval'&&<AiSettings active={active}/>}{notice&&<p role="status">{notice}</p>}{configs&&(page==='chat'||page==='retrieval')&&<ProviderForm kind={page==='chat'?'chat':'embedding'} saved={configs.find(config=>config.kind===(page==='chat'?'chat':'embedding'))} onSaved={saved=>setConfigs(previous=>[...(previous??[]).filter(config=>config.kind!==saved.kind),saved])}/>} {page==='data'&&<WorkspacePanel active={active}/>}</>
+  if(!page)return <section className="house-home" aria-label="工作区设置"><header className="house-home-header"><h1>工作区设置</h1></header><div className="house-entries">{Object.entries(houseTitles).map(([id,title])=>{
+    const config=configs?.find(c=>c.kind===(id==='chat'?'chat':'embedding'))
+    const state=id==='parsers'?'基础解析已内置':id==='data'?'本机保存':config?config.model:configs?'尚未配置':'正在读取…'
+    return <button type="button" key={id} onClick={()=>onOpen?.(id)}><span className="house-entry-icon"><SettingsIcon kind={id}/></span><span className="house-entry-copy"><strong>{title}</strong><small>{id==='parsers'?'原件预览、可选组件与自动整理':id==='chat'?'聊天服务、密钥与连接测试':id==='retrieval'?'语义检索与 Embedding 服务':'数据位置、笔记与专题导出'}</small></span><span className="house-entry-status">{state}</span><span className="house-entry-chevron" aria-hidden="true">›</span></button>
+  })}</div></section>
+  return <div className="house-settings-page"><header className="house-settings-header"><h1>{houseTitles[page]}</h1></header>{page==='parsers'&&<><ParserPanel active={active}/><EnrichmentSettingsPanel/></>} {page==='retrieval'&&<AiSettings active={active}/>}{notice&&<p role="status">{notice}</p>}{configs&&(page==='chat'||page==='retrieval')&&<ProviderForm kind={page==='chat'?'chat':'embedding'} saved={configs.find(config=>config.kind===(page==='chat'?'chat':'embedding'))} onSaved={saved=>setConfigs(previous=>[...(previous??[]).filter(config=>config.kind!==saved.kind),saved])}/>} {page==='data'&&<WorkspacePanel active={active}/>}</div>
 }

@@ -15,7 +15,7 @@ def test_selected_materials_sse_draft_restart_without_body_overwrite(frozen,tmp_
     workspace=tmp_path/'workspace'
     with provider() as (url,received):
         with running(frozen,workspace) as (request,upload):
-            assert request('/v1/health')['schema_version']==21
+            assert request('/v1/health')['schema_version']==22
             doc=upload(pdf_bytes())
             selected=request(f'/v1/documents/{doc}/search','POST',{'query':'English'})['items'][0]
             note=request('/v1/notes','POST',{'id':str(uuid4()),'document_id':doc,'body_md':'个人观点，不是原文结论。'})

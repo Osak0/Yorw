@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { addWorkspaceTab, documentTab, gardenToolTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, toolTab, topicTab } from '../src/renderer/workspace-tabs'
+import { addWorkspaceTab, documentTab, gardenToolTab, moduleForTab, nextActiveKeyAfterClose, restoreTabs, tabKindLabel, toolTab, topicCreateTab, topicManageTab, topicTab } from '../src/renderer/workspace-tabs'
 
 const id = '12345678-1234-1234-1234-123456789abc'
 
@@ -23,6 +23,14 @@ test('document and topic tabs are keyed by page type and entity', () => {
     expect(moduleForTab(tab)).toBe('Garden')
     expect(tabKindLabel(tab)).toBe({ ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tool])
   }
+  const create = topicCreateTab()
+  const manage = topicManageTab(id, 'Topic')
+  expect(create).toMatchObject({ key: 'topic-create:new', kind: 'topic-create', title: '新建专题' })
+  expect(manage).toMatchObject({ key: `topic-manage:${id}`, kind: 'topic-manage', title: 'Topic' })
+  expect(moduleForTab(create)).toBe('Garden')
+  expect(moduleForTab(manage)).toBe('Garden')
+  expect(tabKindLabel(create)).toBe('新建专题')
+  expect(tabKindLabel(manage)).toBe('专题管理')
 })
 
 test('opening the same page again keeps one tab and preserves the existing position', () => {
@@ -46,11 +54,14 @@ test('restoring skips pages that no longer exist and reports the count', () => {
     { kind: 'ai', id },
     { kind: 'history', id },
     { kind: 'materials', id },
+    { kind: 'topic-create', id: 'new' },
+    { kind: 'topic-manage', id },
     { kind: 'document', id: missing },
-    { kind: 'topic', id: missing }
+    { kind: 'topic', id: missing },
+    { kind: 'topic-manage', id: missing }
   ], documents, topics)
-  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'resource:Paper', 'metadata:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic', 'materials:Topic'])
-  expect(restored.skipped).toBe(2)
+  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'resource:Paper', 'metadata:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic', 'materials:Topic', 'topic-create:新建专题', 'topic-manage:Topic'])
+  expect(restored.skipped).toBe(3)
 })
 
 test('closing the active tab selects the next tab, then the previous, then home', () => {

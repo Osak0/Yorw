@@ -32,14 +32,17 @@ const materials: TopicMaterials = {
     excerpt: '关联笔记正文', version: 1, sources_count: 0, created_at: 'time', updated_at: 'time' }]
 }
 
-test('document resource shows metadata, topics, relations, notes, history and chat without copying content', () => {
-  const html = renderToStaticMarkup(<DocumentResourceSections resource={resource} topics={[topic]} notice="" busy={false}
+test('resource activity and editable metadata relations have independent responsibilities', () => {
+  const render = (mode:'activity'|'metadata')=>renderToStaticMarkup(<DocumentResourceSections mode={mode} resource={resource} topics={[topic]} notice="" busy={false}
     onEditMetadata={() => {}} onAddTopic={() => {}} onRemoveTopic={() => {}} onSearchCandidates={() => {}} onAddRelation={() => {}}
     onRemoveRelation={() => {}} onOpenNotes={() => {}} onOpenSearch={() => {}} onOpenChat={() => {}} onNavigate={() => {}}
     onDeleteHistory={() => {}} onClearHistory={() => {}} onRunSearch={() => {}} candidates={[]} candidateQuery="" candidateDescription=""
     onCandidateQuery={() => {}} onCandidateDescription={() => {}} />)
-  for (const text of ['人工总结内容。', '检索增强', 'Parent / 检索增强', '共同主题', '相同标签', '我的笔记摘要', '研究问题',
-    '历史摘录', '第 3 页', '来源已失效', '打开笔记', '打开问答', '相关文献', '检索历史']) expect(html).toContain(text)
+  const html=render('activity'), relations=render('metadata')
+  for (const text of ['我的笔记摘要','研究问题','历史摘录','第 3 页','来源已失效','打开笔记','打开问答','检索历史']) expect(html).toContain(text)
+  for (const text of ['人工总结内容。','Parent / 检索增强','共同主题','相同标签']) expect(html).not.toContain(text)
+  for (const text of ['Parent / 检索增强','共同主题','相关文献','相同标签']) expect(relations).toContain(text)
+  for (const text of ['我的笔记摘要','问答历史','检索历史','人工总结内容。']) expect(relations).not.toContain(text)
   expect(html).not.toContain('自动建立关联')
 })
 

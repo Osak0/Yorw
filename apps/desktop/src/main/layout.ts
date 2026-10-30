@@ -5,9 +5,10 @@ import type { WorkspaceLayout, WorkspaceLayoutModule, WorkspaceLayoutSidebarMode
 
 const MODULES = new Set<WorkspaceLayoutModule>(['Storage', 'Garden', 'House'])
 const SIDEBAR_MODES = new Set<WorkspaceLayoutSidebarMode>(['notes', 'search', 'chat'])
-const TAB_KINDS = new Set(['settings', 'document', 'topic', 'notes', 'search', 'chat', 'resource', 'metadata', 'ai', 'history', 'materials'])
+const TAB_KINDS = new Set(['settings', 'document', 'topic', 'topic-create', 'topic-manage', 'notes', 'search', 'chat', 'resource', 'metadata', 'ai', 'history', 'materials'])
 const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat', 'resource', 'metadata'])
-const GARDEN_TAB_KINDS = new Set(['topic', 'ai', 'history', 'materials'])
+const GARDEN_TAB_KINDS = new Set(['topic', 'topic-create', 'topic-manage', 'ai', 'history', 'materials'])
+const GARDEN_VIEWS = new Set(['tree', 'paths'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_TABS = 50
 const MAX_TITLE = 500
@@ -27,7 +28,7 @@ function validate(value: unknown): WorkspaceLayout | null {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null
     const tab = item as Record<string, unknown>
     if (typeof tab.kind !== 'string' || !TAB_KINDS.has(tab.kind)) return null
-    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','retrieval','data'].includes(tab.id) : !UUID.test(tab.id))) return null
+    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','retrieval','data'].includes(tab.id) : tab.kind === 'topic-create' ? tab.id !== 'new' : !UUID.test(tab.id))) return null
     if (tab.title !== undefined && (typeof tab.title !== 'string' || tab.title.length > MAX_TITLE)) return null
     const kind = tab.kind as WorkspaceLayoutTab['kind']
     const key = tabKey({ kind, id: tab.id })
@@ -63,6 +64,18 @@ function validate(value: unknown): WorkspaceLayout | null {
     if (typeof input.storageDirectoryCollapsed !== 'boolean') return null
     storageDirectoryCollapsed = input.storageDirectoryCollapsed
   }
+  let gardenView: WorkspaceLayout['gardenView']
+  if (input.gardenView !== undefined) {
+    if (typeof input.gardenView !== 'string' || !GARDEN_VIEWS.has(input.gardenView)) return null
+    gardenView = input.gardenView as WorkspaceLayout['gardenView']
+  }
+  let gardenExpanded: string[] | undefined
+  if (input.gardenExpanded !== undefined) {
+    if (!Array.isArray(input.gardenExpanded) || input.gardenExpanded.length > 500) return null
+    if (input.gardenExpanded.some(id => typeof id !== 'string' || !UUID.test(id))) return null
+    gardenExpanded = [...new Set(input.gardenExpanded)] as string[]
+    if (gardenExpanded.length !== input.gardenExpanded.length) return null
+  }
   return {
     version: 1,
     module: input.module as WorkspaceLayoutModule,
@@ -72,7 +85,9 @@ function validate(value: unknown): WorkspaceLayout | null {
     gardenKey,
     ...(sidebar ? { sidebar } : {}),
     ...(directoryCollapsed === undefined ? {} : { directoryCollapsed }),
-    ...(storageDirectoryCollapsed === undefined ? {} : { storageDirectoryCollapsed })
+    ...(storageDirectoryCollapsed === undefined ? {} : { storageDirectoryCollapsed }),
+    ...(gardenView === undefined ? {} : { gardenView }),
+    ...(gardenExpanded === undefined ? {} : { gardenExpanded })
   }
 }
 

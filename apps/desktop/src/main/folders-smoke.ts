@@ -19,9 +19,9 @@ export async function runFoldersSmoke(window:BrowserWindow,backend:Backend,folde
   if(document.querySelector('.directory-entry input')||document.querySelector('.directory-entry button'))throw new Error('ROW_CHROME')
   if(document.querySelectorAll('.directory-toolbar button').length!==2||document.querySelector('.import-button'))throw new Error('DUPLICATE_IMPORT')
   await wait(()=>!document.querySelector('.directory-file'))
-  document.querySelector('.directory-folder[title="Research"]').click()
+  document.querySelector('.directory-folder[title="Research"]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))
   await wait(()=>document.querySelector('.directory-folder[title="Medical"]'))
-  document.querySelector('.directory-folder[title="Medical"]').click()
+  document.querySelector('.directory-folder[title="Medical"]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))
   await wait(()=>document.querySelector('.directory-file'))
   if(!document.querySelector('.directory-location').textContent.includes('Research / Medical'))throw new Error('HIERARCHY')
   const file=document.querySelector('.directory-file')
@@ -61,5 +61,5 @@ export async function runFoldersSmoke(window:BrowserWindow,backend:Backend,folde
  await writeFile(join(folder,'library-context-menu.png'),(await window.webContents.capturePage()).toPNG())
  const after=await backend.request('/v1/documents/'+d.id)
  if(after.sha256!==d.sha256||after.extraction_version!==d.extraction_version)throw new Error('ORIGINAL_CHANGED')
- return {schema:21,rootNavigation:true,directChildren:true,upNavigation:true,menuClamped:true,resizePointer:true,resizeKeyboard:true,singleImport:true,pathByDocumentId:true,originalUnchanged:true}
+ return {schema:22,rootNavigation:true,directChildren:true,upNavigation:true,menuClamped:true,resizePointer:true,resizeKeyboard:true,singleImport:true,pathByDocumentId:true,originalUnchanged:true}
 }

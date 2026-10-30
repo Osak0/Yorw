@@ -43,16 +43,16 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 
 工作区界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用隔离的绝对 `--report-dir`、自编写 PDF 和本地 loopback 模型/SSE 夹具：
 
-- `--tabs-smoke`：打开同一/不同文献和专题、展开和返回三个 Storage 工具、共享检索输入、标签去重、标题更新与键盘语义。
+- `--tabs-smoke`：打开同一/不同文献和专题、展开和返回三个 Storage 工具、共享检索输入、标签去重、标题更新与键盘语义；同时覆盖 Garden 无侧栏首页、层级树打开、首页/正文默认父级、新建标签去重与草稿保留、新建/管理关闭保护、管理改名/移动与标签同步。
 - `--tabs-resume-smoke`：恢复标签顺序、激活项、页码和侧栏模式。
-- `--tabs-close-smoke`：未保存笔记的取消/保存关闭、关闭其他逐项确认与最终关闭。
+- `--tabs-close-smoke`：未保存笔记的取消/保存关闭、关闭其他逐项确认与最终关闭；Garden 新建/管理标签的取消、放弃和创建关闭由 `--tabs-smoke` 覆盖。
 - `--tabs-fault-smoke`：后端退出时保存失败保持标签打开。
 - `--tabs-citation-smoke`：工具标签中的来源跳转到正确阅读标签和物理页；关闭阅读标签后可重新创建。
 - `--tabs-chat-smoke`：长回答流式增长、自动跟随/回到最新、停止、重新回答、输入法组合输入和保存笔记。
 - `--tabs-tool-resume-smoke`：工具标签重启恢复并返回阅读。
-- `--tabs-resource-smoke`：阶段 B 文献资料/关系/专题材料；文献目录与本地搜索、整理文献独立标签及返回文献库；编辑标签和人工总结、关联专题、双向关联文献、笔记显示、从 Garden 添加专题文献，并检查 1280×720/1440×900 的资料与材料视图无横向溢出。与 `--tabs-smoke` 一样，报告目录需有 `fixture.pdf` 和 `fixture2.pdf`。
-- `--ai-workflow-smoke`：阶段 C 默认专题范围与显式全库切换、一次多选的批量导入矩阵、整理文献标签打开/保存/重开和既有 AI 追加/替换/回退；空范围、范围变化及 HTTP 错误由后端 pytest 覆盖。报告目录需有 `fixture.pdf` 与 `fixtures/` 下的 5 份文字和 3 份负例。
-- `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
+- `--tabs-resource-smoke`：阶段 B 文献资料/关系/专题材料；文献目录与本地搜索、整理文献独立标签及返回文献库；编辑标签和人工总结、关联专题、双向关联文献、笔记显示、从 Garden 首页和材料标签添加专题文献，并检查 1280×720/1440×900 的资料与材料视图无横向溢出。与 `--tabs-smoke` 一样，报告目录需有 `fixture.pdf` 和 `fixture2.pdf`。
+- `--ai-workflow-smoke`：阶段 C 默认专题范围与显式全库切换、一次多选的批量导入矩阵、整理文献标签打开/保存/重开和既有 AI 追加/替换/回退；House 设置从首页进入检索/数据页；Garden 新建/管理/AI 标签流程按当前界面执行；空范围、范围变化及 HTTP 错误由后端 pytest 覆盖。报告目录需有 `fixture.pdf` 与 `fixtures/` 下的 5 份文字和 3 份负例。
+- `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；Garden 另覆盖 1024×768、层级树/路径列表、搜索祖先、展开/收起全部、长名称和当前项高亮。阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
 
 这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；`--ai-workflow-smoke` 另输出 `ai-workflow-smoke.json`、`ai-state.json`、`ai-restart.json`，并覆盖 AI 优化的材料范围选择、一次多选批量导入、整理文献标签保存/重开和打包流程。夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
 
@@ -112,7 +112,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 `--rectification-smoke`（兼容旧 `--builtin-reading-smoke` 名称）需同时使用 `--yorw-smoke --reader-smoke --report-dir=<绝对目录> --preview-soffice="<用户安装的 soffice.exe>"`。目录内准备自编写 `fixture.pdf/docx/doc/md/txt`。脚本在隔离工作区操作 House 设置、转换预览与原件阅读，输出 `rectification-smoke.json`、`word-preview.png` 和 `house-home.png`。原生文件选择与确认由测试桩提供；授权边界另由 main 单元测试验证，不能声称已自动操作真实原生对话框。
 
-源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。当前 main schema 20，应用版本仍为 0.2.0。
+源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。已合并 main 基线 schema 20，当前整改分支追加至 schema 22，应用版本仍为 0.2.0。
 
 
 `--builtin-reading-smoke` 使用 `--yorw-smoke --reader-smoke --report-dir=<新绝对目录>`，不传解析组件路径、不设置解析器配置。目录准备自编写 fixture.pdf/docx/md/txt。它验证内置 DOCX 表格/只读展示、缺失可选组件提示、关键词检索依据与原件标记、问答依据；问答使用进程内自有 loopback 模型协议夹具，不代表真实模型质量。输出 builtin-reading-smoke.json 与 builtin-reading.png。可选 LibreOffice 的 --rectification-smoke 另行执行，Word 需主动点击可选版式预览。
@@ -147,3 +147,19 @@ DOCX 整理/布局回归：先用 `scripts/make-mvp-fixtures.py .cache/<新目�
 打包窗口验收：make-mvp-fixtures.py 生成新隔离目录，然后运行 `Yorw.exe --yorw-smoke --reader-smoke --folders-smoke --report-dir=<绝对目录>`。结果为 folders-smoke.json 与 library-folders.png，验证目录展开、子目录筛选、受限路径和原件哈希/解析版本不变。协议与本地窗口成功不代表独立干净 Windows 验收；系统默认应用与 Explorer 行为需在目标机器复核。
 
 目录 review 后 folders-smoke 同时核验根目录直属归属、上级导航、菜单边缘限制、唯一导入以及鼠标/键盘调整宽度；保存 library-folders-1024.png、library-folders-1280.png 和 library-context-menu.png。
+
+
+## 阶段三 UI 验收
+
+在新隔离目录用 make-mvp-fixtures.py 生成夹具，执行 `Yorw.exe --yorw-smoke --reader-smoke --ui-smoke --report-dir=<绝对目录>`。新增 ui-smoke.json 验证无标签时隐藏标签栏、设置去重、未改预设关闭、修改后关闭保护、跨标签草稿及密钥不进布局；截图包含 House 1024/1280、125%/150% Chromium 缩放、解析设置和 Storage。缩放不等同于独立 Windows DPI 验收。
+
+资料/专题窗口回归使用 --tabs-resource-smoke，需把生成的 SyntheticStudyB.pdf 另复制为同一隔离目录下的 fixture2.pdf。报告保存资料关系、来源、标签与布局结果；后端、前端、类型及构建门禁沿用上文。窗口截图与报告仅保留在 .cache，程序包在 release，不入 Git。
+
+
+## AI 记录与元数据 review 回归（schema 22）
+
+先重建冻结后端，再运行完整后端、前端、类型检查和构建。迁移 022 的 test_enrichment.py 回归覆盖逐条隐藏/恢复、旧隐藏状态迁移、输入元数据、按字段采纳、并发冲突、原文过期、跨文献隔离和失败事务回滚。
+
+用 make-mvp-fixtures.py 生成新的隔离目录，运行 `Yorw.exe --yorw-smoke --reader-smoke --metadata-review-smoke --report-dir=<新绝对目录>`。自有 loopback 模型生成两条记录，窗口实际切换历史、隐藏/恢复、追加去重标签与总结、确认替换标题，检查两个页面职责、目录单击展开/双击进入和管理状态。结果 metadata-review-smoke.json；确认框由脚本桩确认，不代表人工原生对话框验收。
+
+--tabs-resource-smoke 已适配新职责：总结与标签在元数据表单验证，关系在其下方管理，笔记仍在资料页。--enrichment-smoke/--enrichment-docx-smoke 的推荐专题确认也迁到元数据页；先前历史报告中的旧 UI 位置不适用于当前版本。本轮候选与报告路径集中于 history/v0.3.0-workspace.md，避免另建测试指导文档。

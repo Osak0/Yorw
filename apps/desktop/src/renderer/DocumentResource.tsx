@@ -20,9 +20,10 @@ const historyStatus = (status: string) => ({
 
 type Candidate = DocumentSummary & { shared_tags: string[] }
 
-export function DocumentResourceSections({ children, resource, topics, notice, busy, candidates, candidateQuery, candidateDescription,
+export function DocumentResourceSections({ mode='activity', children, resource, topics, notice, busy, candidates, candidateQuery, candidateDescription,
   onEditMetadata, onAddTopic, onRemoveTopic, onSearchCandidates, onAddRelation, onRemoveRelation, onOpenNotes,
   onOpenSearch, onOpenChat, onNavigate, onDeleteHistory, onClearHistory, onRunSearch, onCandidateQuery, onCandidateDescription }: {
+  mode?:'activity'|'metadata'
   children?: React.ReactNode
   resource: DocumentResource
   topics: Topic[]
@@ -51,22 +52,15 @@ export function DocumentResourceSections({ children, resource, topics, notice, b
   const document = resource.document
   const linked = new Set(resource.topics.map(item => item.topic.id))
   const availableTopics = topics.filter(topic => !linked.has(topic.id))
-  return <div className="document-resource-view" aria-label="文献资料">
+  return <div className="document-resource-view" aria-label={mode==='metadata'?'文献关联':'文献资料'}>
     <header className="resource-header">
-      <div><h2>{document.title || document.original_name}</h2><p className="resource-file">{document.original_name}</p>
+      <div><h2>{mode==='metadata'?'关联材料与专题':document.title || document.original_name}</h2><p className="resource-file">{document.original_name}</p>
         <p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.page_count ?? '—'} 页</p></div>
-      <button disabled={busy} onClick={onEditMetadata}>编辑元数据</button>
+      {mode==='activity'&&<button disabled={busy} onClick={onEditMetadata}>编辑元数据</button>}
     </header>
     {children}
     {notice && <p role="status" className="resource-notice">{notice}</p>}
-    <section className="resource-section" aria-label="人工总结">
-      <h3>人工总结 <small>{document.summary_source === 'manual' ? '人工编辑' : document.summary_source === 'ai' ? 'AI 生成，已人工确认' : '尚未记录'}{document.summary_updated_at ? ` · ${document.summary_updated_at}` : ''}</small></h3>
-      {document.summary_md ? <p className="resource-summary">{document.summary_md}</p> : <p className="resource-empty">尚未填写人工总结。总结不会替代原文证据。</p>}
-    </section>
-    <section className="resource-section" aria-label="关键词标签">
-      <h3>关键词 / 标签</h3>
-      {document.tags.length ? <div className="resource-tags">{document.tags.map(tag => <span key={tag}>{tag}</span>)}</div> : <p className="resource-empty">尚未添加标签。</p>}
-    </section>
+    {mode==='metadata'&&<>
     <section className="resource-section" aria-label="所属专题">
       <h3>所属专题</h3>
       {resource.topics.length ? <ul className="resource-list">{resource.topics.map(item => <li key={item.topic.id}>
@@ -99,6 +93,8 @@ export function DocumentResourceSections({ children, resource, topics, notice, b
         <button disabled={busy} onClick={() => onAddRelation(item.document.id, '')}>关联</button>
       </li>)}</ul> : <p className="resource-empty">没有使用相同标签的其他文献。</p>}
     </section>
+    </>}
+    {mode==='activity'&&<>
     <section className="resource-section" aria-label="笔记">
       <h3>笔记 <button className="resource-link-button" onClick={onOpenNotes}>打开笔记</button></h3>
       {resource.notes.length ? <ul className="resource-list">{resource.notes.map(note => <li key={note.id}><div><p>{note.excerpt}</p><small>v{note.version} · {note.updated_at}</small></div></li>)}</ul> : <p className="resource-empty">还没有笔记。</p>}
@@ -123,10 +119,12 @@ export function DocumentResourceSections({ children, resource, topics, notice, b
       {resource.chat.length ? <ul className="resource-list">{resource.chat.map(message => <li key={message.id}><div><strong>{message.question}</strong><p>{message.body_excerpt}</p>
         <small>{historyStatus(message.status)}{message.error_code ? ` · ${message.error_code}` : ''} · {message.sources_count} 条来源 · {message.citations} 条引用</small></div></li>)}</ul> : <p className="resource-empty">还没有问答记录。</p>}
     </section>
+    </>}
   </div>
 }
 
-export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, onOpenSearch, onOpenChat, onOpenTopic, onNavigate }: {
+export function DocumentResourceView({ mode='activity', document, onEditMetadata, onOpenNotes, onOpenSearch, onOpenChat, onOpenTopic, onNavigate }: {
+  mode?:'activity'|'metadata'
   document: DocumentRecord
   onEditMetadata(): void
   onOpenNotes(): void
@@ -136,6 +134,7 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
   onNavigate(target: ReaderTarget): void
 }) {
   const [resource, setResource] = useState<DocumentResource | null>(null)
+  const [topicSuggestions,setTopicSuggestions]=useState<{id:number;items:{topic_id:string;title:string;reason:string}[]}|null>(null)
   const [topics, setTopics] = useState<Topic[]>([])
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -154,10 +153,11 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
       if (loaded.ok) setResource(loaded.value)
       else setNotice(explain(loaded.code))
       if (directory.ok) setTopics(directory.value.items)
+      if(mode==='metadata'){const e=await window.yorw.enrichment.view(document.id);if(sequence===loadSequence.current&&e.ok&&e.value.enrichment)setTopicSuggestions({id:e.value.enrichment.id,items:e.value.enrichment.recommendations})}
     } catch {
       if (sequence === loadSequence.current) setNotice('文献资料加载失败，请重试。')
     }
-  }, [document.id])
+  }, [document.id,mode])
   useEffect(() => { void load() }, [load])
   async function action(run: () => Promise<{ ok: boolean; code?: string }>, success: string) {
     setBusy(true); setNotice('')
@@ -185,7 +185,8 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
   }
   if (!resource) return <div className="document-resource-view" aria-label="文献资料"><p role="status">正在加载文献资料…</p><p role="status">{notice}</p></div>
   return <div className="document-resource-page">
-    <DocumentResourceSections resource={resource} topics={topics} notice={notice} busy={busy} candidates={candidates}
+    {mode==='metadata'&&!!topicSuggestions?.items.length&&<section className="resource-section" aria-label="推荐关联专题"><h3>推荐关联专题</h3>{topicSuggestions.items.map(t=><div key={t.topic_id}><strong>{t.title}</strong><p>{t.reason}</p><button disabled={busy} onClick={()=>void action(()=>window.yorw.enrichment.decide({id:document.id,enrichment_id:topicSuggestions.id,action:'accept_topic',value:t.topic_id}),'已关联专题。')}>确认关联</button><button disabled={busy} onClick={()=>void action(()=>window.yorw.enrichment.decide({id:document.id,enrichment_id:topicSuggestions.id,action:'dismiss_topic',value:t.topic_id}),'已忽略建议。')}>忽略</button></div>)}</section>}
+    <DocumentResourceSections mode={mode} resource={resource} topics={topics} notice={notice} busy={busy} candidates={candidates}
       candidateQuery={candidateQuery} candidateDescription={candidateDescription}
       onEditMetadata={onEditMetadata}
       onAddTopic={topicId => void action(() => window.yorw.resources.addDocumentTopic({ document_id: document.id, topic_id: topicId }), '已关联专题。')}
@@ -198,8 +199,8 @@ export function DocumentResourceView({ document, onEditMetadata, onOpenNotes, on
       onClearHistory={() => void action(() => window.yorw.resources.clearSearchHistory(document.id), '已清空检索历史；笔记和对话保持不变。')}
       onRunSearch={query => void runSearch(query)}
       onCandidateQuery={setCandidateQuery} onCandidateDescription={setCandidateDescription}>
-      <EnrichmentPanel key={document.id} id={document.id} onNavigate={onNavigate} onChanged={()=>void load()}/>
+      {mode==='activity'&&<EnrichmentPanel key={document.id} id={document.id} onNavigate={onNavigate} onChanged={()=>void load()}/>}
     </DocumentResourceSections>
-    <div className="resource-topic-links" aria-label="打开所属专题">{resource.topics.map(item => <button key={item.topic.id} onClick={() => onOpenTopic(item.topic)}>打开专题：{item.topic.title}</button>)}</div>
+
   </div>
 }

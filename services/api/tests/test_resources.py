@@ -286,7 +286,7 @@ def test_schema11_upgrade_preserves_research_assets_and_initializes_stage_b_tabl
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 21
+        assert upgraded.version == 22
         assert upgraded.connection.execute('SELECT title,summary_md FROM documents').fetchone() == ('Retained paper', None)
         assert upgraded.connection.execute('SELECT body_md FROM notes').fetchone() == ('Retained note 中文',)
         assert upgraded.connection.execute('SELECT body_md FROM messages').fetchone() == ('Retained answer',)

@@ -1,3 +1,5 @@
+import {runMetadataReviewSmoke} from './metadata-review-smoke'
+import {runUiSmoke,captureUiContent} from './ui-smoke'
 import {runFoldersSmoke} from './folders-smoke'
 import {runEnrichmentSmoke} from './enrichment-smoke'
 import {Enrichment} from './enrichment'
@@ -69,6 +71,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('enrichment:view',providerAction(input=>enrichment.view(input)))
   ipcMain.handle('enrichment:generate',providerAction(input=>enrichment.generate(input)))
   ipcMain.handle('enrichment:cancel',providerAction(input=>enrichment.cancel(input)))
+  ipcMain.handle('enrichment:apply',providerAction(input=>enrichment.apply(input)))
   ipcMain.handle('enrichment:decide',providerAction(input=>enrichment.decide(input)))
   const layout = new Layout(readerSmoke ? smokeReport! : app.getPath('userData'))
   ipcMain.handle('layout:load',providerAction(()=>layout.load()))
@@ -169,6 +172,7 @@ else app.whenReady().then(async () => {
     if (!reportDir) { app.exit(2); return }
     try {
       await new Promise(resolve => setTimeout(resolve, 1100))
+      if(process.argv.includes('--ui-smoke'))await writeFile(join(reportDir,'ui-smoke.json'),JSON.stringify(await runUiSmoke(window,reportDir),null,2))
       const secureStorage = await safeStorage.isAsyncEncryptionAvailable() && (await safeStorage.decryptStringAsync(await safeStorage.encryptStringAsync('yorw-fixture'))).result === 'yorw-fixture'
       let readerProof: unknown = null
       if (readerSmoke && !process.argv.includes('--mvp-resume-smoke')&&!process.argv.includes('--ai-resume-smoke')&&!process.argv.includes('--tabs-resume-smoke')&&!process.argv.includes('--tabs-close-smoke')&&!process.argv.includes('--tabs-fault-smoke')&&!process.argv.includes('--tabs-citation-smoke')&&!process.argv.includes('--tabs-tool-resume-smoke')&&!process.argv.includes('--tabs-chat-smoke')&&!process.argv.includes('--multiformat-smoke')) {
@@ -240,6 +244,7 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--metadata-review-smoke')){await writeFile(join(reportDir,'metadata-review-smoke.json'),JSON.stringify(await runMetadataReviewSmoke(window,backend,providers,reportDir),null,2))}
       if(readerSmoke && process.argv.includes('--folders-smoke')) {
         const proof=await runFoldersSmoke(window,backend,reportDir)
         await writeFile(join(reportDir,'folders-smoke.json'),JSON.stringify(proof,null,2))
@@ -259,6 +264,7 @@ else app.whenReady().then(async () => {
         await writeFile(join(reportDir,'rectification-smoke.json'),JSON.stringify(proof,null,2))
       }
       const probe = await window.webContents.executeJavaScript(`(async () => ({status: await window.yorw.getStatus(), nodeExposed: typeof process !== 'undefined' || typeof require !== 'undefined', bridgeKeys: Object.keys(window.yorw), navigation: [...document.querySelectorAll('nav button')].map(x => x.textContent)}))()`)
+      if(process.argv.includes('--ui-smoke'))await captureUiContent(window,reportDir)
       await mkdir(reportDir, { recursive: true })
       await writeFile(join(reportDir, 'desktop-smoke.json'), JSON.stringify({ ...probe, secureStorage, readerProof, tabProof, tabResumeProof, citationProof, chatProof, toolResumeProof, resourceProof, tabCloseProof, tabFaultProof }, null, 2))
       await writeFile(join(reportDir, 'desktop.png'), (await window.webContents.capturePage()).toPNG())
@@ -270,16 +276,16 @@ else app.whenReady().then(async () => {
             const tab = [...document.querySelectorAll('.workspace-tab')].find(item => item.querySelector('.workspace-tab-kind')?.textContent === ${JSON.stringify(kind)} && item.textContent.includes(${JSON.stringify(title)}))
             if (!tab) return false
             tab.click()
-            return await wait(() => !!document.querySelector(${JSON.stringify(selector)}))
+            return await wait(() => tab.getAttribute('aria-selected')==='true' && document.querySelector(${JSON.stringify(selector)})?.getClientRects().length>0)
           })()`)
           return opened === true
         }
         for (const [width, height] of [[1280, 720], [1440, 900]]) {
           window.setContentSize(width, height)
           await new Promise(resolve => setTimeout(resolve, 500))
-          const resourceOpened = await openView('文献资料', 'Reader fixture', '.document-resource-view')
+          const resourceOpened = await openView('文献资料', 'Reader fixture', '.document-resource-page')
           const resourceLayout = resourceOpened ? await window.webContents.executeJavaScript(`(() => {
-            const view = document.querySelector('.document-resource-view')
+            const view = document.querySelector('.document-resource-page')
             const rect = view?.getBoundingClientRect()
             return { view: 'resource', width: innerWidth, height: innerHeight,
               visible: !!rect && rect.width > 0 && rect.top >= 0 && rect.bottom <= innerHeight + 1,
@@ -304,6 +310,11 @@ else app.whenReady().then(async () => {
         if (layouts.some(layout => layout.opened === false || layout.visible !== true || layout.horizontalOverflow || layout.viewOverflow)) throw new Error('RESOURCE_LAYOUT_OVERFLOW')
       }
       if (readerSmoke && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
+        await window.webContents.executeJavaScript(`(async()=>{
+          const tab=[...document.querySelectorAll('.workspace-tab')].find(t=>t.querySelector('.workspace-tab-kind')?.textContent==='文献')
+          if(!tab)throw new Error('READER_TAB_MISSING');tab.click()
+          const end=Date.now()+12000;while(Date.now()<end){if(document.querySelector('.pdf-viewport')?.getClientRects().length)return;await new Promise(r=>setTimeout(r,80))}throw new Error('READER_NOT_VISIBLE')
+        })()`)
         const layouts = []
         for (const [width, height] of [[1440,1024],[1024,768],[1280,720],[1440,900]]) {
           window.setContentSize(width, height)
@@ -336,7 +347,8 @@ else app.whenReady().then(async () => {
       app.exit((probe.status.state === 'ready'||faultObserved) && !probe.nodeExposed ? 0 : 1)
     } catch (error) {
       try { if (readerSmoke) {
-        await mkdir(reportDir, { recursive: true })
+        if(process.argv.includes('--ui-smoke'))await captureUiContent(window,reportDir)
+      await mkdir(reportDir, { recursive: true })
         const reader = window.isDestroyed() ? null : await window.webContents.executeJavaScript(`({feedback: document.querySelector('.reader-feedback')?.textContent, text: document.querySelector('.textLayer')?.textContent, note: document.querySelector('.note-status')?.textContent, workspace:document.querySelector('.workspace-panel')?.textContent})`).catch(() => null)
         await writeFile(join(reportDir, 'failure.json'), JSON.stringify({ message: error instanceof Error ? error.message : 'SMOKE_FAILED', reader }))
         if (!window.isDestroyed()) await writeFile(join(reportDir, 'failure.png'), (await window.webContents.capturePage()).toPNG())

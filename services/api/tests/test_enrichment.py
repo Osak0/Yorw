@@ -79,7 +79,8 @@ def test_human_fields_remain_and_rejections_persist(enrich):
     view=service.view(identity)['enrichment']
     service.decide(identity,Decision(enrichment_id=view['id'],action='hide'))
     settle(service,service.start(identity,'key',1,regenerate=True))
-    assert service.view(identity)['enrichment']['hidden']
+    assert not service.view(identity)['enrichment']['hidden']
+    assert service.view(identity,view['id'])['enrichment']['hidden']
     assert fake.calls==3
 
 
@@ -242,7 +243,7 @@ def test_migration_19_preserves_human_data_and_adds_disabled_settings(tmp_path):
     with db.write() as conn:conn.execute("INSERT INTO documents(id,sha256,original_name,summary_md,summary_source,extraction_status,created_at,updated_at) VALUES(?,?,?,'Human preserved','manual','ready','time','time')",(identity,identity,'kept.txt'))
     db.close();upgraded=Database(workspace)
     try:
-        assert upgraded.version==21
+        assert upgraded.version==22
         assert upgraded.connection.execute('SELECT summary_md FROM documents').fetchone()[0]=='Human preserved'
         assert upgraded.connection.execute('SELECT enabled FROM enrichment_preferences').fetchone()[0]==0
         assert upgraded.connection.execute('SELECT metadata_enabled FROM ai_preferences').fetchone()[0]==0
@@ -267,3 +268,82 @@ def test_vector_adapter_is_scoped_versioned_and_rebuildable(enrich):
     assert index.load('configuration-1',allowed)=={}
     with service.db.write() as conn:index.rebuild(conn,'configuration-1')
     assert service.library.rows('SELECT * FROM knowledge_vectors')==[]
+
+
+def test_history_restore_and_explicit_canonical_metadata_adoption(enrich):
+    from yorw_api.enrichment import ApplyMetadata
+    service,fake=enrich;identity=doc(service)
+    current=service.library.update(identity,Metadata(version=1,tags=['Human','ldct'],summary_md='Original human summary'))
+    original=fake.summarize
+    observed=[]
+    def suggest(config,key,blocks,check):
+        observed.append(config['metadata_context'])
+        result=original(config,key,blocks,check)
+        result['result']['metadata']={'title':'Suggested title','authors':['Author'],'year':2025}
+        return result
+    fake.summarize=suggest
+    assert settle(service,service.start(identity,'key',1))['status']=='succeeded'
+    first=service.view(identity)['enrichment']
+    assert observed[0]['tags']==['Human','ldct']
+    service.decide(identity,Decision(enrichment_id=first['id'],action='hide'))
+    assert settle(service,service.start(identity,'key',1,regenerate=True))['status']=='succeeded'
+    view=service.view(identity)
+    assert len(view['history'])==2 and not view['enrichment']['hidden']
+    service.decide(identity,Decision(enrichment_id=first['id'],action='restore'))
+    assert service.view(identity,first['id'])['enrichment']['raw_result']['overview']=='Synthetic lung imaging overview'
+    updated=service.apply_metadata(identity,ApplyMetadata(enrichment_id=first['id'],version=current['version'],fields=['tags','summary_md'],mode='append'))
+    assert updated['tags']==['Human','ldct','肺部筛查']
+    assert updated['summary_md']=='Original human summary\n\nSynthetic lung imaging overview'
+    assert updated['summary_source']=='ai'
+    assert service.library.rows('SELECT count(*) AS n FROM enrichment_applications')[0]['n']==1
+    with pytest.raises(HTTPException,match='DOCUMENT_CONFLICT'):
+        service.apply_metadata(identity,ApplyMetadata(enrichment_id=first['id'],version=current['version'],fields=['title'],mode='replace'))
+    applied=service.apply_metadata(identity,ApplyMetadata(enrichment_id=first['id'],version=updated['version'],fields=['title','authors','year'],mode='replace'))
+    assert applied['title']=='Suggested title' and applied['authors']==['Author'] and applied['year']==2025
+    assert applied['metadata_source']['title']=='ai_confirmed'
+    with service.db.write() as conn:conn.execute('UPDATE documents SET extraction_version=extraction_version+1 WHERE id=?',(identity,))
+    with pytest.raises(HTTPException,match='MATERIAL_CHANGED'):
+        service.apply_metadata(identity,ApplyMetadata(enrichment_id=first['id'],version=applied['version'],fields=['title'],mode='replace'))
+    service.decide(identity,Decision(enrichment_id=first['id'],action='hide'))
+    service.decide(identity,Decision(enrichment_id=first['id'],action='restore'))
+    assert service.view(identity,first['id'])['enrichment']['stale']
+
+
+def test_history_is_document_scoped_and_failed_apply_is_atomic(enrich):
+    from yorw_api.enrichment import ApplyMetadata
+    service,_=enrich;identity=doc(service)
+    settle(service,service.start(identity,'key',1))
+    item=service.view(identity)['enrichment']
+    other=document(SimpleNamespace(db=service.db),['A distinct self-authored source.'])
+    with pytest.raises(HTTPException,match='ENRICHMENT_NOT_FOUND'):service.view(other,item['id'])
+    before=service.library.document(identity)
+    with pytest.raises(HTTPException,match='INVALID_INPUT'):
+        service.apply_metadata(identity,ApplyMetadata(enrichment_id=item['id'],version=before['version'],fields=['summary_md','relative_path'],mode='replace'))
+    assert service.library.document(identity)==before
+    assert not service.library.rows('SELECT * FROM enrichment_applications')
+
+
+def test_schema21_hidden_results_migrate_without_losing_original_outputs(tmp_path):
+    from shutil import copy2
+    from pathlib import Path
+    from yorw_api.storage.database import Database
+    from yorw_api.storage.workspace import Workspace
+    previous=tmp_path/'previous';previous.mkdir()
+    for script in sorted((Path(__file__).parents[1]/'src/yorw_api/migrations').glob('*.sql'))[:21]:copy2(script,previous/script.name)
+    workspace=Workspace((tmp_path/'workspace').resolve());old=Database(workspace,previous)
+    identity=str(uuid4());raw={'overview':'Legacy original summary','tags':['Legacy'],'synonyms':[],'evidence_ids':['saved-block']}
+    with old.write() as conn:
+        conn.execute("INSERT INTO documents(id,sha256,original_name,summary_md,extraction_status,created_at,updated_at) VALUES(?,?,?,'Preserved metadata','ready','time','time')",(identity,identity,'legacy.txt'))
+        extraction=conn.execute('SELECT extraction_version FROM documents WHERE id=?',(identity,)).fetchone()[0]
+        for _ in range(2):conn.execute("INSERT INTO document_enrichments(document_id,extraction_version,config_hash,prompt_version,result_json,coverage_json,created_at) VALUES(?,?,'old','v2',?,'[]','time')",(identity,extraction,json.dumps(raw)))
+        conn.execute('INSERT INTO enrichment_decisions VALUES(?,?,?)',(identity,extraction,'hide'))
+    old.close();db=Database(workspace);library=Library(db);service=Enrichments(library)
+    try:
+        assert len(service.view(identity)['history'])==2
+        assert service.view(identity)['enrichment']['hidden']
+        service.decide(identity,Decision(enrichment_id=1,action='restore'))
+        restored=service.view(identity,1)['enrichment']
+        assert restored['raw_result']==raw and not restored['hidden']
+        assert service.view(identity,2)['enrichment']['hidden']
+        assert library.document(identity)['summary_md']=='Preserved metadata'
+    finally:service.close();library.close();db.close()

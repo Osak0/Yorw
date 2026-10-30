@@ -22,11 +22,13 @@ type Edit={kind:'create'|'edit'|'assign';folder?:Folder;document?:DocumentRecord
 type Props={documents:DocumentRecord[];folders:Folder[];selected:string;busy?:boolean;onSelect:(id:string)=>void;onChange:()=>void;onOpen:(d:DocumentRecord)=>void;onMetadata:(d:DocumentRecord)=>void;onEdit:(d:DocumentRecord)=>void;onRemove:(d:DocumentRecord)=>void;onImport:()=>void}
 export function LibraryDirectory({documents,folders,selected,busy:importing,onSelect,onChange,onOpen,onMetadata,onEdit,onRemove,onImport}:Props) {
   const [menu,setMenu]=useState<MenuTarget|null>(null), [edit,setEdit]=useState<Edit|null>(null)
+  const [expanded,setExpanded]=useState<string[]>([])
   const [name,setName]=useState(''), [parent,setParent]=useState(''), [notice,setNotice]=useState(''), [busy,setBusy]=useState(false)
   const menuRef=useRef<HTMLDivElement>(null), dialogRef=useRef<HTMLDialogElement>(null), trigger=useRef<HTMLElement|null>(null)
   useEffect(()=>{setNotice('');setMenu(null)},[selected])
   const current=folders.find(f=>f.id===selected), path=folderPath(folders,selected)
   const children=folders.filter(f=>(f.parent_id||'root')===selected)
+  const currentDocuments=directDocuments(documents,selected)
   function dismiss(){setMenu(null);trigger.current?.focus()}
   function show(event:React.MouseEvent|React.KeyboardEvent,target:Partial<MenuTarget>={}) {
     event.preventDefault();event.stopPropagation();trigger.current=event.currentTarget as HTMLElement
@@ -73,13 +75,23 @@ export function LibraryDirectory({documents,folders,selected,busy:importing,onSe
     try{const r=await window.yorw.documents.library({action,id:d.id});setNotice(r.ok?(r.value.path||'操作完成。'):'原件不可用或系统操作失败，请重试。')}catch{setNotice('系统操作失败，请重试。')}
   }
   const item=(label:string,action:()=>void,danger=false)=><button role="menuitem" className={danger?'danger':''} onClick={()=>{dismiss();action()}}>{label}</button>
+  function entries(parentId:string,seen=new Set<string>()):React.ReactNode {
+    if(seen.has(parentId))return null
+    const next=new Set([...seen,parentId])
+    return <>
+      {folders.filter(f=>(f.parent_id||'root')===parentId).map(f=><React.Fragment key={f.id}>
+        <button className="directory-entry directory-folder" aria-expanded={expanded.includes(f.id)} title={f.name} onClick={()=>setExpanded(ids=>ids.includes(f.id)?ids.filter(id=>id!==f.id):[...ids,f.id])} onDoubleClick={()=>onSelect(f.id)} onContextMenu={e=>show(e,{folder:f})} onKeyDown={e=>{keyMenu(e,{folder:f});if(e.key==='Enter'){e.preventDefault();onSelect(f.id)}if(e.key==='ArrowRight'){e.preventDefault();setExpanded(ids=>ids.includes(f.id)?ids:[...ids,f.id])}if(e.key==='ArrowLeft'){e.preventDefault();setExpanded(ids=>ids.filter(id=>id!==f.id))}}}><span aria-hidden="true">{expanded.includes(f.id)?'▾':'▸'}</span><span>{f.name}</span></button>
+        {expanded.includes(f.id)&&<div className="directory-subtree" role="group" aria-label={f.name}>{entries(f.id,next)}</div>}
+      </React.Fragment>)}
+      {directDocuments(documents,parentId).map(d=><button className="directory-entry directory-file" key={d.id} title={d.original_name} onClick={()=>onOpen(d)} onContextMenu={e=>show(e,{document:d})} onKeyDown={e=>keyMenu(e,{document:d})}>{d.original_name}</button>)}
+    </>
+  }
   return <div className="directory-browser" onContextMenu={e=>show(e)}>
     <div className="directory-toolbar"><button disabled={importing} onClick={onImport}>导入文献</button><button onClick={()=>begin({kind:'create'})}>新建文件夹</button></div>
     <div className="directory-location"><button aria-label="返回上一级" disabled={!current} onClick={()=>onSelect(current?.parent_id||'root')}>↑</button><span title={['文献',...path.map(f=>f.name)].join(' / ')}>{path.length?path.map(f=>f.name).join(' / '):'根目录'}</span></div>
     <div className="directory-entries" aria-label="当前目录内容">
-      {children.map(f=><button className="directory-entry directory-folder" key={f.id} title={f.name} onClick={()=>onSelect(f.id)} onContextMenu={e=>show(e,{folder:f})} onKeyDown={e=>keyMenu(e,{folder:f})}><span aria-hidden="true">▸</span><span>{f.name}</span></button>)}
-      {documents.map(d=><button className="directory-entry directory-file" key={d.id} title={d.original_name} onClick={()=>onOpen(d)} onContextMenu={e=>show(e,{document:d})} onKeyDown={e=>keyMenu(e,{document:d})}>{d.original_name}</button>)}
-      {!children.length&&!documents.length&&<p className="directory-empty">此文件夹为空</p>}
+      {entries(selected)}
+      {!children.length&&!currentDocuments.length&&<p className="directory-empty">此文件夹为空</p>}
     </div>
     {notice&&<p role="status" className="directory-notice">{notice}</p>}
     {menu&&createPortal(<div ref={menuRef} role="menu" aria-label="目录操作" className="directory-menu" style={{left:menu.x,top:menu.y}} onContextMenu={e=>e.preventDefault()} onKeyDown={e=>{

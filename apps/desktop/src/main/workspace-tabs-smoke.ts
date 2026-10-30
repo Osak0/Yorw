@@ -18,6 +18,7 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
       throw new Error('TABS_TIMEOUT_' + label)
     }
     const button = text => [...document.querySelectorAll('button')].find(element => element.textContent === text)
+    const dialogButton = text => [...document.querySelectorAll('.close-dialog button')].find(element => element.textContent === text)
     const nav = name => [...document.querySelectorAll('.module-nav button')].find(element => element.textContent === name)
     const tabs = () => [...document.querySelectorAll('.workspace-tab')]
     const control = selector => {
@@ -34,19 +35,38 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
     const alphaTab = () => tabs().find(tab => tab.textContent.includes('Topic Alpha'))
     const betaTab = () => tabs().find(tab => tab.textContent.includes('Topic Beta'))
     const documentBTab = () => tabs().find(tab => /synthetic study b/i.test(tab.textContent))
+    const closeByKind = label => {
+      const tab = tabs().find(item => item.querySelector('.workspace-tab-kind')?.textContent === label)
+      if (!tab) throw new Error('TAB_KIND_MISSING:' + label)
+      tab.parentElement.querySelector('.workspace-tab-close').click()
+    }
+    const closeByTitle = title => {
+      const tab = tabs().find(item => item.querySelector('.workspace-tab-title')?.textContent === title)
+      if (!tab) throw new Error('TAB_TITLE_MISSING:' + title)
+      tab.parentElement.querySelector('.workspace-tab-close').click()
+    }
 
     button('检索').click()
     await waitFor(() => document.querySelector('input[aria-label="文献内检索"]'), 'SEARCH_A')
     setValue(control('input[aria-label="文献内检索"]'), 'evidence')
 
     nav('Garden').click()
-    await waitFor(() => document.querySelector('.garden-content')?.textContent.includes('专题目录'), 'GARDEN_HOME_A')
-    button('新建').click()
+    await waitFor(() => document.querySelector('.garden-home') && !document.querySelector('.garden-directory'), 'GARDEN_HOME_A')
+    const gardenHomeHasNoDirectory = !document.querySelector('.garden-directory')
+    button('新建专题').click()
     await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_FORM_A')
     setValue(control('input[aria-label="新专题名称"]'), 'Topic Alpha')
     await waitFor(() => !button('创建专题').disabled, 'CREATE_ALPHA')
+    nav('Garden').click()
+    await waitFor(() => document.querySelector('.garden-home'), 'GARDEN_HOME_REOPEN')
+    button('新建专题').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_FORM_A_AGAIN')
+    const createDraftKept = control('input[aria-label="新专题名称"]').value === 'Topic Alpha'
+    const createTabCount = tabs().filter(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '新建专题').length
     button('创建专题').click()
     await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'), 'ALPHA_OPEN')
+    const createTabClosed = !tabs().some(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '新建专题')
+    const alphaId = alphaTab()?.getAttribute('data-tab-key')?.slice(6) ?? ''
 
     documentTab().click()
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'DOC_A_BACK')
@@ -59,18 +79,74 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
     const topicASelected = alphaTab().getAttribute('aria-selected') === 'true'
 
     nav('Garden').click()
-    await waitFor(() => document.querySelector('.garden-content')?.textContent.includes('专题目录'), 'GARDEN_HOME_B')
-    button('新建').click()
+    await waitFor(() => document.querySelector('.garden-home'), 'GARDEN_HOME_B')
+    const alphaTreeButton = document.querySelector('.garden-tree-name[data-topic-id="' + alphaId + '"]')
+    if (!alphaTreeButton) throw new Error('GARDEN_TREE_ALPHA_MISSING')
+    alphaTreeButton.click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'), 'ALPHA_FROM_TREE')
+    button('新建专题').click()
     await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_FORM_B')
+    const bodyDefaultParent = control('select[aria-label="新专题父级"]').value === alphaId
     setValue(control('input[aria-label="新专题名称"]'), 'Topic Beta')
     await waitFor(() => !button('创建专题').disabled, 'CREATE_BETA')
     button('创建专题').click()
     await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta'), 'BETA_OPEN')
-    setValue(control('input[aria-label="专题名称"]'), 'Topic Beta Renamed')
+    button('专题管理').click()
+    await waitFor(() => document.querySelector('input[aria-label="专题管理名称"]'), 'MANAGE_OPEN')
+    const manageTabCount = tabs().filter(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '专题管理').length
+    setValue(control('input[aria-label="专题管理名称"]'), 'Topic Beta Renamed')
+    control('select[aria-label="专题管理父级"]').value = ''
+    control('select[aria-label="专题管理父级"]').dispatchEvent(new Event('change', { bubbles: true }))
     await waitFor(() => !button('保存目录信息').disabled, 'META_ENABLED')
     button('保存目录信息').click()
     await waitFor(() => tabs().some(tab => tab.textContent.includes('Topic Beta Renamed')), 'TOPIC_TITLE_UPDATED')
-    const topicTitleUpdated = tabs().some(tab => tab.textContent.includes('Topic Beta Renamed'))
+    const topicTitleUpdated = tabs().some(tab => tab.textContent.includes('Topic Beta Renamed')) && control('select[aria-label="专题管理父级"]').value === ''
+    button('返回正文').click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta Renamed'), 'BETA_BODY_AFTER_MANAGE')
+    button('专题管理').click()
+    await waitFor(() => document.querySelector('input[aria-label="专题管理名称"]'), 'MANAGE_REOPEN')
+    const manageDeduped = tabs().filter(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '专题管理').length === 1
+    button('返回正文').click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta Renamed'), 'BETA_BODY_AGAIN')
+
+    button('新建专题').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_CLOSE_FORM')
+    setValue(control('input[aria-label="新专题名称"]'), 'Topic Gamma')
+    closeByKind('新建专题')
+    await waitFor(() => document.querySelector('.close-dialog')?.textContent.includes('尚未创建'), 'CREATE_CLOSE_DIALOG')
+    dialogButton('取消').click()
+    await waitFor(() => !document.querySelector('.close-dialog'), 'CREATE_CLOSE_CANCEL')
+    const createCancelKept = control('input[aria-label="新专题名称"]').value === 'Topic Gamma' && !!tabs().find(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '新建专题')
+    closeByKind('新建专题')
+    await waitFor(() => document.querySelector('.close-dialog'), 'CREATE_CLOSE_DIALOG_2')
+    dialogButton('放弃并关闭').click()
+    await waitFor(() => !tabs().find(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '新建专题'), 'CREATE_CLOSE_DISCARD')
+    const createDiscarded = !tabs().find(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '新建专题')
+
+    button('专题管理').click()
+    await waitFor(() => document.querySelector('input[aria-label="专题管理名称"]'), 'MANAGE_CLOSE_FORM')
+    setValue(control('input[aria-label="专题管理名称"]'), 'Unsaved Rename')
+    closeByKind('专题管理')
+    await waitFor(() => document.querySelector('.close-dialog'), 'MANAGE_CLOSE_DIALOG')
+    dialogButton('取消').click()
+    await waitFor(() => !document.querySelector('.close-dialog') && !!document.querySelector('input[aria-label="专题管理名称"]'), 'MANAGE_CLOSE_CANCEL')
+    const manageCancelKept = control('input[aria-label="专题管理名称"]').value === 'Unsaved Rename'
+    closeByKind('专题管理')
+    await waitFor(() => document.querySelector('.close-dialog'), 'MANAGE_CLOSE_DIALOG_2')
+    dialogButton('放弃并关闭').click()
+    await waitFor(() => !tabs().find(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '专题管理'), 'MANAGE_CLOSE_DISCARD')
+    const manageDiscarded = !tabs().find(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '专题管理') && tabs().some(tab => tab.textContent.includes('Topic Beta Renamed'))
+
+    button('新建专题').click()
+    await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'CREATE_SAVE_CLOSE_FORM')
+    setValue(control('input[aria-label="新专题名称"]'), 'Topic Gamma')
+    closeByKind('新建专题')
+    await waitFor(() => document.querySelector('.close-dialog')?.textContent.includes('尚未创建'), 'CREATE_SAVE_CLOSE_DIALOG')
+    button('创建并关闭').click()
+    await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Gamma'), 'CREATE_SAVE_CLOSE_DONE')
+    const createSaveClose = tabs().some(tab => tab.textContent.includes('Topic Gamma')) && !tabs().find(tab => tab.querySelector('.workspace-tab-kind')?.textContent === '新建专题')
+    closeByTitle('Topic Gamma')
+    await waitFor(() => !tabs().some(tab => tab.textContent.includes('Topic Gamma')) && document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Beta Renamed'), 'GAMMA_CLOSED')
 
     alphaTab().click()
     await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Topic Alpha'), 'ALPHA_AGAIN')
@@ -79,7 +155,7 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
     const topicBSelected = betaTab().getAttribute('aria-selected') === 'true'
 
     nav('Storage').click()
-    await waitFor(() => button('导入 PDF'), 'LIBRARY')
+    await waitFor(() => button('导入文献'), 'LIBRARY')
     const documentBRow = [...document.querySelectorAll('.document-row')].find(row => /synthetic study b/i.test(row.textContent))
     if (!documentBRow) throw new Error('DOCUMENT_B_MISSING')
     ;[...documentBRow.querySelectorAll('button')].find(element => element.textContent === '打开阅读').click()
@@ -152,9 +228,11 @@ export async function runWorkspaceTabsSmoke(window: BrowserWindow): Promise<unkn
     documentTab().click()
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'READER_AFTER_KEYBOARD')
 
+    if (!gardenHomeHasNoDirectory || !createDraftKept || createTabCount !== 1 || !createTabClosed || !bodyDefaultParent || manageTabCount !== 1 || !manageDeduped || !createCancelKept || !createDiscarded || !manageCancelKept || !manageDiscarded || !createSaveClose) throw new Error('GARDEN_TABS_FAILED')
     return {
       tabCount: tabs().length,
       titles: tabs().map(tab => tab.textContent),
+      garden: { gardenHomeHasNoDirectory, createDraftKept, createTabCount, createTabClosed, bodyDefaultParent, manageTabCount, manageDeduped, createCancelKept, createDiscarded, manageCancelKept, manageDiscarded, createSaveClose },
       documentSelected: documentTab().getAttribute('aria-selected') === 'true',
       topicASelected,
       topicBSelected,
@@ -217,8 +295,8 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
       tab.querySelector('.workspace-tab-kind')?.textContent === kind && tab.querySelector('.workspace-tab-title')?.textContent === title)
 
     nav('Garden').click()
-    await waitFor(() => button('新建'), 'GARDEN')
-    button('新建').click()
+    await waitFor(() => document.querySelector('.garden-home'), 'GARDEN')
+    button('新建专题').click()
     await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'TOPIC_FORM')
     setValue(document.querySelector('input[aria-label="新专题名称"]'), 'Resource Topic')
     await waitFor(() => !button('创建专题').disabled, 'TOPIC_CREATE_READY')
@@ -226,21 +304,21 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Resource Topic'), 'TOPIC_CREATED')
 
     nav('Storage').click()
-    await waitFor(() => button('导入 PDF'), 'LIBRARY')
+    await waitFor(() => button('导入文献'), 'LIBRARY')
     openReader('Reader fixture')
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'READER')
     button('资料').click()
     await waitFor(() => resource(), 'RESOURCE')
-    await waitFor(() => resource().textContent.includes('尚未填写人工总结'), 'RESOURCE_LOADED')
+    await waitFor(() => resource().textContent.includes('检索历史'), 'RESOURCE_LOADED')
 
     // A metadata editor opened on document A must not survive a switch to B.
     nav('Storage').click()
-    await waitFor(() => button('导入 PDF'), 'LIBRARY_ISOLATION')
+    await waitFor(() => button('导入文献'), 'LIBRARY_ISOLATION')
     await waitFor(() => document.querySelector('.storage-directory'), 'STORAGE_DIRECTORY')
     await waitFor(() => [...document.querySelectorAll('.document-row')].some(row => row.textContent.includes('Synthetic study B')), 'LIBRARY_ROWS_ISOLATION')
     setValue(document.querySelector('input[aria-label="搜索文献"]'), 'Synthetic study B')
     await waitFor(() => document.querySelectorAll('.document-row').length === 1 && document.querySelector('.document-row')?.textContent.includes('Synthetic study B'), 'STORAGE_SEARCH')
-    const storageSearch = document.querySelectorAll('.document-row').length === 1 && document.querySelector('.storage-directory-list')?.textContent.includes('Synthetic study B')
+    const storageSearch = document.querySelectorAll('.document-row').length === 1 && document.querySelector('.directory-entries')?.textContent.includes('SyntheticStudyB.pdf')
     setValue(document.querySelector('input[aria-label="搜索文献"]'), '')
     await waitFor(() => document.querySelectorAll('.document-row').length > 1, 'STORAGE_SEARCH_CLEARED')
     button('收起目录').click()
@@ -267,7 +345,7 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     const metadataDraftKept = document.querySelector('[aria-label="关键词 / 标签"]')?.value === 'draft-tag'
     const metadataTabReturned = Boolean(metadataTabOpen && metadataTitle === 'Reader fixture' && metadataDraftKept)
     button('关闭整理').click()
-    await waitFor(() => button('导入 PDF') && !document.querySelector('[aria-label="编辑文献元数据"]'), 'META_CLOSED_TO_LIBRARY')
+    await waitFor(() => button('导入文献') && !document.querySelector('[aria-label="编辑文献元数据"]'), 'META_CLOSED_TO_LIBRARY')
     const metadataClosedToLibrary = tabBy('整理文献', 'Reader fixture') === undefined
     if (!metadataTabOpen || !editorClearedOnSwitch || !metadataTabReturned || !metadataClosedToLibrary) throw new Error('RESOURCE_STATE_LEAK')
 
@@ -278,17 +356,19 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     button('编辑元数据').click()
     await waitFor(() => document.querySelector('[aria-label="关键词 / 标签"]'), 'META_EDITOR')
     setValue(document.querySelector('[aria-label="关键词 / 标签"]'), '检索增强\\nRAG')
-    setValue(document.querySelector('[aria-label="人工总结"]'), '资源页人工总结。')
+    setValue(document.querySelector('[aria-label="总结"]'), '资源页人工总结。')
     await new Promise(resolve => setTimeout(resolve, 100))
     buttonIn(document.querySelector('[aria-label="编辑文献元数据"]'), '保存').click()
-    await waitFor(() => button('导入 PDF') && !document.querySelector('[aria-label="编辑文献元数据"]'), 'META_SAVED_TO_LIBRARY')
+    await waitFor(() => button('导入文献') && !document.querySelector('[aria-label="编辑文献元数据"]'), 'META_SAVED_TO_LIBRARY')
     openReader('Reader fixture')
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'), 'SUMMARY_READER')
     button('资料').click()
-    await waitFor(() => resource()?.textContent.includes('资源页人工总结。'), 'SUMMARY_SAVED')
-    await waitFor(() => resource().textContent.includes('检索增强'), 'TAGS_SAVED')
-    const summarySaved = resource().textContent.includes('资源页人工总结。')
-    const tagsSaved = resource().textContent.includes('检索增强')
+    await waitFor(() => button('编辑元数据'), 'SUMMARY_RESOURCE')
+    button('编辑元数据').click()
+    await waitFor(() => document.querySelector('[aria-label="总结"]')?.value === '资源页人工总结。', 'SUMMARY_SAVED')
+    const summarySaved = document.querySelector('[aria-label="总结"]').value === '资源页人工总结。'
+    const tagsSaved = document.querySelector('[aria-label="关键词 / 标签"]').value.includes('检索增强')
+    await waitFor(() => document.querySelector('[aria-label="文献关联"]'), 'RELATIONS_EDITOR')
 
     setSelect(document.querySelector('select[aria-label="关联专题"]'), 'Resource Topic')
     await waitFor(() => !button('关联专题').disabled, 'TOPIC_READY')
@@ -304,19 +384,22 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
     await waitFor(() => document.querySelector('[aria-label="关联说明"]').value === '资源页关联', 'RELATION_DESCRIPTION')
     buttonIn(document.querySelector('.resource-candidates'), '关联').click()
     await waitFor(() => resource().textContent.includes('资源页关联'), 'RELATION_ADDED')
+    tabBy('文献资料', 'Reader fixture').click()
     await waitFor(() => resource().textContent.includes('Resource smoke note for materials.'), 'NOTE_VISIBLE')
 
     nav('Storage').click()
-    await waitFor(() => button('导入 PDF'), 'LIBRARY_BACK')
+    await waitFor(() => button('导入文献'), 'LIBRARY_BACK')
     openReader('Synthetic study B')
     await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存'), 'SECOND_READER')
     button('资料').click()
+    await waitFor(() => button('编辑元数据'), 'SECOND_ACTIVITY')
+    button('编辑元数据').click()
     await waitFor(() => resource()?.textContent.includes('Reader fixture'), 'RELATION_BIDIRECTIONAL')
     const bidirectional = resource().textContent.includes('资源页关联')
 
     nav('Garden').click()
-    await waitFor(() => document.querySelector('.garden-directory'), 'GARDEN_BACK')
-    const topicButton = [...document.querySelectorAll('.garden-directory button[data-topic-id]')].find(item => item.textContent.includes('Resource Topic'))
+    await waitFor(() => document.querySelector('.garden-home'), 'GARDEN_BACK')
+    const topicButton = [...document.querySelectorAll('.garden-home button[data-topic-id]')].find(item => item.textContent.includes('Resource Topic'))
     if (!topicButton) throw new Error('RESOURCE_TOPIC_MISSING')
     topicButton.click()
     await waitFor(() => document.querySelector('.topic-body-view h2')?.textContent.includes('Resource Topic'), 'TOPIC_OPEN')
@@ -327,7 +410,9 @@ export async function runResourceRelationsSmoke(window: BrowserWindow, backend: 
 
     // Create a second materials tab first, then switch directly from A to B
     // with A's search results on screen.
-    button('新建').click()
+    nav('Garden').click()
+    await waitFor(() => document.querySelector('.garden-home'), 'GARDEN_SECOND')
+    button('新建专题').click()
     await waitFor(() => document.querySelector('input[aria-label="新专题名称"]'), 'SECOND_TOPIC_FORM')
     setValue(document.querySelector('input[aria-label="新专题名称"]'), 'Resource Topic B')
     await waitFor(() => !button('创建专题').disabled, 'SECOND_TOPIC_READY')
@@ -436,8 +521,8 @@ export async function runWorkspaceTabsCloseSmoke(window: BrowserWindow): Promise
   const finished = await window.webContents.executeJavaScript(`(async()=>{${helpers}
     item('Topic Alpha').querySelector('.workspace-tab-close').click()
     await waitFor(()=>tabs().length===0,'CLOSE_LAST')
-    await waitFor(()=>document.querySelector('.workspace-tab-empty'),'EMPTY_TABS')
-    return {tabs:tabs().length,emptyHint:!!document.querySelector('.workspace-tab-empty'),dialog:!!document.querySelector('.close-dialog')}
+    await waitFor(()=>!document.querySelector('.workspace-tabbar')&&!!document.querySelector('.garden-home'),'EMPTY_TABS')
+    return {tabs:tabs().length,tabbarHidden:!document.querySelector('.workspace-tabbar'),gardenHome:!!document.querySelector('.garden-home'),dialog:!!document.querySelector('.close-dialog')}
   })()`)
   return { cancelled, saved, closedOthers, finished }
 }
@@ -571,7 +656,7 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   })()`)
   const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
   const sizes: Array<[number, number]> = [[1280, 720], [1440, 900]]
-  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown; tool?: unknown[]; directoryCollapsed?: unknown; toolBack?: unknown } = { chat: [], garden: [] }
+  const result: { chat: unknown[]; garden: unknown[]; narrow?: unknown; tool?: unknown[]; directoryCollapsed?: unknown; toolBack?: unknown; gardenHome?: unknown } = { chat: [], garden: [] }
   await ui(`document.querySelector('.chat-toggle').click();await wait(()=>document.querySelector('[aria-label="研究问题"]'),'CHAT')`)
   for (const [width, height] of sizes) {
     window.setContentSize(width, height)
@@ -585,14 +670,38 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
     result.chat.push(check)
     await writeFile(join(reportDir, `chat-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
   }
-  await ui(`document.querySelector('.module-nav button:nth-child(2)').click();await wait(()=>document.querySelector('[data-topic-id]'),'GARDEN');document.querySelector('[data-topic-id]').click();await wait(()=>document.querySelector('.topic-body-view'),'EDITOR')`)
+  const longTitle = 'A long synthetic Garden child topic title for layout verification ' + 'x'.repeat(48)
+  const longTopic = await window.webContents.executeJavaScript(`(async()=>{
+    const topics=await window.yorw.garden.list()
+    const alpha=topics.ok?topics.value.items.find(topic=>topic.title==='Topic Alpha'):null
+    if(!alpha)return {ok:false}
+    const id=crypto.randomUUID()
+    const result=await window.yorw.garden.create({id,title:${JSON.stringify(longTitle)},parent_id:alpha.id})
+    return {ok:result.ok,id,alpha:alpha.id}
+  })()`)
+  if (!(longTopic as any).ok) throw new Error('GARDEN_LONG_TOPIC_CREATE_FAILED')
+  const longTopicId = (longTopic as any).id as string
+  await ui(`document.querySelector('.module-nav button:nth-child(2)').click();await wait(()=>document.querySelector('.garden-home')&&!document.querySelector('.garden-directory'),'GARDEN_HOME');await wait(()=>!button('刷新').disabled,'REFRESH_READY');button('刷新').click();await wait(()=>document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'LONG_TOPIC')`)
+  await ui(`button('路径').click();await wait(()=>document.querySelector('.garden-path-list'),'PATH_VIEW')`)
+  const pathView = await window.webContents.executeJavaScript(`(() => { const rows=[...document.querySelectorAll('.garden-path-list [data-topic-id]')];const row=rows.find(item=>item.textContent.includes('layout verification'));return {rows:rows.length,longPath:row?.querySelector('small')?.textContent??''} })()`)
+  await ui(`button('层级').click();await wait(()=>document.querySelector('.garden-tree'),'TREE_VIEW')`)
+  const setSearch = async (value: string) => window.webContents.executeJavaScript(`(() => { const input=document.querySelector('.garden-home input[aria-label="搜索专题"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true})) })()`)
+  await setSearch('layout verification')
+  await ui(`await wait(()=>document.querySelectorAll('.garden-tree-name').length===2,'SEARCH_TREE')`)
+  const searchAncestorKept = await window.webContents.executeJavaScript(`[...document.querySelectorAll('.garden-tree-name')].some(item=>item.textContent.includes('Topic Alpha'))`)
+  await setSearch('')
+  await ui(`await wait(()=>document.querySelectorAll('.garden-tree-name').length===4,'SEARCH_CLEARED')`)
+  await ui(`button('收起全部').click();await wait(()=>!document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'COLLAPSE_ALL');button('展开全部').click();await wait(()=>document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'EXPAND_ALL')`)
+  await ui(`document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]').click();await wait(()=>document.querySelector('.topic-body-view')&&document.querySelector('.garden-directory'),'EDITOR')`)
+  const homeEditor = await window.webContents.executeJavaScript(`({homeHadNoDirectory:true,bodyHasDirectory:!!document.querySelector('.garden-directory'),searchVisible:!!document.querySelector('.garden-directory input[aria-label="搜索专题"]'),newTopicVisible:[...document.querySelectorAll('.garden-directory button')].some(button=>button.textContent==='新建专题'),treeVisible:!!document.querySelector('.garden-directory .garden-tree'),pathView:${JSON.stringify(pathView)},searchAncestorKept:${searchAncestorKept},currentHighlighted:document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]')?.getAttribute('aria-current')==='true',parentPath:document.querySelector('.topic-parent-path')?.textContent??''})`)
   const normalContentWidth = await window.webContents.executeJavaScript(`document.querySelector('.garden-content')?.getBoundingClientRect().width??0`)
   await ui(`button('收起目录').click();await wait(()=>!document.querySelector('.garden-directory'),'COLLAPSE')`)
   const collapsed = await window.webContents.executeJavaScript(`(() => { const content=document.querySelector('.garden-content'); return { directoryGone: !document.querySelector('.garden-directory'), expandVisible: document.querySelector('.garden-content-bar button')?.textContent === '展开目录', contentWidth: content?.getBoundingClientRect().width ?? 0 } })()`)
   await writeFile(join(reportDir, 'garden-collapsed.png'), (await window.webContents.capturePage()).toPNG())
   await ui(`button('展开目录').click();await wait(()=>document.querySelector('.garden-directory'),'EXPAND')`)
   result.directoryCollapsed = { ...collapsed, normalContentWidth, wider: collapsed.contentWidth > normalContentWidth }
-  for (const [width, height] of sizes) {
+  const gardenSizes: Array<[number, number]> = [[1024, 768], ...sizes]
+  for (const [width, height] of gardenSizes) {
     window.setContentSize(width, height)
     await pause(800)
     const check = await window.webContents.executeJavaScript(`(() => {
@@ -605,6 +714,8 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
     result.garden.push(check)
     await writeFile(join(reportDir, `garden-${width}x${height}.png`), (await window.webContents.capturePage()).toPNG())
   }
+  result.gardenHome = homeEditor
+  await ui(`const childTab=[...document.querySelectorAll('.workspace-tab')].find(tab=>tab.getAttribute('data-tab-key')==='topic:${longTopicId}');if(childTab)childTab.parentElement.querySelector('.workspace-tab-close').click();await wait(()=>document.querySelectorAll('.workspace-tab').length===4,'CHILD_TAB_CLOSED')`)
   await ui(`const docTab=[...document.querySelectorAll('.workspace-tab')].find(tab=>tab.textContent.includes('Reader fixture'));docTab.click();await wait(()=>document.querySelector('.reader-feedback'),'DOC')`)
   window.setContentSize(1024, 768)
   await pause(800)
@@ -617,7 +728,7 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   })()`)
   await writeFile(join(reportDir, 'narrow-1024x768.png'), (await window.webContents.capturePage()).toPNG())
   await ui(`const close=[...document.querySelectorAll('.notes-overlay button')].find(button=>button.textContent==='关闭');close.click();await wait(()=>!document.querySelector('.notes-overlay'),'OVERLAY_CLOSE');await new Promise(resolve=>setTimeout(resolve,150))`)
-  const focusReturned = await window.webContents.executeJavaScript(`document.activeElement?.classList.contains('chat-toggle') ?? false`)
+  const focusReturned = await window.webContents.executeJavaScript(`(async()=>{const end=Date.now()+1500;while(Date.now()<end){if(document.activeElement?.classList.contains('chat-toggle'))return true;await new Promise(resolve=>setTimeout(resolve,50))}return false})()`)
   result.narrow = { ...narrow, focusReturned }
   await ui(`document.querySelector('.chat-toggle').click();await wait(()=>document.querySelector('.notes-heading-actions'),'SIDEBAR');[...document.querySelectorAll('.notes-heading-actions button')].find(button=>button.title==='展开为标签').click();await wait(()=>document.querySelector('.document-tool-view .chat-panel'),'TOOL')`)
   result.tool = []
@@ -650,7 +761,8 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   const narrowOk = (result.narrow as any).overlayVisible && (result.narrow as any).inputVisible && !(result.narrow as any).horizontalOverflow && focusReturned
   const toolOk = (result.tool as any[]).every(item => item.toolVisible && item.headerVisible && item.bodyVisible && item.inputVisible && !item.horizontalOverflow)
   const directoryOk = (result.directoryCollapsed as any).directoryGone && (result.directoryCollapsed as any).expandVisible && (result.directoryCollapsed as any).wider
-  if (!chatOk || !gardenOk || !narrowOk || !toolOk || !directoryOk) throw new Error('PANEL_LAYOUT_FAILED')
+  const gardenHomeOk = (result.gardenHome as any).homeHadNoDirectory && (result.gardenHome as any).bodyHasDirectory && (result.gardenHome as any).searchVisible && (result.gardenHome as any).newTopicVisible && (result.gardenHome as any).treeVisible && (result.gardenHome as any).pathView?.rows >= 3 && (result.gardenHome as any).pathView?.longPath?.includes('Topic Alpha') && (result.gardenHome as any).searchAncestorKept && (result.gardenHome as any).currentHighlighted && (result.gardenHome as any).parentPath?.includes('Topic Alpha')
+  if (!chatOk || !gardenOk || !narrowOk || !toolOk || !directoryOk || !gardenHomeOk) throw new Error('PANEL_LAYOUT_FAILED')
   return result
 }
 
