@@ -10,7 +10,7 @@ def test_topics_revisions_http_and_restart(frozen,tmp_path):
     workspace=tmp_path/'workspace'
     a,b=str(uuid4()),str(uuid4())
     with running(frozen,workspace) as (request,_):
-        assert request('/v1/health')['schema_version']==22
+        assert request('/v1/health')['schema_version']==23
         first=request('/v1/topics','POST',{'id':a,'title':'Medical research','parent_id':None})
         request('/v1/topics','POST',{'id':b,'title':'Reliability','parent_id':a})
         second=request('/v1/topics/'+a+'/revisions','POST',{'base_revision_id':first['revision']['id'],'body_md':'# Reliability\n\n人工正文'})
@@ -24,4 +24,23 @@ def test_topics_revisions_http_and_restart(frozen,tmp_path):
         history=request('/v1/topics/'+a+'/revisions')['items']
         assert history[0]['body_md']=='# Reliability\n\n人工正文' and history[1]['body_md']==''
     with sqlite3.connect(workspace/'yorw.sqlite3') as conn:
+        assert conn.execute('PRAGMA foreign_key_check').fetchall()==[]
+
+@pytest.mark.parametrize('frozen',[False,True])
+def test_remove_topic_http_promotes_child_and_persists(frozen,tmp_path):
+    if frozen and not (ROOT/'dist/yorw-api/yorw-api.exe').exists():pytest.skip('Build backend first')
+    workspace=tmp_path/'workspace';a,b=str(uuid4()),str(uuid4())
+    with running(frozen,workspace) as (request,_):
+        request('/v1/topics','POST',{'id':a,'title':'Delete fixture','parent_id':None})
+        request('/v1/topics','POST',{'id':b,'title':'Keep child','parent_id':a})
+        with pytest.raises(urllib.error.HTTPError) as conflict:request('/v1/topics/'+a,'DELETE',{'version':2})
+        assert conflict.value.code==409
+        assert request('/v1/topics/'+a,'DELETE',{'version':1})['removed']
+        assert request('/v1/topics/'+b)['topic']['parent_id'] is None
+        with pytest.raises(urllib.error.HTTPError) as missing:request('/v1/topics/'+a)
+        assert missing.value.code==404
+    with running(frozen,workspace) as (request,_):
+        assert [item['id'] for item in request('/v1/topics')['items']]==[b]
+    with sqlite3.connect(workspace/'yorw.sqlite3') as conn:
+        assert conn.execute('SELECT count(*) FROM revisions WHERE topic_id=?',(a,)).fetchone()[0]==1
         assert conn.execute('PRAGMA foreign_key_check').fetchall()==[]

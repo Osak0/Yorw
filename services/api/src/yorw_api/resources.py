@@ -127,7 +127,7 @@ class DocumentResources:
         return {'removed': cursor.rowcount > 0}
 
     def _topic_paths(self) -> dict[str, list[str]]:
-        topics = self.library.rows('SELECT id,parent_id,title FROM topics')
+        topics = self.library.rows('SELECT id,parent_id,title FROM topics WHERE deleted_at IS NULL')
         by_id = {item['id']: item for item in topics}
         paths = {}
         for identity in by_id:
@@ -144,14 +144,14 @@ class DocumentResources:
         with self.db.lock:
             rows = self.library.rows(
                 'SELECT t.* FROM document_topics dt JOIN topics t ON t.id=dt.topic_id '
-                'WHERE dt.document_id=? ORDER BY dt.rowid', (document_id,))
+                'WHERE dt.document_id=? AND t.deleted_at IS NULL ORDER BY dt.rowid', (document_id,))
             paths = self._topic_paths()
             return [{'topic': row, 'path': paths.get(row['id'], [row['title']])} for row in rows]
 
     def add_document_topic_with(self, conn, document_id: str, topic_id: str) -> dict:
         """Shared relation invariant for callers already holding a transaction."""
         self.library.document(document_id)
-        if not self.library.rows('SELECT id FROM topics WHERE id=?', (topic_id,)):
+        if not self.library.rows('SELECT id FROM topics WHERE id=? AND deleted_at IS NULL', (topic_id,)):
             raise HTTPException(404, detail='TOPIC_NOT_FOUND')
         conn.execute('INSERT OR IGNORE INTO document_topics(document_id,topic_id,created_at) VALUES(?,?,?)',
                      (document_id, topic_id, now()))
@@ -175,14 +175,14 @@ class DocumentResources:
         return result
 
     def topic_materials(self, topic_id: str) -> dict:
-        topic = self.library.rows('SELECT * FROM topics WHERE id=?', (topic_id,))
+        topic = self.library.rows('SELECT * FROM topics WHERE id=? AND deleted_at IS NULL', (topic_id,))
         if not topic:
             raise HTTPException(404, detail='TOPIC_NOT_FOUND')
         with self.db.lock:
             descendants = [row['id'] for row in self.library.rows(
                 'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id)'
+                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
+                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
                 ' SELECT id FROM descendants', (topic_id,))]
             direct_rows = self.library.rows(
                 'SELECT d.*,dt.created_at AS linked_at FROM document_topics dt JOIN documents d ON d.id=dt.document_id '

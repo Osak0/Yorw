@@ -102,9 +102,84 @@ def test_step9_database_upgrade_preserves_existing_research_assets(tmp_path):
     old.close()
     updated=Database(workspace)
     try:
-        assert updated.version==22
+        assert updated.version==23
         assert updated.connection.execute('SELECT body_md FROM notes').fetchone()[0]=='Retained note 中文'
         assert updated.connection.execute('SELECT body_md FROM messages').fetchone()[0]=='Retained answer'
         assert updated.connection.execute('SELECT count(*) FROM topics').fetchone()[0]==0
         assert updated.connection.execute('PRAGMA foreign_key_check').fetchall()==[]
     finally:updated.close()
+
+def test_remove_promotes_children_preserves_history_and_rejects_stale_version(garden):
+    from yorw_api.garden import RemoveTopic
+    parent=create(garden,'Parent');removed=create(garden,'Remove',parent['topic']['id'])
+    identity=removed['topic']['id'];child=create(garden,'Child',identity)
+    leaf=create(garden,'Leaf',child['topic']['id'])
+    saved=garden.save(identity,SaveBody(body_md='Saved evidence',base_revision_id=removed['revision']['id']))
+    with pytest.raises(HTTPException) as conflict:garden.remove(identity,RemoveTopic(version=1))
+    assert conflict.value.detail=='TOPIC_CONFLICT'
+    assert garden.get(child['topic']['id'])['topic']['parent_id']==identity
+    result=garden.remove(identity,RemoveTopic(version=saved['topic']['version']))
+    assert identity not in [t['id'] for t in result['items']]
+    promoted=garden.get(child['topic']['id'])['topic']
+    assert promoted['parent_id']==parent['topic']['id'] and promoted['version']==2
+    assert garden.get(leaf['topic']['id'])['topic']['parent_id']==child['topic']['id']
+    for action in (lambda:garden.get(identity),lambda:garden.save(identity,SaveBody(body_md='late',base_revision_id=saved['revision']['id'])),lambda:garden.remove(identity,RemoveTopic(version=2)),lambda:create(garden,'Late child',identity)):
+        with pytest.raises(HTTPException) as missing:action()
+        assert missing.value.detail=='TOPIC_NOT_FOUND'
+    assert garden.db.connection.execute('SELECT body_md FROM revisions WHERE id=?',(saved['revision']['id'],)).fetchone()[0]=='Saved evidence'
+    assert garden.db.connection.execute('PRAGMA foreign_key_check').fetchall()==[]
+    garden.remove(parent['topic']['id'],RemoveTopic(version=1))
+    assert garden.get(child['topic']['id'])['topic']['parent_id'] is None
+
+
+def test_removed_topic_is_unlinked_not_exported_or_retrieved_and_stays_removed(library):
+    from types import SimpleNamespace
+    from yorw_api.garden import RemoveTopic
+    from yorw_api.resources import DocumentResources
+    from yorw_api.retrieval import EvidenceRetriever
+    from yorw_api.source_status import source_status
+    from yorw_api.storage.database import Database
+    garden=Garden(library.db);item=create(garden)
+    identity=item['topic']['id']
+    saved=garden.save(identity,SaveBody(body_md='Topic removal evidence',base_revision_id=item['revision']['id']))
+    doc=str(uuid4())
+    with library.db.write() as conn:
+        conn.execute("INSERT INTO documents(id,sha256,original_name,extraction_status,created_at,updated_at) VALUES(?,?,'fixture.txt','ready','time','time')",(doc,str(uuid4())))
+    resources=DocumentResources(library);resources.add_document_topic(doc,identity)
+    retrieval=EvidenceRetriever(SimpleNamespace(library=library,db=library.db))
+    records=retrieval._catalog()
+    assert any(r[1]==identity for r in records)
+    source={'kind':'wiki','source_object_id':identity,'source_version':saved['revision']['id'],'evidence':[]}
+    assert source_status(library.db,[source])[0]['available']
+    garden.remove(identity,RemoveTopic(version=2))
+    assert resources.document_topics(doc)==[]
+    assert not any(r[1]==identity for r in retrieval._catalog())
+    assert not source_status(library.db,[source])[0]['available']
+    with pytest.raises(HTTPException):resources.add_document_topic(doc,identity)
+    with pytest.raises(HTTPException):resources.topic_materials(identity)
+    # Reopen the same database; the tombstone and immutable revisions survive restart.
+    reopened=Database(library.workspace)
+    try:
+        assert identity not in [t['id'] for t in Garden(reopened).list()['items']]
+        assert reopened.connection.execute('SELECT count(*) FROM revisions WHERE topic_id=?',(identity,)).fetchone()[0]==2
+    finally:reopened.close()
+
+
+
+def test_schema22_upgrade_preserves_topic_history_and_starts_visible(tmp_path):
+    from pathlib import Path
+    import shutil
+    from legacy_garden import PreRemovalGarden
+    from yorw_api.storage.database import Database
+    from yorw_api.storage.workspace import Workspace
+    scripts=tmp_path/'schema22';scripts.mkdir()
+    for path in sorted((Path(__file__).parents[1]/'src/yorw_api/migrations').glob('*.sql'))[:22]:shutil.copy2(path,scripts/path.name)
+    workspace=Workspace(tmp_path/'workspace');old=Database(workspace,scripts)
+    item=create(PreRemovalGarden(old));old.close()
+    upgraded=Database(workspace)
+    try:
+        assert upgraded.version==23
+        assert Garden(upgraded).get(item['topic']['id'])==item
+        assert upgraded.connection.execute('SELECT deleted_at FROM topics').fetchone()[0] is None
+        assert len(list((workspace.root/'backups').glob('*.sqlite3')))==1
+    finally:upgraded.close()

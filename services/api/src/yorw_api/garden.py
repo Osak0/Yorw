@@ -22,6 +22,11 @@ class UpdateTopic(TopicFields):
     version: int = Field(ge=1, strict=True)
 
 
+class RemoveTopic(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: int = Field(ge=1, strict=True)
+
+
 class SaveBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     base_revision_id: UUID
@@ -38,7 +43,7 @@ class Garden:
         return [dict(zip(columns,row)) for row in cursor.fetchall()]
 
     def _topic(self, identity):
-        rows = self._rows('SELECT * FROM topics WHERE id=?',(identity,))
+        rows = self._rows('SELECT id,parent_id,title,current_revision_id,version,created_at,updated_at FROM topics WHERE id=? AND deleted_at IS NULL',(identity,))
         if not rows:
             raise HTTPException(404,detail='TOPIC_NOT_FOUND')
         return rows[0]
@@ -62,7 +67,7 @@ class Garden:
 
     def list(self):
         with self.db.lock:
-            return {'items':self._rows('SELECT * FROM topics ORDER BY created_at,id')}
+            return {'items':self._rows('SELECT id,parent_id,title,current_revision_id,version,created_at,updated_at FROM topics WHERE deleted_at IS NULL ORDER BY created_at,id')}
 
     def get(self, identity):
         with self.db.lock:
@@ -98,6 +103,22 @@ class Garden:
                 conn.execute('UPDATE topics SET title=?,parent_id=?,version=version+1,updated_at=? WHERE id=?',
                              (value.title,parent_id,datetime.now(timezone.utc).isoformat(),identity))
             return self.get(identity)
+
+    def remove(self, identity, value: RemoveTopic):
+        """Remove one topic, preserving immutable history and promoting its children."""
+        with self.db.write() as conn:
+            topic = self._topic(identity)
+            if topic['version'] != value.version:
+                raise HTTPException(409, detail='TOPIC_CONFLICT')
+            timestamp = datetime.now(timezone.utc).isoformat()
+            conn.execute('UPDATE topics SET parent_id=?,version=version+1,updated_at=? '
+                         'WHERE parent_id=? AND deleted_at IS NULL',
+                         (topic['parent_id'], timestamp, identity))
+            conn.execute('UPDATE topics SET deleted_at=?,version=version+1,updated_at=? WHERE id=?',
+                         (timestamp, timestamp, identity))
+            conn.execute('DELETE FROM document_topics WHERE topic_id=?', (identity,))
+            conn.execute("DELETE FROM knowledge_sources WHERE kind='wiki' AND object_id=?", (identity,))
+            return {'removed': True, 'items': self.list()['items']}
 
     def save(self, identity, value: SaveBody):
         with self.db.write() as conn:
@@ -145,6 +166,10 @@ def router(database):
     @routes.patch('/v1/topics/{identity}')
     def update_topic(identity: UUID, value: UpdateTopic):
         return garden.update(str(identity),value)
+
+    @routes.delete('/v1/topics/{identity}')
+    def remove_topic(identity: UUID, value: RemoveTopic):
+        return garden.remove(str(identity), value)
 
     @routes.post('/v1/topics/{identity}/revisions')
     def save_body(identity: UUID, value: SaveBody):

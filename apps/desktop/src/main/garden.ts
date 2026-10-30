@@ -10,6 +10,10 @@ function fields(value:TopicFields):TopicFields {
 }
 export class Garden {
  constructor(private backend:Backend){}
+ remove(input:{id:string;version:number}){
+  if(!input||!Number.isSafeInteger(input.version)||input.version<1)throw new Error('INVALID_INPUT')
+  return this.backend.request(`/v1/topics/${id(input.id)}`,'DELETE',{version:input.version})
+ }
  list(){return this.backend.request('/v1/topics')}
  get(value:unknown){return this.backend.request(`/v1/topics/${id(value)}`)}
  history(value:unknown){return this.backend.request(`/v1/topics/${id(value)}/revisions`)}

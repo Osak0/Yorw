@@ -25,7 +25,7 @@ import { Parsers } from './parsers'
 import {runAiWorkflowSmoke,resumeAiWorkflowSmoke} from './ai-workflow-smoke'
 import {runBuiltinReadingSmoke} from './builtin-reading-smoke'
 import {runRectificationSmoke} from './rectification-smoke'
-import {runResourceRelationsSmoke,runWorkspaceChatSmoke,runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
+import {runTopicMenuSmoke,runResourceRelationsSmoke,runWorkspaceChatSmoke,runWorkspaceCitationSmoke,runWorkspaceLayoutSmoke,runWorkspaceTabsCloseSmoke,runWorkspaceTabsFaultSmoke,runWorkspaceTabsResumeSmoke,runWorkspaceTabsSmoke,runWorkspaceTabsToolResumeSmoke} from './workspace-tabs-smoke'
 
 let backend: Backend
 let quitting = false
@@ -96,6 +96,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('garden:accept',providerAction(input=>garden.accept(input)))
   ipcMain.handle('garden:reject',providerAction(input=>garden.reject(input)))
   ipcMain.handle('garden:restore',providerAction(input=>garden.restore(input)))
+  ipcMain.handle('garden:remove',providerAction(input=>garden.remove(input)))
   ipcMain.handle('garden:list',providerAction(()=>garden.list()))
   ipcMain.handle('garden:get',providerAction(input=>garden.get(input)))
   ipcMain.handle('garden:create',providerAction(input=>garden.create(input)))
@@ -225,6 +226,7 @@ else app.whenReady().then(async () => {
         }
       }
       const tabProof = readerSmoke && process.argv.includes('--tabs-smoke') ? await runWorkspaceTabsSmoke(window) : null
+      if(tabProof)await writeFile(join(reportDir,'topic-menu-smoke.json'),JSON.stringify(await runTopicMenuSmoke(window,reportDir),null,2))
       const tabResumeProof = readerSmoke && process.argv.includes('--tabs-resume-smoke') ? await runWorkspaceTabsResumeSmoke(window) : null
       const citationProof = readerSmoke && process.argv.includes('--tabs-citation-smoke') ? await runWorkspaceCitationSmoke(window,providers) : null
       const chatProof = readerSmoke && process.argv.includes('--tabs-chat-smoke') ? await runWorkspaceChatSmoke(window,providers) : null

@@ -6,13 +6,18 @@ import {MarkdownPreview} from './MarkdownPreview'
 import {SuggestionsPanel,Sources} from './SuggestionsPanel'
 import {WikiReview} from './WikiReview'
 import {TopicMaterialsView} from './TopicMaterials'
-import {collectAncestors,defaultExpanded,parentOptions,searchTopics,topicPath,topicPathLabel} from './garden-tree'
+import {collectAncestors,defaultExpanded,parentOptions,searchTopics,topicLocationLabel,topicPath,topicPathLabel} from './garden-tree'
 import type {GardenTool} from './workspace-tabs'
 import './notes.css'
 import './garden.css'
+import {TopicActions, useTopicMenu} from './TopicActions'
 
 export type GardenPage = 'topic'|'topic-create'|'topic-manage'|GardenTool
 const errorText=(error:unknown)=>error instanceof Error?error.message:'操作失败，请重试。'
+
+function TreeChevron(){
+ return <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m3 4.5 3 3 3-3"/></svg>
+}
 
 function ToolHeader({topic,label,onBack}:{topic:Topic;label:string;onBack():void}){
  return <div className="topic-tool-header"><div className="topic-title-row"><h2>{topic.title}</h2><span className="topic-kind-chip">{label}</span></div><button onClick={onBack}>返回正文</button></div>
@@ -57,17 +62,18 @@ function TopicHistory({topic,draft,onBack}:{topic:Topic;draft:WikiDraft|undefine
 }
 
 function TopicTree({topics,visible,expanded,activeTopicId,drafts,onToggle,onOpen}:{topics:Topic[];visible:Set<string>;expanded:Set<string>;activeTopicId:string|null;drafts:Record<string,WikiDraft>;onToggle(id:string):void;onOpen(topic:Topic):void}){
+ const menu=useTopicMenu()
  const children=useMemo(()=>{const map=new Map<string|null,Topic[]>();for(const topic of topics){const key=topic.parent_id&&topics.some(item=>item.id===topic.parent_id)?topic.parent_id:null;const list=map.get(key)??[];list.push(topic);map.set(key,list)}return map},[topics])
  const rendered=new Set<string>()
  function rows(parentId:string|null,depth:number):React.ReactNode{
   return (children.get(parentId)??[]).map(topic=>{
    if(rendered.has(topic.id)||!visible.has(topic.id))return null
    rendered.add(topic.id)
-   const all=(children.get(topic.id)??[]).filter(item=>visible.has(item.id)),hasChildren=all.length>0,isOpen=expanded.has(topic.id)
+   const all=(children.get(topic.id)??[]).filter(item=>visible.has(item.id)),hasChildren=all.length>0,isOpen=expanded.has(topic.id),dirty=!!drafts[topic.id]&&wikiDirty(drafts[topic.id])
    return <li key={topic.id} className="garden-tree-item">
-    <div className="garden-tree-row" style={{paddingLeft:8+depth*16}} data-active={activeTopicId===topic.id?'true':undefined}>
-     {hasChildren?<button type="button" className="garden-tree-toggle" aria-label={`${isOpen?'收起':'展开'} ${topic.title}`} aria-expanded={isOpen} onClick={()=>onToggle(topic.id)}>{isOpen?'▾':'▸'}</button>:<span className="garden-tree-spacer" aria-hidden="true"/>}
-     <button type="button" className="garden-tree-name" data-topic-id={topic.id} aria-current={activeTopicId===topic.id?'true':undefined} onClick={()=>onOpen(topic)} onKeyDown={event=>{if(event.key==='ArrowRight'&&hasChildren&&!isOpen){event.preventDefault();onToggle(topic.id)}else if(event.key==='ArrowLeft'&&hasChildren&&isOpen){event.preventDefault();onToggle(topic.id)}}}>{topic.title}{drafts[topic.id]&&wikiDirty(drafts[topic.id])&&<span className="garden-tree-dirty" aria-label="有未保存正文">●</span>}</button>
+    <div className="garden-tree-row" data-depth={depth} data-active={activeTopicId===topic.id?'true':undefined}>
+     {hasChildren?<button type="button" className="garden-tree-toggle" aria-label={`${isOpen?'收起':'展开'} ${topic.title}`} aria-expanded={isOpen} onClick={()=>onToggle(topic.id)}><TreeChevron/></button>:<span className="garden-tree-spacer" aria-hidden="true"/>}
+     <button type="button" className="garden-tree-name" title={topic.title} data-topic-id={topic.id} onContextMenu={event=>menu(event,topic)} aria-current={activeTopicId===topic.id?'true':undefined} onClick={()=>onOpen(topic)} onKeyDown={event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){menu(event,topic)}else if(event.key==='ArrowRight'&&hasChildren&&!isOpen){event.preventDefault();onToggle(topic.id)}else if(event.key==='ArrowLeft'&&hasChildren&&isOpen){event.preventDefault();onToggle(topic.id)}}}><span className="garden-tree-label"><span className="garden-tree-title">{topic.title}</span>{dirty&&<span className="garden-tree-dirty" aria-label="有未保存正文">●</span>}</span></button>
     </div>
     {hasChildren&&isOpen&&<ul className="garden-tree-children">{rows(topic.id,depth+1)}</ul>}
    </li>
@@ -77,8 +83,12 @@ function TopicTree({topics,visible,expanded,activeTopicId,drafts,onToggle,onOpen
 }
 
 function TopicPathList({topics,visible,activeTopicId,drafts,onOpen}:{topics:Topic[];visible:Set<string>;activeTopicId:string|null;drafts:Record<string,WikiDraft>;onOpen(topic:Topic):void}){
- const ordered=topics.filter(topic=>visible.has(topic.id)).map(topic=>({topic,path:topicPath(topics,topic.id)})).sort((a,b)=>topicPathLabel(topics,a.topic.id).localeCompare(topicPathLabel(topics,b.topic.id),'zh-Hans-CN'))
- return <div className="garden-path-list" role="list">{ordered.map(({topic,path})=><button type="button" role="listitem" key={topic.id} data-topic-id={topic.id} aria-current={activeTopicId===topic.id?'true':undefined} className="garden-path-item" onClick={()=>onOpen(topic)}><strong>{topic.title}{drafts[topic.id]&&wikiDirty(drafts[topic.id])&&<span className="garden-tree-dirty" aria-label="有未保存正文">●</span>}</strong><small>{path.length>1?path.slice(0,-1).map(item=>item.title).join(' / '):'根目录'}</small></button>)}</div>
+ const menu=useTopicMenu()
+ const ordered=topics.filter(topic=>visible.has(topic.id)).map(topic=>({topic,label:topicLocationLabel(topics,topic.id)})).sort((a,b)=>topicPathLabel(topics,a.topic.id).localeCompare(topicPathLabel(topics,b.topic.id),'zh-Hans-CN'))
+ return <div className="garden-path-list" role="list">{ordered.map(({topic,label})=>{
+  const dirty=!!drafts[topic.id]&&wikiDirty(drafts[topic.id])
+  return <button type="button" role="listitem" key={topic.id} data-topic-id={topic.id} onContextMenu={event=>menu(event,topic)} aria-current={activeTopicId===topic.id?'true':undefined} className="garden-path-item" onKeyDown={event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')menu(event,topic)}} onClick={()=>onOpen(topic)}><strong title={topic.title}><span className="garden-path-title">{topic.title}</span>{dirty&&<span className="garden-tree-dirty" aria-label="有未保存正文">●</span>}</strong><small title={label}>{label}</small></button>
+ })}</div>
 }
 
 function GardenHome({topics,loading,error,view,query,onQuery,onViewChange,onOpen,onCreate,expanded,onToggle,onExpandAll,onCollapseAll,onRefresh}:{topics:Topic[];loading:boolean;error:string;view:'tree'|'paths';query:string;onQuery(value:string):void;onViewChange(view:'tree'|'paths'):void;onOpen(topic:Topic):void;onCreate():void;expanded:Set<string>;onToggle(id:string):void;onExpandAll():void;onCollapseAll():void;onRefresh():void}){
@@ -110,7 +120,7 @@ function ManageTopicView({topic,topics,draft,busy,notice,onSave,onBack}:{topic:T
  </div>
 }
 
-export function Garden({activeTopicId,activePage,onOpenTopic,onOpenTool,onCollapseTool,onOpenCreate,onCloseCreate,onCreateComplete,onOpenManage,onCloseManage,directoryCollapsed,onToggleDirectory,view,onViewChange,expanded,onExpandedChange,onTitles}:{
+function GardenContent({activeTopicId,activePage,onOpenTopic,onOpenTool,onCollapseTool,onOpenCreate,onCloseCreate,onCreateComplete,onOpenManage,onCloseManage,directoryCollapsed,onToggleDirectory,view,onViewChange,expanded,onExpandedChange,onTitles,onDeleted}:{
  activeTopicId:string|null
  activePage:GardenPage|null
  onOpenTopic(topic:Topic):void
@@ -127,6 +137,7 @@ export function Garden({activeTopicId,activePage,onOpenTopic,onOpenTool,onCollap
  onViewChange(view:'tree'|'paths'):void
  expanded:string[]|null
  onExpandedChange(ids:string[]):void
+ onDeleted(id:string):void
  onTitles(topics:Topic[]):void
 }){
  const book=gardenBook(),state=useSyncExternalStore(book.subscribe,book.getSnapshot)
@@ -155,4 +166,8 @@ export function Garden({activeTopicId,activePage,onOpenTopic,onOpenTool,onCollap
   {!directoryCollapsed&&<aside className="garden-directory" aria-label="专题目录"><div className="garden-directory-header"><h2>专题</h2><button onClick={onToggleDirectory}>收起目录</button></div><label className="garden-search"><span>搜索专题</span><input aria-label="搜索专题" type="search" placeholder="按名称搜索" value={query} onChange={event=>setQuery(event.target.value)}/></label><div className="garden-directory-actions"><button className="primary" onClick={()=>onOpenCreate(activeTopicId)}>新建专题</button><button onClick={()=>void book.refresh()} disabled={state.loading}>刷新</button></div>{query.trim()&&!search.matches.size?<p className="garden-directory-note">没有匹配的专题。</p>:<TopicTree topics={state.topics} visible={query.trim()?search.visible:new Set(state.topics.map(item=>item.id))} expanded={treeExpanded} activeTopicId={activeTopicId} drafts={drafts} onToggle={toggle} onOpen={onOpenTopic}/>}</aside>}
   <div className="garden-content">{directoryCollapsed&&<div className="garden-content-bar"><button onClick={onToggleDirectory}>展开目录</button><span>{topic.title}</span></div>}{state.error&&<p role="alert">{state.error}<button onClick={()=>void book.refresh()}>重试加载</button></p>}<TopicEditor topic={topic} draft={draft} topics={state.topics} onOpenManage={()=>onOpenManage(topic)} onOpenAi={()=>onOpenTool('ai',topic)} onOpenHistory={()=>onOpenTool('history',topic)} onOpenMaterials={()=>onOpenTool('materials',topic)}/></div>
  </div>
+}
+
+export function Garden(props:React.ComponentProps<typeof GardenContent>){
+ return <TopicActions onOpen={props.onOpenTopic} onManage={props.onOpenManage} onCreate={props.onOpenCreate} onHistory={topic=>props.onOpenTool('history',topic)} onDeleted={props.onDeleted}><GardenContent {...props}/></TopicActions>
 }

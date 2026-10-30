@@ -182,10 +182,10 @@ class EvidenceRetriever:
             identities = scoped.get('wiki_topic_ids', [])
             topics = self.library.rows(
                 'SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t '
-                f'JOIN revisions r ON r.id=t.current_revision_id WHERE t.id IN ({self._placeholders(identities)})',
+                f'JOIN revisions r ON r.id=t.current_revision_id WHERE t.deleted_at IS NULL AND t.id IN ({self._placeholders(identities)})',
                 identities) if identities else []
         else:
-            topics = self.library.rows('SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t JOIN revisions r ON r.id=t.current_revision_id')
+            topics = self.library.rows('SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t JOIN revisions r ON r.id=t.current_revision_id WHERE t.deleted_at IS NULL')
         for row in topics:
             if row['id'] == exclude_topic:
                 continue
@@ -236,7 +236,7 @@ class EvidenceRetriever:
         with self.db.write() as conn:
             conn.execute("DELETE FROM knowledge_sources WHERE kind='document' AND object_id NOT IN (SELECT id FROM documents WHERE deleted_at IS NULL)")
             conn.execute("DELETE FROM knowledge_sources WHERE kind='note' AND object_id NOT IN (SELECT n.id FROM notes n JOIN documents d ON d.id=n.document_id WHERE d.deleted_at IS NULL)")
-            conn.execute("DELETE FROM knowledge_sources WHERE kind='wiki' AND object_id NOT IN (SELECT id FROM topics)")
+            conn.execute("DELETE FROM knowledge_sources WHERE kind='wiki' AND object_id NOT IN (SELECT id FROM topics WHERE deleted_at IS NULL)")
         if not keys:
             return []
         rows = []

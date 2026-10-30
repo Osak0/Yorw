@@ -43,7 +43,7 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 
 工作区界面回归由 `workspace-tabs-smoke.ts` 驱动，均使用隔离的绝对 `--report-dir`、自编写 PDF 和本地 loopback 模型/SSE 夹具：
 
-- `--tabs-smoke`：打开同一/不同文献和专题、展开和返回三个 Storage 工具、共享检索输入、标签去重、标题更新与键盘语义；同时覆盖 Garden 无侧栏首页、层级树打开、首页/正文默认父级、新建标签去重与草稿保留、新建/管理关闭保护、管理改名/移动与标签同步。
+- `--tabs-smoke`：附加专题右键菜单回归（树、路径、正文侧栏、键盘唤起、取消/确认删除、子专题提升及相关标签关闭），输出 `topic-menu-smoke.json` 与 `topic-context-menu.png`；打开同一/不同文献和专题、展开和返回三个 Storage 工具、共享检索输入、标签去重、标题更新与键盘语义；同时覆盖 Garden 无侧栏首页、层级树打开、首页/正文默认父级、新建标签去重与草稿保留、新建/管理关闭保护、管理改名/移动与标签同步。
 - `--tabs-resume-smoke`：恢复标签顺序、激活项、页码和侧栏模式。
 - `--tabs-close-smoke`：未保存笔记的取消/保存关闭、关闭其他逐项确认与最终关闭；Garden 新建/管理标签的取消、放弃和创建关闭由 `--tabs-smoke` 覆盖。
 - `--tabs-fault-smoke`：后端退出时保存失败保持标签打开。
@@ -52,7 +52,7 @@ powershell -NoProfile -File scripts/verify-mvp.ps1 -Executable release/<本轮�
 - `--tabs-tool-resume-smoke`：工具标签重启恢复并返回阅读。
 - `--tabs-resource-smoke`：阶段 B 文献资料/关系/专题材料；文献目录与本地搜索、整理文献独立标签及返回文献库；编辑标签和人工总结、关联专题、双向关联文献、笔记显示、从 Garden 首页和材料标签添加专题文献，并检查 1280×720/1440×900 的资料与材料视图无横向溢出。与 `--tabs-smoke` 一样，报告目录需有 `fixture.pdf` 和 `fixture2.pdf`。
 - `--ai-workflow-smoke`：阶段 C 默认专题范围与显式全库切换、一次多选的批量导入矩阵、整理文献标签打开/保存/重开和既有 AI 追加/替换/回退；House 设置从首页进入检索/数据页；Garden 新建/管理/AI 标签流程按当前界面执行；空范围、范围变化及 HTTP 错误由后端 pytest 覆盖。报告目录需有 `fixture.pdf` 与 `fixtures/` 下的 5 份文字和 3 份负例。
-- `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；Garden 另覆盖 1024×768、层级树/路径列表、搜索祖先、展开/收起全部、长名称和当前项高亮。阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
+- `--layout-smoke`：1280×720、1440×900 的聊天/Garden/工具视图、目录收起和 1024 窄覆盖侧栏；Garden 另覆盖 1024×768、层级树/路径列表、搜索祖先、展开/收起全部、长名称和当前项高亮，并保存首页层级树与路径视图截图（`garden-home-<宽×高>.png`、`garden-home-paths-1024x768.png`、`garden-home-paths-1280x720.png`）。阅读布局循环另覆盖 1440×1024 与 1024×768。高 DPI 可在同一次运行传入 `--force-device-scale-factor=1.25`。
 
 这些烟测输出 `desktop-smoke.json`、`layouts.json`、`layout-panels.json` 和截图；`--ai-workflow-smoke` 另输出 `ai-workflow-smoke.json`、`ai-state.json`、`ai-restart.json`，并覆盖 AI 优化的材料范围选择、一次多选批量导入、整理文献标签保存/重开和打包流程。夹具模型只证明界面、协议和持久化行为，不代表真实论文质量。
 
@@ -97,7 +97,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## 候选制品与发布流程
 
-历史 v0.2.0 发布候选为 schema 15；阶段一已合并 main（ed65e79 / schema 19），当前 main 已合并阶段二（PR #19 / 639509b），schema 20，应用版本仍为 0.2.0。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
+历史 v0.2.0 发布候选为 schema 15；阶段一经 PR #18 合并 main（ed65e79 / schema 19），阶段二与工作区整改已通过 PR #19 / PR #20 合并（639509b、d42bd37），当前 main 为 schema 22，应用版本仍为 0.2.0；后续开发分支为 feature/Garden-interface-refine。包内帮助仍固定为当前使用指南与 v0.2.0 发布说明；更新帮助后必须重新打包，不能上传旧 review 包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -112,7 +112,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 `--rectification-smoke`（兼容旧 `--builtin-reading-smoke` 名称）需同时使用 `--yorw-smoke --reader-smoke --report-dir=<绝对目录> --preview-soffice="<用户安装的 soffice.exe>"`。目录内准备自编写 `fixture.pdf/docx/doc/md/txt`。脚本在隔离工作区操作 House 设置、转换预览与原件阅读，输出 `rectification-smoke.json`、`word-preview.png` 和 `house-home.png`。原生文件选择与确认由测试桩提供；授权边界另由 main 单元测试验证，不能声称已自动操作真实原生对话框。
 
-源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。已合并 main 基线 schema 20，当前整改分支追加至 schema 22，应用版本仍为 0.2.0。
+源码回归使用新临时目录，冻结服务回归前重建后端。测试 schema 断言随追加迁移更新；不修改历史迁移。main 已合并至 schema 22，当前开发分支为 feature/Garden-interface-refine，应用版本仍为 0.2.0。
 
 
 `--builtin-reading-smoke` 使用 `--yorw-smoke --reader-smoke --report-dir=<新绝对目录>`，不传解析组件路径、不设置解析器配置。目录准备自编写 fixture.pdf/docx/md/txt。它验证内置 DOCX 表格/只读展示、缺失可选组件提示、关键词检索依据与原件标记、问答依据；问答使用进程内自有 loopback 模型协议夹具，不代表真实模型质量。输出 builtin-reading-smoke.json 与 builtin-reading.png。可选 LibreOffice 的 --rectification-smoke 另行执行，Word 需主动点击可选版式预览。
