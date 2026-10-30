@@ -26,11 +26,11 @@ export function metadataUpdatePayload(document: DocumentRecord, values: Metadata
   const tags = values.tags.split('\n').map(value => value.trim()).filter(Boolean)
   if (JSON.stringify(tags) !== JSON.stringify(document.tags)) payload.tags = tags
   const summary = values.summary.trim()
-  if (summary !== (document.summary_md ?? '')) payload.summary_md = summary || null
+  if (summary !== (document.summary_md ?? '')) payload.summary_md = summary
   return payload
 }
 
-/** Manual metadata only; an AI summary entry point is reserved for a later step. */
+/** One canonical metadata form; confirmed AI suggestions write through the same service. */
 export function MetadataEditor({ document, topicOptions, onClose, onSaved }: { document: DocumentRecord; topicOptions?: Topic[]; onClose(): void; onSaved(warning?: string, saved?: DocumentRecord): void }) {
   const initial = metadataDrafts.get(document.id) ?? {
     title: document.title ?? '', authors: document.authors.join('\n'), year: document.year?.toString() ?? '',
@@ -64,9 +64,9 @@ export function MetadataEditor({ document, topicOptions, onClose, onSaved }: { d
       if (topicOptions && topicId) {
         try {
           const linked = await window.yorw.resources.addDocumentTopic({ document_id: document.id, topic_id: topicId })
-          if (!linked.ok) warning = `元数据已保存；专题关联失败（${linked.code}），可在文献资料中重试。`
+          if (!linked.ok) warning = `元数据已保存；专题关联失败（${linked.code}），可在元数据页面重试。`
         } catch {
-          warning = '元数据已保存；专题关联请求失败，可在文献资料中重试。'
+          warning = '元数据已保存；专题关联请求失败，可在元数据页面重试。'
         }
       }
       onSaved(warning, result.value)
@@ -81,7 +81,7 @@ export function MetadataEditor({ document, topicOptions, onClose, onSaved }: { d
       <label>作者（每行一位）<textarea aria-label="文献作者" value={authors} onChange={event => setAuthors(event.target.value)} /></label>
       <label>年份<input aria-label="文献年份" value={year} onChange={event => setYear(event.target.value)} inputMode="numeric" /></label>
       <label>关键词 / 标签（每行一个）<textarea aria-label="关键词 / 标签" value={tags} onChange={event => setTags(event.target.value)} placeholder="例如：检索增强生成&#10;因果推断" /></label>
-      <label>人工总结<textarea aria-label="人工总结" value={summary} maxLength={20000} onChange={event => setSummary(event.target.value)} placeholder="用自己的话概括这篇文献；不会替代原文证据。" /></label>
+      <label>总结<textarea aria-label="总结" value={summary} maxLength={20000} onChange={event => setSummary(event.target.value)} placeholder="用自己的话概括这篇文献；不会替代原文证据。" /></label>
       {topicOptions && <label>关联专题（可选）<select aria-label="导入关联专题" value={topicId} onChange={event => setTopicId(event.target.value)}><option value="">暂不关联</option>{topicOptions.map(topic => <option key={topic.id} value={topic.id}>{topic.title}</option>)}</select></label>}
       <small>总结来源：{summarySource(document.summary_source)}{document.summary_updated_at ? ` · 更新于 ${document.summary_updated_at}` : ''}</small>
       <div className="actions"><button onClick={() => void save()}>保存</button><button onClick={cancel}>取消编辑</button></div>

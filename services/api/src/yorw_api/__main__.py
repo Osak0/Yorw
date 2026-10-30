@@ -80,6 +80,8 @@ def create_app(token: str, database: Database) -> FastAPI:
     # route so FastAPI does not treat "search" as a document UUID.
     from .resources import router as resources_router
     app.include_router(resources_router(library))
+    from .folders import router as folders_router
+    app.include_router(folders_router(library))
     app.include_router(library_router(library))
     app.include_router(parsers_router(parser_service, library))
     app.include_router(previews_router(previews))

@@ -1,4 +1,4 @@
-import { app, shell, dialog } from 'electron'
+import { app, shell, dialog, clipboard } from 'electron'
 import { readFile, stat, mkdtemp, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { Backend } from './backend'
@@ -9,6 +9,22 @@ function id(value: unknown): string {
 }
 export class Documents {
   constructor(private backend: Backend) {}
+  async library(input: any) {
+    if (!input || typeof input !== 'object') throw new Error('INVALID_INPUT')
+    if (input.action === 'list') return this.backend.request('/v1/library-folders')
+    if (input.action === 'create') return this.backend.request('/v1/library-folders','POST',input.value)
+    if (input.action === 'update') return this.backend.request(`/v1/library-folders/${id(input.id)}`,'PATCH',input.value)
+    if (input.action === 'remove' && Number.isInteger(input.version)) return this.backend.request(`/v1/library-folders/${id(input.id)}?version=${input.version}`,'DELETE')
+    if (input.action === 'assign') return this.backend.request('/v1/library-folder-assignment','POST',input.value)
+    if (['path','copy','reveal','open'].includes(input.action)) {
+      const value = await this.backend.request(`/v1/library-original/${id(input.id)}`)
+      if (input.action === 'copy') clipboard.writeText(value.path)
+      if (input.action === 'reveal') shell.showItemInFolder(value.path)
+      if (input.action === 'open') await this.openOriginal(input.id)
+      return {path:input.action === 'path' ? value.path : undefined}
+    }
+    throw new Error('INVALID_INPUT')
+  }
   readPdf(identity: unknown) { return this.backend.readPdf(id(identity)) }
   preview(input: any) {
     const identity = id(input?.id)

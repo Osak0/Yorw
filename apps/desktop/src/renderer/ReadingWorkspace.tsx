@@ -27,7 +27,8 @@ export function ReadingWorkspace({ document, onClose, onExpand, onResource, jump
   const width = dragWidth ?? session.sidebarWidth
   const mode = session.sidebarMode
   const jump = externalJump ?? localJump
-  const opener = useRef<SidebarMode>('notes')
+  const opener = useRef<SidebarMode>(mode)
+  useEffect(() => { if (open) opener.current = mode }, [open, mode])
   function openPanel(next: SidebarMode) {
     opener.current = next
     sessionStore().updateDocument(document.id, { sidebarMode: next, sidebarOpen: true })

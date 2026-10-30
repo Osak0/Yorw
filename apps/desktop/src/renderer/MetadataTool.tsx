@@ -1,5 +1,6 @@
+import {DocumentResourceView} from './DocumentResource'
 import React, { useEffect, useState } from 'react'
-import type { DocumentRecord, Topic } from '../shared/status'
+import type { DocumentRecord } from '../shared/status'
 import { MetadataEditor } from './MetadataEditor'
 
 const errorText = (code: string) => ({
@@ -17,7 +18,6 @@ export function MetadataTool({ document, onOpenDocument, onClose, onSaved }: {
   onSaved(warning?: string, saved?: DocumentRecord): void
 }) {
   const [current, setCurrent] = useState<DocumentRecord | null>(null)
-  const [topics, setTopics] = useState<Topic[]>([])
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
@@ -25,14 +25,12 @@ export function MetadataTool({ document, onOpenDocument, onClose, onSaved }: {
   useEffect(() => {
     let active = true
     setLoading(true); setNotice('')
-    void Promise.all([window.yorw.documents.list(), window.yorw.garden.list()]).then(([documents, garden]) => {
+    void window.yorw.documents.list().then((documents) => {
       if (!active) return
       if (!documents.ok) { setNotice(errorText(documents.code)); return }
       const found = documents.value.items.find(item => item.id === document.id)
       if (!found) { setNotice('这篇文献可能已被移除，请返回文献库刷新。'); return }
       setCurrent(found)
-      setTopics(garden.ok ? garden.value.items : [])
-      if (!garden.ok) setNotice('专题列表加载失败；仍可整理标题、作者、标签和总结。')
     }).catch(() => { if (active) setNotice('文献加载失败，请重试。') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -47,7 +45,7 @@ export function MetadataTool({ document, onOpenDocument, onClose, onSaved }: {
     <div className="document-tool-body metadata-tool">
       {notice && <p role="status">{notice}{!current && !loading && <button onClick={() => setAttempt(value => value + 1)}>重试加载</button>}</p>}
       {loading ? <p className="metadata-tool-loading">正在读取文献与专题…</p> : current
-        ? <MetadataEditor document={current} topicOptions={topics.length ? topics : undefined} onClose={onClose} onSaved={onSaved} />
+        ? <><MetadataEditor document={current} onClose={onClose} onSaved={onSaved} /><DocumentResourceView key={current.id} mode="metadata" document={current} onEditMetadata={()=>{}} onOpenNotes={()=>{}} onOpenSearch={()=>{}} onOpenChat={()=>{}} onOpenTopic={()=>{}} onNavigate={()=>{}}/></>
         : <p className="metadata-tool-loading">文献暂不可用，请返回文献库。</p>}
     </div>
   </div>

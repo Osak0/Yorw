@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-适用阶段二分支 `feature/document-enrichment-rag` / schema 20，基础来自已合并阶段一 ed65e79 / schema 19；应用版本仍为 0.2.0。环境与命令见[开发指南](development.md)，当前证据见[阶段二记录](history/v0.3.0-phase2.md)。
+已合并基线 main 为 PR #19 / 639509b / schema 20；当前 feature/library-workspace-polish 追加到 schema 22，整改阶段二已 review，阶段三等待 review；应用版本仍为 0.2.0。环境与命令见[开发指南](development.md)，当前证据见[阶段二记录](history/v0.3.0-phase2.md)。
 
 ## 模块与通信
 
@@ -24,22 +24,22 @@ main 启动 Python 时通过 stdin 传入工作区与会话令牌；后端监听
 
 ## 工作区界面、标签与布局
 
-`workspace-tabs.ts` 定义工作标签：`document`、`topic`、Storage 工具（`notes`/`search`/`chat`/`resource`/`metadata`）和 Garden 工具（`ai`/`history`/`materials`）。标签键为“类型:实体 ID”，文献与专题工具共用所属实体 ID；`moduleForTab` 决定归属 Storage 或 Garden。App 持有标签数组、激活键、当前模块和各模块最后活动键；模块导航清空当前激活键进入首页，标签栏激活标签时同步模块。布局恢复按当前文献/专题列表校验实体，跳过不存在的页面并提示；损坏布局回到 Storage 首页。
+`workspace-tabs.ts` 定义工作标签：`document`、`topic`、`topic-create`、`topic-manage`、Storage 工具（`notes`/`search`/`chat`/`resource`/`metadata`）和 Garden 工具（`ai`/`history`/`materials`）。标签键为“类型:实体 ID”，文献与专题工具共用所属实体 ID；`topic-create` 使用固定 ID `new`（全局唯一），`topic-manage` 按专题 ID 去重。`moduleForTab` 决定归属 Storage 或 Garden。App 持有标签数组、激活键、当前模块和各模块最后活动键；模块导航清空当前激活键进入首页，标签栏激活标签时同步模块。布局恢复按当前文献/专题列表校验实体，跳过不存在的页面并提示；`topic-create` 恢复为空白新建页，已存在的 `topic-manage` 读取已保存目录值；损坏布局回到 Storage 首页。
 
 侧栏与标签是同一份状态的两种宿主。Storage 的阅读标签渲染 PDF 与侧栏；工具标签渲染独立的 `DocumentTool`，整理文献由独立 `MetadataTool` 标签承载；文献资料中的“编辑元数据”也打开该标签。任一时刻只挂载一个宿主，工具输入/结果/编辑草稿按文献保存在 `session-state.ts`（页码、缩放、侧栏模式/宽度、检索与问答输入）、既有 `Notebook`/`GardenBook`，整理文献的元数据草稿在当前会话按文献保留。从侧栏“展开为标签”关闭侧栏宿主并激活工具标签；工具“返回阅读侧栏”移除工具标签、激活文献阅读标签并打开对应侧栏。工具标签中的来源跳转通过一次性 pending jump 激活目标文献的阅读标签，PDF 加载完成后定位物理页，不覆盖其他文献。
 
-Storage 首页始终是文献列表：左侧可收起“文献目录”列出文献标题与文件名，点击在新标签打开阅读；中右侧是导入、搜索和文献列表。搜索只在本地按标题、文件名、作者、年份、标签和总结过滤，不调用模型或后端。文献资料标签由 `DocumentResource` 聚合：标题/文件、作者年份、标签、人工总结（来源与更新时间）、所属专题、双向相关文献、相同标签辅助查找、笔记、检索历史和问答历史。标签只是查找线索，不自动建立关系；相关文献由用户手动关联，不等同学术引用，也不扩大 AI 材料范围。打开资料标签、查看历史或删除历史都不调用模型；界面中的“重新检索”才会创建新的检索任务。
+Storage 首页始终是文献列表：左侧目录显示文件名，单击文件夹展开后代，双击进入；未归类文献位于根目录。左侧保留唯一导入，中右侧是当前目录直属文献搜索和列表。搜索只在本地按标题、文件名、作者、年份、标签和总结过滤，不调用模型或后端。文献资料由 `DocumentResource` 的 activity 模式聚合 AI 生成记录、笔记、检索及问答历史；`MetadataTool` 承载正式字段编辑，复用 metadata 模式管理专题、双向文献关系和同标签推荐。标签只是查找线索，不自动建立关系；相关文献由用户手动关联，不等同学术引用，也不扩大 AI 材料范围。打开资料标签、查看历史或删除历史都不调用模型；界面中的“重新检索”才会创建新的检索任务。
 
-Garden 正文、AI 优化、修订历史和关联材料是所属专题的四个标签。正文页保留标题/父级路径、折叠的名称与父级入口、编辑/预览/保存/AI 优化/修订历史/关联材料工具栏和主编辑器；AI 优化复用 `SuggestionsPanel` 与 `WikiReview`，修订历史复用既有 revision/source 比较和回退合同。关联材料区分本专题直接关联的文献与从后代专题汇集的文献；笔记按 ID 去重展示，正文仍归所属文献。解除关联只删除关系行，不删除笔记、PDF 或历史来源快照。目录移动后按当前树动态计算后代材料。
+Garden 首页不渲染侧栏，顶部提供新建专题、层级/路径视图切换、展开/收起全部、刷新和本地名称搜索；只有确实无专题时才显示新建空状态，搜索无匹配使用独立空状态。正文页左栏为可收起的专题目录（搜索、新建、共用树）；点击名称打开或激活正文标签，箭头只展开/收起，叶节点无箭头。正文、AI 优化、修订历史、关联材料和专题管理是独立标签；正文页保留标题/父级路径、编辑/预览/保存工具栏和主编辑器，不再内嵌名称/父级表单。新建页与管理页复用既有创建/更新 API；新建沿用稳定请求 ID，管理携带专题版本。`GardenBook` 在会话内保存新建/管理草稿，切换标签不丢，布局不保存未提交表单。AI 优化复用 `SuggestionsPanel` 与 `WikiReview`，修订历史复用既有 revision/source 比较和回退合同。关联材料区分本专题直接关联的文献与从后代专题汇集的文献；笔记按 ID 去重展示，正文仍归所属文献。解除关联只删除关系行，不删除笔记、PDF 或历史来源快照。目录移动后按当前树动态计算后代材料。
 
 AI 优化的材料范围默认是当前专题及子专题，显式切换到全工作区才扩大范围。专题范围汇集直接/后代专题关联的文献、这些文献的笔记和后代专题的已保存 Wiki；当前专题的已保存正文只作为编辑背景，不作为独立证据召回。范围为空时在创建任务前返回 `NO_SCOPED_MATERIALS`，不静默回退全库。范围 ID、note/wiki 集合与指纹保存在建议的请求快照中；生成期间的关联/目录变化保留已有草稿，但列表标记 `scope_changed`，采纳时返回 `SCOPE_CHANGED`，要求重新生成或核对。草稿截断恢复、来源检查、修订校验和人工采纳语义没有改变。
 
-主进程 `Layout` 将界面状态写入 `userData/workspace-layout.json`（不进入 SQLite）：版本 1，最多 50 个标签、标题最多 500 字符、文件上限 64 KiB；校验页面类型、UUID、唯一键、激活项与模块一致、Storage/Garden 键归属、侧栏宽度 320–480 和专题/文献目录折叠布尔值，未知字段在写入时丢弃。写入使用临时文件加 rename，并串行化；文件不含正文、密钥、聊天输入或任务结果。读取失败、版本/结构损坏或校验不通过时回退 Storage 首页。布局是界面便利状态，不是业务备份。
+主进程 `Layout` 将界面状态写入 `userData/workspace-layout.json`（不进入 SQLite）：版本 1，最多 50 个标签、标题最多 500 字符、文件上限 64 KiB；校验页面类型、UUID、唯一键、激活项与模块一致、Storage/Garden 键归属、侧栏宽度 320–480、专题/文献目录折叠布尔值，以及可选 `gardenView`（`tree`/`paths`）和 `gardenExpanded`（最多 500 个去重 UUID）；未知字段在写入时丢弃。旧布局缺少 Garden 字段时使用默认值。写入使用临时文件加 rename，并串行化；文件不含正文、密钥、聊天输入、任务结果或未提交表单。读取失败、版本/结构损坏或校验不通过时回退 Storage 首页。布局是界面便利状态，不是业务备份。
 
 ## 数据所有权与一致性
 
 - UUID 为业务 ID，时间为 UTC，物理页码从 1 开始。导入保存受管 PDF 副本并按 SHA256 去重；原始文件不会因应用移除文献而删除。
-- `documents/chunks` 保存文献元数据、抽取版本、页文本和阅读页码；`document_tags` 保存去空、去重后的标签；`documents.summary_md/summary_source/summary_updated_at` 保存人工总结及来源和更新时间。文献 ID 与受管路径不因改名或标签变化而改变。
+- `documents/chunks` 保存文献元数据、抽取版本、页文本和阅读页码；`document_tags` 保存去空、去重后的标签；`documents.summary_md/summary_source/summary_updated_at` 保存统一总结及来源和更新时间。文献 ID 与受管路径不因改名或标签变化而改变。
 - `document_relations` 每对文献只保存一行（`low_id < high_id`），说明为双向共享；`document_topics` 保存文献—专题多对多。关系解除只删除关系行，不删除文献、笔记或 Wiki 快照。
 - `notes` 保存文献笔记及来源；`conversations/messages` 保存问题、输出、状态、来源和提示词/模型信息；`search_history` 保存实际提交的检索问题、时间、状态、摘录和来源引用快照。检索历史可单独删除或清空，不删除任务、笔记或对话。
 - `topics` 管层级与当前修订指针；`revisions` 是不可变正文/来源快照；`suggestions` 独立保存生成草稿、基础修订、材料与请求；自动草稿的请求快照包含材料范围、范围指纹和来源版本；`wiki_decisions` 保证采纳、拒绝与回退幂等。
@@ -105,7 +105,7 @@ ReaderTarget 增加 evidence 与 section_path，引用操作首先显示依据�
 
 `enrichment.DocumentEnricher` 将已解析块分为最多 32 个章节/长度批次，每批文字上限 12000 字符，长块分片不丢尾部；多批结果再汇总，记录实际覆盖块。超过预算直接报错，不把首段概述称为全文总结。模型输出由 Pydantic 和来源 ID 集合校验，不执行文档内指令；合法来源编号不能证明语义真实性，仍需人工核查。
 
-迁移 020 新增 `enrichment_preferences/document_enrichments/enrichment_decisions/enrichment_requests` 和文献级 `document_hint_index/document_hint_fts`，另给 ai_preferences 增加 metadata_enabled（默认关闭）。结果保存输入 extraction_version、模型配置指纹、Prompt 版本、覆盖和时间；tasks 保存任务快照与阶段。人工 summary_md/document_tags 不被覆盖，AI 结果单独保存；移除标签/隐藏结果/忽略专题按解析版本持久化，重新生成不恢复拒绝项。旧结果在重解析后过期，失败保留旧结果。
+迁移 020 新增 `enrichment_preferences/document_enrichments/enrichment_decisions/enrichment_requests` 和文献级 `document_hint_index/document_hint_fts`，另给 ai_preferences 增加 metadata_enabled（默认关闭）。结果保存输入 extraction_version、模型配置指纹、Prompt 版本、覆盖和时间；tasks 保存任务快照与阶段。AI 生成记录单独保存，不自动改写正式 summary_md/document_tags；标签拒绝及专题忽略仍按解析版本保留，隐藏按每条结果记录并可恢复。旧结果在重解析后过期，失败保留旧结果。
 
 main 的 `Enrichment` 通过受限 IPC 使用安全存储密钥，每三秒检查已授权新文献，单工作线程有序执行；密钥只经私有请求头传递，不进入任务和布局。普通查看不调用模型，失败/中断任务不会被扫描重发；手动重新生成是新的付费意图。关闭自动整理会取消未完成任务。取消不撤销已经发出的上游请求，但后续批次和提交检查会阻止结果发布；重启不自动重发。
 
@@ -113,4 +113,35 @@ main 的 `Enrichment` 通过受限 IPC 使用安全存储密钥，每三秒检�
 
 `EvidenceRetriever`（兼容别名 Retriever）统一范围、RRF、去重与来源返回。`LexicalRetriever` 的实现为 SQLite FTS5/BM25；`VectorIndex` 当前由 SQLite 配置版本缓存与 NumPy 点积实现，支持受限查询、写入、删除、版本检查和重建。原文/SQLite 业务记录仍是权威数据，未引入 Chroma。
 
-启用元数据方案时，标题、人工标签/总结和当前未隐藏 AI 字段进入独立文献级 FTS5 入口；同义词只取有限短术语，保留原始查询，不把整篇总结复制进每个切片。命中文献只能在本次允许集合中选择当前原文块，AI 证据 ID 再限制可选支持块；最后再次检查来源可用性。输出仍是原文摘录，AI 字段不是引用。本轮合成评估通过，但真实模型质量未完成，因此默认排序保持原方案。
+启用元数据方案时，标题、正式标签/总结和当前未隐藏 AI 字段进入独立文献级 FTS5 入口；同义词只取有限短术语，保留原始查询，不把整篇总结复制进每个切片。命中文献只能在本次允许集合中选择当前原文块，AI 证据 ID 再限制可选支持块；最后再次检查来源可用性。输出仍是原文摘录，AI 字段不是引用。本轮合成评估通过，但真实模型质量未完成，因此默认排序保持原方案。
+
+
+## 逻辑文献目录（迁移 021）
+
+library_folders 保存稳定 ID、parent_id、规范化名称及乐观版本；documents.folder_id 可空，旧文献迁移后未分类。目录服务独立于解析与检索，通过事务校验同级名称、32 层深度、循环及版本冲突。批量归类先验证全部文献版本再更新；不改变原件哈希、解析版本、来源 ID 或专题关系。非空目录删除提升子节点，同级重名则回滚。
+
+受限 documents:library IPC 使用枚举操作。后端 UUID 路由解析受管原件并复用 Workspace 的重解析点/路径检查，main 处理系统打开、资源管理器定位和剪贴板；renderer 不提供路径或命令。绝对路径仅按用户请求显示，不进入布局和普通日志。目录选择与分隔条宽度在 renderer 本机 localStorage 保存，旧全部/未分类及缺失目录恢复到根目录；目录展示和右侧列表只消费直属归属。目录组织不参与 AI 证据授权，当前范围问答规则仍由原有来源系统控制。
+
+
+## 界面与工作标签（整改阶段三）
+
+workspace-ui.css 管理当前工作区的颜色、字号、按钮和密度；目录专用样式仍在 library-directory.css，原件/笔记/Garden/资料模块保留各自布局与滚动职责。SettingsIcon 使用本地 SVG，仅作装饰，入口有可见文字和原生按钮语义，无新依赖。
+
+无标签时不渲染 tabbar；设置仍通过现有稳定 settings:id 标签和 House 表单注册表去重、恢复、保护草稿。模型预设的脏状态以当前已保存值或初始预设比较，未编辑预设不提示丢弃。密钥仍由用户输入后通过 main 安全保存，草稿不进入布局。文献管理 details 保留元数据、解析和删除操作，主要列表默认只呈现阅读和资料按钮。
+
+### Garden 专题导航与标签页
+
+`garden-tree.ts` 是纯函数目录层：按 `parent_id` 构造子节点、计算从根到当前专题的路径、祖先/后代集合、默认展开、名称搜索与父级选项。搜索返回匹配项与祖先可见集合，树只在渲染时临时展开祖先；清空搜索回到用户原有展开状态。管理父级选项排除自身及后代，后端仍做版本与循环校验。
+
+`GardenBook` 扩展会话内 `create` 与 `manage` 草稿：新建草稿保存名称、父级、稳定请求 ID 和初始父级；已有脏草稿不因重复打开重置。管理草稿保存名称、父级、专题版本与基线；刷新目录只更新未编辑的基线，脏编辑保留。创建/更新成功后用返回的专题替换目录项，标签标题由 App 统一同步；移动不触碰正文、修订或来源。关闭修改后的新建/管理标签沿用统一关闭对话框，可创建/保存、放弃或取消，失败保持输入。表单内容不进入布局。
+
+首页使用 `.garden-home`，正文使用 `.garden-workspace` + 可收起 `.garden-directory`，工具/新建/管理页不渲染重复目录。视图、展开状态、目录收起和标签均走现有布局/IPC，不新增数据库迁移或专属 API。
+
+
+### 生成历史与元数据采纳（schema 22）
+
+追加 022，不改写旧迁移。document_enrichments 新增 metadata_json/provider_json，保留输入元数据、无密钥的模型配置及 Prompt enrichment-evidence-v3；result_json 为完整原始结果，API 同时提供未过滤 raw_result 和兼容拒绝策略的 result。历史查询受文献 ID 约束；旧版本隐藏决策迁入逐条 hidden 后可恢复，不丢弃原输出。重解析只标记历史过期，不允许采纳过期结果。
+
+ModelDocumentEnricher 在每批与汇总请求加入 current_metadata，作为参考而非证据；建议标题、作者和年份可省略，标签/总结沿用结果字段。enrichment:apply 仅接受白名单字段、文献/结果 ID、预期版本和 replace/append，main 不接收路径或模型密钥。服务在同一写事务检查文献与解析版本、验证字段、更新统一元数据、写入 enrichment_applications 前后值审计。追加标签按 casefold 去重，追加总结保留现有内容；来源标记 ai_confirmed。替换需用户确认，自动生成不执行采纳。
+
+前端历史选择时禁止在切换未完成的记录上采纳；元数据编辑与采纳均使用乐观版本保护。资料页保留生成记录及活动，不重复提供字段或关系表单。菜单与目录归类不变更原件路径、解析版本和引用 ID。

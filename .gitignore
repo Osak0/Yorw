@@ -63,3 +63,8 @@ Desktop.ini
 .~lock.*#
 *.orig
 *.rej
+
+# Python/frontend tooling caches and generated test coverage
+.hypothesis/
+.pyre/
+.eslintcache

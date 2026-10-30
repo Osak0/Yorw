@@ -23,10 +23,10 @@ const document: DocumentRecord = {
   metadata_source: { title: 'user', authors: 'user', year: 'user', tags: 'user', summary: 'user' }
 }
 
-test('metadata editor exposes tags and manual summary without an AI generate button', () => {
+test('metadata editor exposes tags and canonical summary without an AI generate button', () => {
   const html = renderToStaticMarkup(<MetadataEditor document={document} onClose={() => {}} onSaved={() => {}} />)
   expect(html).toContain('关键词 / 标签')
-  expect(html).toContain('人工总结')
+  expect(html).toContain('总结')
   expect(html).toContain('检索增强')
   expect(html).toContain('这篇论文讨论检索增强生成。')
   expect(html).toContain('人工编辑')
@@ -57,6 +57,6 @@ test('metadata payload writes only fields the user changed', () => {
     title: '', authors: '', year: '', tags: '', summary: ''
   })
   expect(cleared).toEqual({
-    id: document.id, version: 2, title: null, authors: [], year: null, tags: [], summary_md: null
+    id: document.id, version: 2, title: null, authors: [], year: null, tags: [], summary_md: ''
   })
 })

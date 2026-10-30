@@ -116,3 +116,29 @@ test('save rejects malformed layouts and out-of-range sidebar widths', async () 
  expect((await store.load()).layout).toEqual(value)
  })
 })
+test('Garden create and manage tabs plus view and expansion state persist', async () => {
+  await withDirectory(async directory => {
+    const store = new Layout(directory)
+    const value: WorkspaceLayout = {
+      version: 1,
+      module: 'Garden',
+      tabs: [
+        { kind: 'topic-create', id: 'new', title: '新建专题' },
+        { kind: 'topic-manage', id: topicId, title: 'Topic' },
+        { kind: 'topic', id: topicId, title: 'Topic' }
+      ],
+      activeKey: 'topic-create:new',
+      storageKey: null,
+      gardenKey: `topic-manage:${topicId}`,
+      directoryCollapsed: true,
+      gardenView: 'paths',
+      gardenExpanded: [topicId]
+    }
+    await store.save(value)
+    await expect(store.load()).resolves.toEqual({ layout: value })
+    await expect(store.save({ ...value, tabs: [{ kind: 'topic-create', id: topicId }] })).rejects.toThrow('INVALID_LAYOUT')
+    await expect(store.save({ ...value, gardenView: 'grid' })).rejects.toThrow('INVALID_LAYOUT')
+    await expect(store.save({ ...value, gardenExpanded: ['not-a-topic'] })).rejects.toThrow('INVALID_LAYOUT')
+    await expect(store.save({ ...value, gardenExpanded: [topicId, topicId] })).rejects.toThrow('INVALID_LAYOUT')
+  })
+})

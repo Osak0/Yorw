@@ -1,11 +1,13 @@
 import type {GardenBridge,Topic,TopicView,Suggestion,WikiDecisionInput} from '../shared/status'
 export interface ReviewDraft {suggestion:Suggestion;current:TopicView;body:string;requestId:string}
 export interface WikiDraft {id:string;body:string;savedBody:string;base:string;saving:boolean;conflict:boolean;message:string}
-interface Snapshot {topics:Topic[];selected:string;drafts:Record<string,WikiDraft>;reviews:Record<string,ReviewDraft>;loading:boolean;error:string}
+export interface CreateDraft {title:string;parent_id:string;requestId:string;initialParent:string}
+export interface ManageDraft {title:string;parent_id:string;version:number;baseTitle:string;baseParent:string}
+interface Snapshot {topics:Topic[];selected:string;drafts:Record<string,WikiDraft>;reviews:Record<string,ReviewDraft>;create:CreateDraft|null;manage:Record<string,ManageDraft>;loading:boolean;error:string}
 export const wikiDirty=(draft:WikiDraft)=>draft.body!==draft.savedBody
 const explain=(code:string)=>({INVALID_CITATION:'请保留至少一个有效的本轮 S 引用，不能引用未提供的编号。',MATERIAL_CHANGED:'材料已变化，请重新选材生成；比较草稿仍保留。',SCOPE_CHANGED:'专题材料范围已变化，请重新生成或核对来源后再采纳。',SUGGESTION_DECIDED:'此建议已处理，请重新打开历史核对。',SUGGESTION_NOT_READY:'请等待生成结束；已有部分内容的草稿可在结束后编辑补全。',REQUEST_CONFLICT:'请求内容已变化，请重新比较后确认。',REVISION_CONFLICT:'正文已有新修订，草稿已保留。请比较最新版本后决定。',TOPIC_CONFLICT:'目录已更新，请刷新目录后重试；输入仍保留。',TOPIC_CYCLE:'不能将专题移动到自身或其后代。',TOPIC_NOT_FOUND:'专题不存在，请刷新目录。',BACKEND_NOT_READY:'本地服务不可用，草稿已保留。',INVALID_INPUT:'输入无效或正文超过 200,000 字。'}[code]??`操作失败（${code}），草稿已保留。`)
 export class GardenBook {
- private state:Snapshot={topics:[],selected:'',drafts:{},reviews:{},loading:false,error:''}
+ private state:Snapshot={topics:[],selected:'',drafts:{},reviews:{},create:null,manage:{},loading:false,error:''}
  private listeners=new Set<()=>void>()
  constructor(private bridge:GardenBridge){}
  getSnapshot=()=>this.state
@@ -13,12 +15,23 @@ export class GardenBook {
  private publish(update:Partial<Snapshot>){this.state={...this.state,...update};this.listeners.forEach(fn=>fn())}
  private patch(id:string,update:Partial<WikiDraft>){const draft=this.state.drafts[id];if(draft)this.publish({drafts:{...this.state.drafts,[id]:{...draft,...update}}})}
  private topic(value:Topic){const topics=this.state.topics.filter(item=>item.id!==value.id);this.publish({topics:[...topics,value]})}
- hasUnsaved(){return Object.values(this.state.drafts).some(d=>wikiDirty(d)||d.saving)||Object.values(this.state.reviews).some(r=>r.body!==r.suggestion.body_md)}
+ hasUnsaved(){return this.createDirty()||this.manageDirtyIds().length>0||Object.values(this.state.drafts).some(d=>wikiDirty(d)||d.saving)||Object.values(this.state.reviews).some(r=>r.body!==r.suggestion.body_md)}
  hasUnsavedDraft(id:string){const d=this.state.drafts[id];return !!d&&(wikiDirty(d)||d.saving)}
  hasUnsavedReview(id:string){const r=this.state.reviews[id];return !!r&&r.body!==r.suggestion.body_md}
- hasUnsavedTopic(id:string){return this.hasUnsavedDraft(id)||this.hasUnsavedReview(id)}
+ hasUnsavedTopic(id:string){if(id==='new')return this.createDirty();if(this.state.manage[id])return this.manageDirty(id);return this.hasUnsavedDraft(id)||this.hasUnsavedReview(id)}
  discardTopic(id:string){const d=this.state.drafts[id];if(d)this.patch(id,{body:d.savedBody,conflict:false,message:''});this.review(id,null)}
  discardReview(id:string){this.review(id,null)}
+ startCreate(parent_id:string|null=null){const parent=parent_id??'';const existing=this.state.create;if(existing&&this.createDirty())return;this.publish({create:{title:existing?.title??'',parent_id:parent,requestId:existing?.requestId??crypto.randomUUID(),initialParent:parent}})}
+ editCreate(field:'title'|'parent_id',value:string){const draft=this.state.create;if(draft)this.publish({create:{...draft,[field]:value}})}
+ createDirty(){const draft=this.state.create;return !!draft&&(draft.title.trim()!==''||draft.parent_id!==draft.initialParent)}
+ async createFromDraft(){const draft=this.state.create;if(!draft)throw new Error('没有待创建的新专题。');const title=draft.title.trim();if(!title)throw new Error('请输入专题名称。');const result=await this.bridge.create({id:draft.requestId,title,parent_id:draft.parent_id||null});if(!result.ok)throw new Error(explain(result.code));this.publish({create:null});this.topic(result.value.topic);await this.select(result.value.topic.id);return result.value.topic}
+ discardCreate(){if(this.state.create)this.publish({create:null})}
+ manage(id:string){if(this.state.manage[id])return;const topic=this.state.topics.find(item=>item.id===id);if(!topic)return;this.publish({manage:{...this.state.manage,[id]:{title:topic.title,parent_id:topic.parent_id??'',version:topic.version,baseTitle:topic.title,baseParent:topic.parent_id??''}}})}
+ editManage(id:string,field:'title'|'parent_id',value:string){const draft=this.state.manage[id];if(draft)this.publish({manage:{...this.state.manage,[id]:{...draft,[field]:value}}})}
+ manageDirty(id:string){const draft=this.state.manage[id];return !!draft&&(draft.title.trim()!==draft.baseTitle||draft.parent_id!==draft.baseParent)}
+ manageDirtyIds(){return Object.keys(this.state.manage).filter(id=>this.manageDirty(id))}
+ async saveManage(id:string){const draft=this.state.manage[id];if(!draft)throw new Error('没有待保存的专题管理草稿。');const title=draft.title.trim();if(!title)throw new Error('请输入专题名称。');const result=await this.bridge.update({id,title,parent_id:draft.parent_id||null,version:draft.version});if(!result.ok)throw new Error(explain(result.code));const topic=result.value.topic;this.topic(topic);this.publish({manage:{...this.state.manage,[id]:{title:topic.title,parent_id:topic.parent_id??'',version:topic.version,baseTitle:topic.title,baseParent:topic.parent_id??''}}});return topic}
+ discardManage(id:string){const manage={...this.state.manage};delete manage[id];this.publish({manage})}
  review(id:string,value:ReviewDraft|null){const reviews={...this.state.reviews};if(value)reviews[id]=value;else delete reviews[id];this.publish({reviews})}
  refreshReview(id:string,suggestion:Suggestion){
   const review=this.state.reviews[id]
@@ -42,7 +55,7 @@ export class GardenBook {
    if(clearReview)this.review(id,null);this.patch(id,{message:replace?`已保存 · 修订 ${value.revision.ordinal}`:'已拒绝建议，正文保持。'});return result.value
   }catch(e){this.patch(id,{message:e instanceof Error?e.message:'操作失败，编辑内容已保留。'});throw e}finally{this.patch(id,{saving:false})}
  }
- async refresh(){this.publish({loading:true,error:''});try{const result=await this.bridge.list();if(result.ok)this.publish({topics:result.value.items});else this.publish({error:explain(result.code)})}catch{this.publish({error:'目录加载失败，请重试。'})}finally{this.publish({loading:false})}}
+ async refresh(){this.publish({loading:true,error:''});try{const result=await this.bridge.list();if(result.ok){const items=result.value.items,manage={...this.state.manage};for(const [id,draft] of Object.entries(manage)){const topic=items.find(item=>item.id===id);if(topic&&draft.title.trim()===draft.baseTitle&&draft.parent_id===draft.baseParent)manage[id]={title:topic.title,parent_id:topic.parent_id??'',version:topic.version,baseTitle:topic.title,baseParent:topic.parent_id??''}}this.publish({topics:items,manage})}else this.publish({error:explain(result.code)})}catch{this.publish({error:'目录加载失败，请重试。'})}finally{this.publish({loading:false})}}
  async select(id:string){this.publish({selected:id,error:''});if(this.state.drafts[id])return
   try{const result=await this.bridge.get(id);if(result.ok){const r=result.value.revision;this.topic(result.value.topic);if(!this.state.drafts[id])this.publish({drafts:{...this.state.drafts,[id]:{id,body:r.body_md,savedBody:r.body_md,base:r.id,saving:false,conflict:false,message:'已载入保存版本'}}})}else this.publish({error:explain(result.code)})}catch{this.publish({error:'正文加载失败，请重试。'})}}
  edit(id:string,body:string){this.patch(id,{body,message:''})}

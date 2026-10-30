@@ -391,49 +391,53 @@ class Library:
             return True
 
     def update(self, identity, metadata: Metadata):
+        with self.operations, self.db.write() as conn:
+            return self.update_with(conn, identity, metadata)
+
+    def update_with(self, conn, identity, metadata: Metadata):
+        """Canonical metadata write; caller owns the serialized transaction."""
         tags = normalize_tags(metadata.tags) if metadata.tags is not None else None
         supplied = metadata.model_fields_set
-        with self.operations, self.db.write() as conn:
-            doc = self.document(identity)
-            if doc['version'] != metadata.version:
-                raise HTTPException(409, detail="DOCUMENT_CONFLICT")
-            if 'authors' in supplied and any(len(author) > 1000 for author in metadata.authors):
-                raise HTTPException(422, detail="INVALID_METADATA")
-            timestamp = now()
-            summary_md, summary_source, summary_updated_at = (
-                doc['summary_md'], doc['summary_source'], doc['summary_updated_at'])
-            summary_changed = False
-            if metadata.summary_md is not None:
-                candidate = metadata.summary_md.strip()
-                if not candidate:
-                    summary_changed = summary_md is not None or summary_source is not None
-                    summary_md = summary_source = summary_updated_at = None
-                elif candidate != (summary_md or ''):
-                    summary_changed = True
-                    summary_md, summary_source, summary_updated_at = candidate, 'manual', timestamp
-            title = metadata.title if 'title' in supplied else doc['title']
-            authors = metadata.authors if 'authors' in supplied else doc['authors']
-            year = metadata.year if 'year' in supplied else doc['year']
-            sources = dict(doc['metadata_source'])
-            for changed in ('title', 'authors', 'year'):
-                if changed in supplied:
-                    sources[changed] = 'user'
-            if tags is not None:
-                sources['tags'] = 'user'
-                retained = {tag.casefold() for tag in tags}
-                conn.executemany('INSERT OR IGNORE INTO enrichment_decisions VALUES(?,?,?)',
-                    [(identity,doc['extraction_version'],'tag:'+tag.casefold()) for tag in doc['tags'] if tag.casefold() not in retained])
-            if summary_changed:
-                sources['summary'] = 'user'
-            conn.execute(
-                "UPDATE documents SET title=?,authors_json=?,year=?,metadata_source_json=?,summary_md=?,summary_source=?,summary_updated_at=?,version=version+1,updated_at=? WHERE id=?",
-                (title, json.dumps(authors), year, json.dumps(sources),
-                 summary_md, summary_source, summary_updated_at, timestamp, identity))
-            if tags is not None:
-                conn.execute("DELETE FROM document_tags WHERE document_id=?", (identity,))
-                conn.executemany(
-                    "INSERT INTO document_tags(document_id,tag_key,tag,created_at) VALUES(?,?,?,?)",
-                    [(identity, tag.casefold(), tag, timestamp) for tag in tags])
+        doc = self.document(identity)
+        if doc['version'] != metadata.version:
+            raise HTTPException(409, detail="DOCUMENT_CONFLICT")
+        if 'authors' in supplied and any(len(author) > 1000 for author in metadata.authors):
+            raise HTTPException(422, detail="INVALID_METADATA")
+        timestamp = now()
+        summary_md, summary_source, summary_updated_at = (
+            doc['summary_md'], doc['summary_source'], doc['summary_updated_at'])
+        summary_changed = False
+        if metadata.summary_md is not None:
+            candidate = metadata.summary_md.strip()
+            if not candidate:
+                summary_changed = summary_md is not None or summary_source is not None
+                summary_md = summary_source = summary_updated_at = None
+            elif candidate != (summary_md or ''):
+                summary_changed = True
+                summary_md, summary_source, summary_updated_at = candidate, 'manual', timestamp
+        title = metadata.title if 'title' in supplied else doc['title']
+        authors = metadata.authors if 'authors' in supplied else doc['authors']
+        year = metadata.year if 'year' in supplied else doc['year']
+        sources = dict(doc['metadata_source'])
+        for changed in ('title', 'authors', 'year'):
+            if changed in supplied:
+                sources[changed] = 'user'
+        if tags is not None:
+            sources['tags'] = 'user'
+            retained = {tag.casefold() for tag in tags}
+            conn.executemany('INSERT OR IGNORE INTO enrichment_decisions VALUES(?,?,?)',
+                [(identity,doc['extraction_version'],'tag:'+tag.casefold()) for tag in doc['tags'] if tag.casefold() not in retained])
+        if summary_changed:
+            sources['summary'] = 'user'
+        conn.execute(
+            "UPDATE documents SET title=?,authors_json=?,year=?,metadata_source_json=?,summary_md=?,summary_source=?,summary_updated_at=?,version=version+1,updated_at=? WHERE id=?",
+            (title, json.dumps(authors), year, json.dumps(sources),
+             summary_md, summary_source, summary_updated_at, timestamp, identity))
+        if tags is not None:
+            conn.execute("DELETE FROM document_tags WHERE document_id=?", (identity,))
+            conn.executemany(
+                "INSERT INTO document_tags(document_id,tag_key,tag,created_at) VALUES(?,?,?,?)",
+                [(identity, tag.casefold(), tag, timestamp) for tag in tags])
         return self.document(identity)
 
     def remove(self, identity, version):

@@ -3,7 +3,8 @@ import type { WorkspaceLayoutTab } from '../shared/status'
 export type WorkspaceModule = 'Storage' | 'Garden' | 'House'
 export type StorageTool = 'notes' | 'search' | 'chat' | 'resource' | 'metadata'
 export type GardenTool = 'ai' | 'history' | 'materials'
-export type WorkspaceTabKind = 'settings' | 'document' | 'topic' | StorageTool | GardenTool
+export type WorkspaceTabKind = 'settings' | 'document' | 'topic' | 'topic-create' | 'topic-manage' | StorageTool | GardenTool
+export const CREATE_TOPIC_TAB_ID = 'new'
 const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat', 'resource', 'metadata']
 
 export type WorkspaceTab = {
@@ -33,6 +34,14 @@ export function gardenToolTab(tool: GardenTool, id: string, title: string): Work
   return makeTab(tool, id, title)
 }
 
+export function topicCreateTab(): WorkspaceTab {
+  return makeTab('topic-create', CREATE_TOPIC_TAB_ID, '新建专题')
+}
+
+export function topicManageTab(id: string, title: string): WorkspaceTab {
+  return makeTab('topic-manage', id, title)
+}
+
 export function isStorageTab(tab: WorkspaceTab): boolean {
   return STORAGE_KINDS.includes(tab.kind)
 }
@@ -47,7 +56,7 @@ export function moduleForTab(tab: WorkspaceTab): WorkspaceModule {
 }
 
 export function tabKindLabel(tab: WorkspaceTab): string {
-  return { settings:'设置', document: '文献', topic: '专题', notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
+  return { settings:'设置', document: '文献', topic: '专题', 'topic-create': '新建专题', 'topic-manage': '专题管理', notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
 }
 
 /** Restores saved pages against the current workspace and reports pages that no longer exist. */
@@ -55,6 +64,7 @@ export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, 
   const tabs: WorkspaceTab[] = []
   for (const item of items) {
     if(item.kind==='settings'){tabs.push(makeTab('settings',item.id,({parsers:'文献解析与预览',chat:'聊天模型',retrieval:'检索',data:'数据与导出'} as Record<string,string>)[item.id]));continue}
+    if(item.kind==='topic-create'){tabs.push(topicCreateTab());continue}
     const garden = !STORAGE_KINDS.includes(item.kind)
     const title = (garden ? topics : documents).get(item.id)
     if (title !== undefined) tabs.push(makeTab(item.kind, item.id, title))

@@ -57,16 +57,14 @@ export async function runEnrichmentSmoke(window:BrowserWindow,backend:Backend,pr
    const row=[...document.querySelectorAll('.document-row')].find(n=>n.textContent.includes(${JSON.stringify(filename)}));[...row.querySelectorAll('button')].find(b=>b.textContent==='文献资料').click()
    await wait(()=>document.querySelector('[aria-label="AI 文献整理"]')?.textContent.includes(${JSON.stringify(overview)}),'AI_RESOURCE')
    const panel=document.querySelector('[aria-label="AI 文献整理"]')
-   if(!panel.textContent.includes(${JSON.stringify(tag)})||!panel.textContent.includes('共同主题词'))throw new Error('TAG_OR_RECOMMENDATION')
-   ;[...panel.querySelectorAll('button')].find(b=>b.textContent==='确认关联').click()
-   await wait(()=>panel.textContent.includes('已保存选择'),'CONFIRM_TOPIC')
+   if(!panel.textContent.includes(${JSON.stringify(tag)}))throw new Error('TAG_OR_RECOMMENDATION')
    const page=panel.closest('.document-resource-page'),sections=page?.querySelector('.document-resource-view')
    if(!page||!sections||getComputedStyle(page).overflowY!=='auto'||getComputedStyle(sections).overflowY!=='visible')throw new Error('MULTIPLE_SCROLL_OWNERS')
    const before=panel.getBoundingClientRect().top;page.scrollTop=200;await new Promise(r=>setTimeout(r,150))
    if(panel.getBoundingClientRect().top>=before-100)throw new Error('AI_PANEL_NOT_SCROLLING_WITH_PAGE')
    page.scrollTop=0
    if(page.scrollWidth>page.clientWidth+1)throw new Error('RESOURCE_HORIZONTAL_OVERFLOW')
-   return {singleScrollPage:true,optInHouse:true,automaticAfterImport:true,derivedTags:true,confirmedTopic:true,humanFieldsPreserved:true}
+   return {singleScrollPage:true,optInHouse:true,automaticAfterImport:true,derivedTags:true,humanFieldsPreserved:true}
   })()`)
   for(const [width,height] of [[1280,720],[1024,768]]){
    window.setContentSize(width,height);await new Promise(r=>setTimeout(r,250))
@@ -74,6 +72,15 @@ export async function runEnrichmentSmoke(window:BrowserWindow,backend:Backend,pr
    if(!layout.fits||!layout.scrolls)throw new Error('RESOURCE_LAYOUT_'+width)
    await writeFile(join(folder,'enrichment-resource-'+width+'.png'),(await window.webContents.capturePage()).toPNG())
   }
+  await window.webContents.executeJavaScript(`(async()=>{
+   const wait=async(fn,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,100))}throw new Error(label)}
+   ;[...document.querySelectorAll('button')].find(b=>b.textContent==='编辑元数据').click()
+   await wait(()=>document.querySelector('[aria-label="推荐关联专题"]'),'TOPIC_IN_METADATA')
+   const section=document.querySelector('[aria-label="推荐关联专题"]');[...section.querySelectorAll('button')].find(b=>b.textContent==='确认关联').click()
+   await wait(()=>document.querySelector('[aria-label="所属专题"]')?.textContent.includes(${JSON.stringify(docx?'event budget':'lung imaging')}),'TOPIC_CONFIRMED')
+   ;[...document.querySelectorAll('.workspace-tab')].find(b=>b.querySelector('.workspace-tab-kind')?.textContent==='文献资料').click()
+   await wait(()=>document.querySelector('[aria-label="AI 文献整理"]'),'RESOURCE_BACK')
+  })()`)
   const evidence=await window.webContents.executeJavaScript(`(async()=>{
    const wait=async(fn,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,100))}throw new Error(label)}
    const panel=document.querySelector('[aria-label="AI 文献整理"]');panel.querySelector('summary').click()
@@ -92,6 +99,6 @@ export async function runEnrichmentSmoke(window:BrowserWindow,backend:Backend,pr
   for(let i=0;i<100;i++){search=await backend.request(`/v1/ai/tasks/${task.id}`);if(!['running','queued'].includes(search.status))break;await new Promise(r=>setTimeout(r,100))}
   if(search.status!=='succeeded'||!search.result.items[0]?.snippet.includes(sourceNeedle))throw new Error('METADATA_SEARCH')
   await writeFile(join(folder,'enrichment.png'),(await window.webContents.capturePage()).toPNG())
-  return {...proof,...evidence,docx,nullAndListResponse:true,metadataOriginalEvidence:true,modelCalls:calls,schema:20}
+  return {...proof,...evidence,confirmedTopic:true,docx,nullAndListResponse:true,metadataOriginalEvidence:true,modelCalls:calls,schema:22}
  }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()))}
 }
