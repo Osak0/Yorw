@@ -1,8 +1,10 @@
 # Yorw v0.3.0 多格式文献与 RAG 改进计划
 
+归档说明（2026-11-12）：本文件从仓库根目录迁入，以下按原时点保留。当前已提交业务基线为 c9a6cb2／schema 23，现役开发范围见 [v0.4.0 计划](../../PLAN_v0_4_0.md)。
+
 > 状态：本计划实现工作已完成（2026-10-30），并经 PR #20 合并到 main（d42bd37）；schema 22，应用版本 0.2.0。后续 v0.3.0 开发在 feature/Garden-interface-refine 分支进行；文末 Garden 首页专题展示视觉细化已实现并 review 通过（2026-10-31）。以下保留原始分阶段规划和实施时点，旧“待 review/未提交”不作为当前待办；研究记忆仍为未实施草案。现役状态以 PLAN.md 为准。
 
-更新：2026-10-30。阶段一（步骤 1–7）与阶段二（步骤 8–14）均已由 osako review 通过，经 PR #18/#19 合并到 main；工作区整改经 PR #20 合并，main 为 schema 22，应用版本仍为 0.2.0；后续开发在 feature/Garden-interface-refine 分支进行。本文件保留原定范围与验收、未实施的研究记忆草案，以及文末 Garden 首页专题展示视觉细化的实现记录；当前状态见 [PLAN.md](PLAN.md)。
+更新：2026-10-30。阶段一（步骤 1–7）与阶段二（步骤 8–14）均已由 osako review 通过，经 PR #18/#19 合并到 main；工作区整改经 PR #20 合并，main 为 schema 22，应用版本仍为 0.2.0；后续开发在 feature/Garden-interface-refine 分支进行。本文件保留原定范围与验收、未实施的研究记忆草案，以及文末 Garden 首页专题展示视觉细化的实现记录；当前状态见 [PLAN.md](../../PLAN.md)。
 
 ## 基线和交接
 
@@ -262,7 +264,7 @@
 
 视觉方向主要依据用户提供的 Obsidian 截图：紧凑目录树、清晰选中态、分组菜单和中心工作区。设计参考入口为 [CSS Design Awards](https://www.cssdesignawards.com/) 与 [Awwwards](https://www.awwwards.com/)；本轮前者已读取，后者访问超时，不声称完成其具体作品视觉审核。
 
-整改阶段一的实际整理结果见 [收尾记录](docs/history/v0.3.0-workspace.md)；阶段二、三仍待后续授权。历史模型测试和评估的适用边界继续有效。
+整改阶段一的实际整理结果见 [收尾记录](v0.3.0-workspace.md)；阶段二、三仍待后续授权。历史模型测试和评估的适用边界继续有效。
 
 
 2026-10-29 整改阶段二交付：schema 21，逻辑目录与基础菜单已实现，本地全量回归及打包窗口通过。系统默认应用/Explorer 人工操作与独立干净 Windows 另行复核，等待用户 review。实际证据见 docs/history/v0.3.0-workspace.md。
@@ -320,7 +322,7 @@
 - 正文页移除内嵌名称/父级表单，保留标题、父级路径、编辑/预览/保存、冲突与载入最新；专题管理、AI 优化、修订历史、关联材料均为独立标签，工具页无重复目录并可返回正文。布局新增可选 `gardenView` 与 `gardenExpanded`，旧布局默认、失效专题 ID 忽略；未新增数据库迁移。
 - 顺带修正阅读侧栏在窄窗口关闭后焦点回落到当前侧栏模式的问题（`ReadingWorkspace` 初始化 opener 为当前模式），由窗口回归覆盖。
 
-本地验证：前端 26 files / 73 passed；`pnpm typecheck`、`pnpm build`、`pnpm package:dir` 通过；后端完整 261 passed（143.11 秒）。打包窗口 1024/1280/1440 验证首页/层级树/路径列表/搜索祖先恢复/新建与管理草稿保护/目录收起/长名称无横向溢出；资源与 AI 工作流回归通过。证据与限制见 [docs/history/v0.3.0-workspace.md](docs/history/v0.3.0-workspace.md)。
+本地验证：前端 26 files / 73 passed；`pnpm typecheck`、`pnpm build`、`pnpm package:dir` 通过；后端完整 261 passed（143.11 秒）。打包窗口 1024/1280/1440 验证首页/层级树/路径列表/搜索祖先恢复/新建与管理草稿保护/目录收起/长名称无横向溢出；资源与 AI 工作流回归通过。证据与限制见 [docs/history/v0.3.0-workspace.md](v0.3.0-workspace.md)。
 
 ### 接口、兼容与验收
 

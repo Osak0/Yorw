@@ -38,7 +38,14 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
   }, [jump, pdf, onJumpApplied])
   useEffect(() => {
     const element = viewport.current!
-    const observer = new ResizeObserver(entries => { if (entries[0].contentRect.width > 0) setWidth(entries[0].contentRect.width) })
+    // Measure the usable client width, excluding padding and the reserved scrollbar.
+    const measure = () => {
+      const style = getComputedStyle(element)
+      const available = Math.floor(element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
+      if (available > 0) setWidth(previous => previous === available ? previous : available)
+    }
+    const observer = new ResizeObserver(measure)
+    measure()
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
@@ -75,7 +82,7 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
         const source = await pdf!.getPage(page)
         if (!active) return
         const original = source.getViewport({ scale: 1 })
-        const scale = zoom === 'fit' ? Math.max(.1, Math.min(3, (width - 48) / original.width)) : zoom
+        const scale = zoom === 'fit' ? Math.max(.1, Math.min(3, width / original.width)) : zoom
         const view = source.getViewport({ scale })
         if (!Number.isFinite(view.width) || !Number.isFinite(view.height) || view.width <= 0 || view.height <= 0 || view.width > 20000 || view.height > 20000) throw new Error('PAGE_TOO_LARGE')
         const density = Math.max(.1, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(16_000_000 / (view.width * view.height))))
@@ -115,7 +122,7 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
     }
     void paint()
     return () => { active = false; render?.cancel(); layer?.cancel() }
-  }, [pdf, page, zoom, width, highlight])
+  }, [pdf, page, zoom, zoom === 'fit' ? width : 0, highlight])
   useEffect(() => {
     if (!painted || previewId) return
     let active = true

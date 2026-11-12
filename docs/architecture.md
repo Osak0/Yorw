@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-main 已通过 PR #20 合并（d42bd37），为 schema 22；应用版本仍为 0.2.0。后续 v0.3.0 开发在 feature/Garden-interface-refine 分支进行。环境与命令见[开发指南](development.md)，当前状态见[PLAN](../PLAN.md)，阶段二证据见[阶段二记录](history/v0.3.0-phase2.md)。
+当前已提交业务基线为 c9a6cb2（PR #21），应用／后端 0.3.0，schema 23。本文只描述现有实现；v0.4.0 待实现能力见 [计划](../PLAN_v0_4_0.md)，当前状态见 [PLAN](../PLAN.md)，命令见 [开发指南](development.md)。
 
 ## 模块与通信
 
@@ -48,7 +48,7 @@ AI 优化的材料范围默认是当前专题及子专题，显式切换到全�
 - `documents` 保存格式、媒体类型、活动抽取版本、解析版本/状态、解析器与配置指纹；`document_blocks` 保存按版本和顺序排列的内容块、类型、章节路径、物理页（仅 PDF/OCR 有真实页）和定位。旧 `chunks` 继续作为 PDF 兼容索引，内容块 ID 与对应 chunk ID 一致；旧引用快照不重写，来源可用性按活动版本动态计算。
 - 解析版本与活动版本分离：尝试解析递增 `parse_version`；成功才切换 `extraction_version` 并删除/失效派生索引；失败保留上一活动版本和其内容块，记录 `parse_status/parse_warning`。重新解析成功后旧内容块仍可按版本读取，但不再作为当前来源。
 - `parser_settings` 保存增强解析开关、Docling/LibreOffice 路径、超时、OCR 开关/模式/引擎和版本；能力检测与测试只读取独立用户环境，不把组件装进 Yorw 运行时。
-- 阶段一 schema 由 001–019 迁移组成（阶段二另追加 020，见末节）：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎，019 增加 document_previews 和 preview_locations。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
+- 当前 schema 由 001–023 顺序迁移组成；020 文献整理、021 逻辑目录、022 生成历史与采纳审计、023 专题删除，相关合同见后文。001–019 的主要变更：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎，019 增加 document_previews 和 preview_locations。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
 - 正文保存比较 base_revision_id，目录修改比较 version。追加保留旧正文，合并原始来源并重排新增 S 编号；替换及回退创建新修订。动态 available 状态不写回不可变来源。
 
 ## 统一 AI 工作流

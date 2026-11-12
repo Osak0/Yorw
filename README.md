@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**v0.3.0 总计划实现工作已完成，并经 PR #20 合并到 main（d42bd37 / schema 22）。** 当前候选应用版本为 0.3.0，不代表新的公开发布。已完成多格式阅读、自动整理与检索、逻辑目录、工作区交互统一，以及生成记录/统一元数据与 Garden 专题导航、标签页改造，均已由用户 review 通过。后续 v0.3.0 开发在 `feature/Garden-interface-refine` 分支进行；Garden 首页专题展示视觉细化已在该分支实现并通过源码测试与窗口烟测，已由用户 review 通过，尚未完成打包或发布。本轮追加专题右键菜单与单专题删除（工作树 schema 23），已通过 review；上方统一工具栏不变。状态见 [PLAN](PLAN.md)，已完成能力与验证边界见[阶段二记录](docs/history/v0.3.0-phase2.md)。
+当前已提交基线为 **c9a6cb2（PR #21 / 应用 0.3.0 / schema 23）**，包含多格式阅读、AI 生成记录与正式元数据采纳、逻辑目录、Garden 导航和专题右键／删除。现已创建 v0.4.0 开发分支，四个功能阶段尚未开始，范围见 [v0.4.0 计划](PLAN_v0_4_0.md)，当前交接见 [PLAN](PLAN.md)。v0.3.0 候选及历史验证见 [工作区记录](docs/history/v0.3.0-workspace.md)；本轮未核验远端 Release 状态。
 
 PDF、DOCX、Markdown、TXT 基础处理无需外装解析组件；旧 DOC、OCR 和 Word 版式转换的可选配置见[使用指南](docs/user-guide.md#house内置能力与可选解析组件)。自动整理需用户授权和聊天模型，不阻塞阅读；元数据辅助检索默认关闭，仍返回原文依据。真实模型质量和独立干净 Windows 验收后置。内容导出不是完整备份。
 
@@ -33,12 +33,12 @@ PDF、DOCX、Markdown、TXT 基础处理无需外装解析组件；旧 DOC、OCR
 
 ### 获取源码并启动
 
-以下固定到已合并的 v0.3.0 功能基线 d42bd37（schema 22），包含生成历史、统一元数据、目录与 Garden 标签改造。最新 Garden 首页视觉细化尚在当前分支的已审核工作树中，未形成提交：下列 checkout 不包含这部分差异。要重现最新界面，请在作者提交并发布该分支后记录最终提交号，再用它替换下列基线；当前本地工作区直接跳过 clone/checkout。不要在有未提交修改时切换或重置版本。
+以下固定到包含完整 v0.3.0 改动的已提交基线 c9a6cb2（schema 23）。它用于复现当前业务基线，不包含后续 v0.4.0 修改。当前本地工作区直接跳过 clone/checkout；不要在有未提交修改时切换或重置版本。
 
 ```powershell
 git clone https://github.com/Osak0/Yorw.git
 Set-Location Yorw
-git checkout d42bd37a04958b4f6602b87375774a676a32b809
+git checkout c9a6cb2478fb6e49af8e62698430651e0b481d99
 git rev-parse HEAD
 node --version
 pnpm --version
@@ -130,7 +130,8 @@ Docling 用于主动选择的增强解析和可选 OCR；LibreOffice 用于旧 D
 | 文档 | 用途 |
 | --- | --- |
 | [PLAN](PLAN.md) | 当前集成状态、下一步和后置范围。 |
-| [v0.3.0 计划](PLAN_v0_3_0.md) | 已确认范围、分阶段步骤、Garden 界面追加计划与验收。 |
+| [v0.4.0 计划](PLAN_v0_4_0.md) | 当前阅读修复、文献管理与 AI 整理升级的四阶段范围和验收。 |
+| [v0.3.0 计划归档](docs/history/PLAN_v0_3_0.md) | 原计划、追加范围与未实施草案，按当时时点保留。 |
 | [v0.3.0 阶段二记录](docs/history/v0.3.0-phase2.md) | 自动整理、元数据检索、固定评估与验证证据。 |
 | [v0.3.0 阶段一记录](docs/history/v0.3.0-phase1.md) | 阶段一提交、关键整改、review 结论与验证证据索引。 |
 | [产品约定](docs/product.md) | 三个空间、体验原则与视觉。 |
@@ -145,8 +146,3 @@ Docling 用于主动选择的增强解析和可选 OCR；LibreOffice 用于旧 D
 | [v0.2.0 发布准备](docs/history/v0.2.0-release-preparation.md) | v0.2.0 历史候选制品、发布准备与验收证据。 |
 
 后续 Agent 从 [AGENTS](AGENTS.md) 进入。历史是发生时的证据，无需全部作为当前开发指令加载。自动化测试、必要夹具和复现工具继续维护；测试 PDF、数据库、报告和制品在忽略目录中按需生成。
-
-
-## v0.3.0 发布候选准备
-
-2026-10-31：专题右键与删除已由用户 review 通过。本轮将桌面与后端包版本更新至 0.3.0，schema 23；发布说明见 docs/releases/v0.3.0.md。作品介绍与技术文档已按本次对话扩充，Word 分别为8页和10页。候选制品统一放在 release/v0.3.0-candidate-20261031，含安装器、校验文件、文档与源码快照、构建清单及验证记录。作者后续提交、发布分支、合并和创建远端 Release。

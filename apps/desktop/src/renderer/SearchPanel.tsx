@@ -1,3 +1,4 @@
+import {searchReason} from './search-reason'
 import React from 'react'
 import type {ReaderTarget,SearchHit} from '../shared/status'
 import {useAiTask} from './ai-task'
@@ -20,7 +21,7 @@ export function SearchPanel({documentId,onPage,onNavigate}:{documentId:string;on
   </form>
   <p role="status" className="search-feedback">{job.notice}</p>
   {result&&<div className="search-results" aria-label="检索结果">
-   {result.reason&&<p className="search-mode">智能检索暂不可用，已展示初步匹配结果。</p>}
+   {result.reason&&<p className="search-mode">{searchReason(result.reason)}<button disabled={job.running} onClick={()=>void job.start(String(result.query ?? query))}>重新检索</button></p>}
    {!hits.length&&<p>没有找到相关内容。可以换一种问法再试。</p>}
    {hits.map(hit=><article key={hit.id} className="search-hit">
     <h3><button className="source-title" disabled={!hit.physical_page&&!hit.block_id} onClick={()=>go(hit)}>{hit.title}</button></h3>
