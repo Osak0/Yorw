@@ -53,23 +53,14 @@ export function DocumentResourceSections({ mode='activity', children, resource, 
   const linked = new Set(resource.topics.map(item => item.topic.id))
   const availableTopics = topics.filter(topic => !linked.has(topic.id))
   return <div className="document-resource-view" aria-label={mode==='metadata'?'文献关联':'文献资料'}>
-    <header className="resource-header">
-      <div><h2>{mode==='metadata'?'关联材料与专题':document.title || document.original_name}</h2><p className="resource-file">{document.original_name}</p>
+    {mode==='activity'&&<header className="resource-header">
+      <div><h2> {document.title || document.original_name}</h2><p className="resource-file">{document.original_name}</p>
         <p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.page_count ?? '—'} 页</p></div>
       {mode==='activity'&&<button disabled={busy} onClick={onEditMetadata}>编辑元数据</button>}
-    </header>
+    </header>}
     {children}
     {notice && <p role="status" className="resource-notice">{notice}</p>}
     {mode==='metadata'&&<>
-    <section className="resource-section" aria-label="所属专题">
-      <h3>所属专题</h3>
-      {resource.topics.length ? <ul className="resource-list">{resource.topics.map(item => <li key={item.topic.id}>
-        <span>{item.path.join(' / ')}</span><button disabled={busy} onClick={() => onRemoveTopic(item.topic.id)}>解除关联</button>
-      </li>)}</ul> : <p className="resource-empty">尚未关联专题。</p>}
-      <div className="resource-inline"><select aria-label="关联专题" value={topicChoice} disabled={busy || !availableTopics.length} onChange={event => setTopicChoice(event.target.value)}>
-        <option value="">选择专题</option>{availableTopics.map(topic => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
-      </select><button disabled={busy || !topicChoice} onClick={() => { onAddTopic(topicChoice); setTopicChoice('') }}>关联专题</button></div>
-    </section>
     <section className="resource-section" aria-label="相关文献">
       <h3>相关文献</h3>
       <p className="resource-hint">相关文献由你手动建立，双向显示，不等同学术引用，也不会自动扩大 AI 材料范围。</p>
@@ -84,6 +75,15 @@ export function DocumentResourceSections({ mode='activity', children, resource, 
       {!!candidates.length && <div className="resource-candidates"><label>关联说明（可选）<input aria-label="关联说明" maxLength={500} value={candidateDescription} disabled={busy} onChange={event => onCandidateDescription(event.target.value)} /></label>
         <ul className="resource-list">{candidates.map(item => <li key={item.id}><div><strong>{item.title || item.original_name}</strong>{!!item.shared_tags.length && <small>共同标签：{item.shared_tags.join('、')}</small>}</div>
           <button disabled={busy} onClick={() => onAddRelation(item.id, candidateDescription)}>关联</button></li>)}</ul></div>}
+    </section>
+    <section className="resource-section" aria-label="所属专题">
+      <h3>所属专题</h3>
+      {resource.topics.length ? <ul className="resource-list">{resource.topics.map(item => <li key={item.topic.id}>
+        <span>{item.path.join(' / ')}</span><button disabled={busy} onClick={() => onRemoveTopic(item.topic.id)}>解除关联</button>
+      </li>)}</ul> : <p className="resource-empty">尚未关联专题。</p>}
+      <div className="resource-inline"><select aria-label="关联专题" value={topicChoice} disabled={busy || !availableTopics.length} onChange={event => setTopicChoice(event.target.value)}>
+        <option value="">选择专题</option>{availableTopics.map(topic => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
+      </select><button disabled={busy || !topicChoice} onClick={() => { onAddTopic(topicChoice); setTopicChoice('') }}>关联专题</button></div>
     </section>
     <section className="resource-section" aria-label="相同标签">
       <h3>相同标签</h3>

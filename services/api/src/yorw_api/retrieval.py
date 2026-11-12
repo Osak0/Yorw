@@ -100,9 +100,9 @@ def bounded_context(body, query, budget=20000):
     return '\n\n[…]\n\n'.join(body[parts[i][0]:parts[i][1]] for i in sorted(chosen))[:budget]
 
 
-def json_completion(config, key, instruction, value, max_tokens=2048):
+def json_completion(config, key, instruction, value, max_tokens=2048, structured=False):
     body = ''.join(stream(config, key, json.dumps(value, ensure_ascii=False), [],
-                          system=instruction, max_tokens=max_tokens))
+                          system=instruction, max_tokens=max_tokens, **({'structured_input':value} if structured else {})))
     body = re.sub(r'^```(?:json)?\s*|\s*```$', '', body.strip())
     try:
         result = json.loads(body)

@@ -38,7 +38,14 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
   }, [jump, pdf, onJumpApplied])
   useEffect(() => {
     const element = viewport.current!
-    const observer = new ResizeObserver(entries => { if (entries[0].contentRect.width > 0) setWidth(entries[0].contentRect.width) })
+    // Measure the usable client width, excluding padding and the reserved scrollbar.
+    const measure = () => {
+      const style = getComputedStyle(element)
+      const available = Math.floor(element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
+      if (available > 0) setWidth(previous => previous === available ? previous : available)
+    }
+    const observer = new ResizeObserver(measure)
+    measure()
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
@@ -75,7 +82,7 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
         const source = await pdf!.getPage(page)
         if (!active) return
         const original = source.getViewport({ scale: 1 })
-        const scale = zoom === 'fit' ? Math.max(.1, Math.min(3, (width - 48) / original.width)) : zoom
+        const scale = zoom === 'fit' ? Math.max(.1, Math.min(3, width / original.width)) : zoom
         const view = source.getViewport({ scale })
         if (!Number.isFinite(view.width) || !Number.isFinite(view.height) || view.width <= 0 || view.height <= 0 || view.width > 20000 || view.height > 20000) throw new Error('PAGE_TOO_LARGE')
         const density = Math.max(.1, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(16_000_000 / (view.width * view.height))))
@@ -115,7 +122,7 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
     }
     void paint()
     return () => { active = false; render?.cancel(); layer?.cancel() }
-  }, [pdf, page, zoom, width, highlight])
+  }, [pdf, page, zoom, zoom === 'fit' ? width : 0, highlight])
   useEffect(() => {
     if (!painted || previewId) return
     let active = true
@@ -131,5 +138,5 @@ export function PdfReader({ previewId, highlight, document: record, onClose, onN
     if (!pdf || !Number.isInteger(number) || number < 1 || number > pdf.numPages) { setInput(String(page)); return }
     setPage(number); setInput(String(number)); viewport.current?.scrollTo({ top: 0, left: 0 })
   }
-  return <div className="reader" aria-label="PDF 阅读器"><div className="reader-toolbar"><button onClick={() => { void saveQueue.current.finally(onClose) }}>返回文献库</button><button className="note-toggle" aria-expanded={notesOpen} onClick={onNotes}>笔记</button><button className="search-toggle" aria-expanded={searchOpen} onClick={onSearch}>检索</button><button className="chat-toggle" aria-expanded={chatOpen} onClick={onChat}>问答</button><button className="resource-toggle" onClick={onResource}>资料</button><span className="reader-title" title={record.title || record.original_name}>{record.title || record.original_name}</span><div className="reader-controls"><button aria-label="上一页" disabled={!pdf || page <= 1} onClick={() => go(page - 1)}>上一页</button><form onSubmit={event => { event.preventDefault(); go(Number(input)) }}><input aria-label="物理页码" inputMode="numeric" value={input} disabled={!pdf} onChange={event => setInput(event.target.value)} onBlur={() => go(Number(input))} /><span>/ {pdf?.numPages ?? '—'}</span></form><button aria-label="下一页" disabled={!pdf || page >= pdf.numPages} onClick={() => go(page + 1)}>下一页</button><label>缩放<select aria-label="缩放" value={zoom} onChange={event => setZoom(event.target.value === 'fit' ? 'fit' : +event.target.value)}><option value="fit">适合宽度</option>{[.5,.75,1,1.25,1.5,2].map(value => <option key={value} value={value}>{value * 100}%</option>)}</select></label></div></div>{record.extraction_status !== 'ready' && <p className="reader-warning">{record.extraction_status === 'partial' ? '仅部分文字已抽取。' : '该文献尚无完整的可检索文字。'}阅读原文不代表抽取完整；后续 AI 仅能使用实际抽取片段。</p>}<div className="reader-feedback" role="status">{loading ? '正在加载页面…' : error || saveStatus}{!loading && error && <button onClick={() => setRetry(value => value + 1)}>重试打开</button>}{!loading && !error && saveStatus && !saveStatus.startsWith('已保存') && !saveStatus.startsWith('正在') && <button onClick={() => setSaveRetry(value => value + 1)}>重试保存位置</button>}</div><div ref={viewport} className="pdf-viewport" tabIndex={0} aria-label="PDF 页面滚动区域"><div ref={pageElement} className="pdf-page" aria-busy={loading}><canvas ref={canvas} aria-label={`第 ${page} 页图像`} /><div ref={textContainer} className="pdf-text-host" /></div></div></div>
+  return <div className="reader" aria-label="PDF 阅读器"><div className="reader-toolbar"><button onClick={() => { void saveQueue.current.finally(onClose) }}>返回文献库</button><button className="note-toggle" aria-expanded={notesOpen} onClick={onNotes}>笔记</button><button className="search-toggle" aria-expanded={searchOpen} onClick={onSearch}>检索</button><button className="chat-toggle" aria-expanded={chatOpen} onClick={onChat}>问答</button><button className="resource-toggle" onClick={onResource}>编辑元数据</button><span className="reader-title" title={record.title || record.original_name}>{record.title || record.original_name}</span><div className="reader-controls"><button aria-label="上一页" disabled={!pdf || page <= 1} onClick={() => go(page - 1)}>上一页</button><form onSubmit={event => { event.preventDefault(); go(Number(input)) }}><input aria-label="物理页码" inputMode="numeric" value={input} disabled={!pdf} onChange={event => setInput(event.target.value)} onBlur={() => go(Number(input))} /><span>/ {pdf?.numPages ?? '—'}</span></form><button aria-label="下一页" disabled={!pdf || page >= pdf.numPages} onClick={() => go(page + 1)}>下一页</button><label>缩放<select aria-label="缩放" value={zoom} onChange={event => setZoom(event.target.value === 'fit' ? 'fit' : +event.target.value)}><option value="fit">适合宽度</option>{[.5,.75,1,1.25,1.5,2].map(value => <option key={value} value={value}>{value * 100}%</option>)}</select></label></div></div>{record.extraction_status !== 'ready' && <p className="reader-warning">{record.extraction_status === 'partial' ? '仅部分文字已抽取。' : '该文献尚无完整的可检索文字。'}阅读原文不代表抽取完整；后续 AI 仅能使用实际抽取片段。</p>}<div className="reader-feedback" role="status">{loading ? '正在加载页面…' : error || saveStatus}{!loading && error && <button onClick={() => setRetry(value => value + 1)}>重试打开</button>}{!loading && !error && saveStatus && !saveStatus.startsWith('已保存') && !saveStatus.startsWith('正在') && <button onClick={() => setSaveRetry(value => value + 1)}>重试保存位置</button>}</div><div ref={viewport} className="pdf-viewport" tabIndex={0} aria-label="PDF 页面滚动区域"><div ref={pageElement} className="pdf-page" aria-busy={loading}><canvas ref={canvas} aria-label={`第 ${page} 页图像`} /><div ref={textContainer} className="pdf-text-host" /></div></div></div>
 }

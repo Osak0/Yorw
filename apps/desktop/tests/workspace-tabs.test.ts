@@ -13,9 +13,9 @@ test('document and topic tabs are keyed by page type and entity', () => {
   expect(tabKindLabel(topic)).toBe('专题')
   for (const tool of ['notes', 'search', 'chat', 'resource', 'metadata'] as const) {
     const tab = toolTab(tool, id, 'Paper')
-    expect(tab.key).toBe(`${tool}:${id}`)
+    expect(tab.key).toBe(`${tool === 'resource' ? 'metadata' : tool}:${id}`)
     expect(moduleForTab(tab)).toBe('Storage')
-    expect(tabKindLabel(tab)).toBe({ notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献' }[tool])
+    expect(tabKindLabel(tab)).toBe({ notes: '笔记', search: '检索', chat: '问答', resource: '编辑元数据', metadata: '编辑元数据' }[tool])
   }
   for (const tool of ['ai', 'history', 'materials'] as const) {
     const tab = gardenToolTab(tool, id, 'Topic')
@@ -60,7 +60,7 @@ test('restoring skips pages that no longer exist and reports the count', () => {
     { kind: 'topic', id: missing },
     { kind: 'topic-manage', id: missing }
   ], documents, topics)
-  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'resource:Paper', 'metadata:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic', 'materials:Topic', 'topic-create:新建专题', 'topic-manage:Topic'])
+  expect(restored.tabs.map(tab => `${tab.kind}:${tab.title}`)).toEqual(['document:Paper', 'notes:Paper', 'search:Paper', 'metadata:Paper', 'topic:Topic', 'ai:Topic', 'history:Topic', 'materials:Topic', 'topic-create:新建专题', 'topic-manage:Topic'])
   expect(restored.skipped).toBe(3)
 })
 
@@ -74,4 +74,14 @@ test('closing the active tab selects the next tab, then the previous, then home'
   expect(nextActiveKeyAfterClose(tabs, first.key, second.key)).toBe(second.key)
   expect(nextActiveKeyAfterClose([first], first.key, first.key)).toBeNull()
   expect(nextActiveKeyAfterClose(tabs, 'missing', 'missing')).toBe('missing')
+})
+
+test('legacy resource tabs collapse into metadata while AI results remain independent', () => {
+  const restored = restoreTabs([
+    { kind: 'resource', id }, { kind: 'metadata', id }, { kind: 'enrichment', id }
+  ], new Map([[id, 'Paper']]), new Map())
+  expect(restored.tabs.map(tab => tab.key)).toEqual([`metadata:${id}`, `enrichment:${id}`])
+  expect(restored.skipped).toBe(0)
+  expect(tabKindLabel(restored.tabs[0])).toBe('编辑元数据')
+  expect(moduleForTab(restored.tabs[1])).toBe('Storage')
 })

@@ -8,7 +8,7 @@ import { Garden, type GardenPage } from './Garden'
 import { collectAncestors, defaultExpanded } from './garden-tree'
 import { gardenBook, hasUnsavedGarden, unsavedReviewTopicIds, unsavedTopicIds, wikiDirty } from './garden-book'
 import { House, houseTitles, houseForms } from './House'
-import { clearMetadataDraft } from './MetadataEditor'
+import { clearMetadataDraft, hasMetadataDraft, hasAnyMetadataDraft, saveMetadataDraft, isMetadataSaving } from './MetadataEditor'
 import { Storage } from './Storage'
 import { documentHasUnsavedNotes, hasUnsavedNotes, notebookFor, unsavedDocumentIds } from './notebook'
 import { sessionStore } from './session-state'
@@ -60,7 +60,7 @@ function App() {
   useEffect(() => { if (status.state === 'ready') setStarted(true) }, [status.state])
   useEffect(() => {
     const protect = (event: BeforeUnloadEvent) => {
-      if (hasUnsavedNotes() || hasUnsavedGarden() || [...houseForms.values()].some(form=>form.dirty)) {
+      if (hasAnyMetadataDraft() || hasUnsavedNotes() || hasUnsavedGarden() || [...houseForms.values()].some(form=>form.dirty)) {
         event.preventDefault()
         // Electron explicitly accepts false; DOM typings model browser message strings.
         ;(event as unknown as { returnValue: boolean }).returnValue = false
@@ -104,6 +104,8 @@ function App() {
         const topicTitles = new Map(topics.ok ? topics.value.items.map(item => [item.id, item.title] as const) : [])
         const { tabs: restoredTabs, skipped } = restoreTabs(layout.tabs, documentTitles, topicTitles)
         if (skipped) setLayoutNotice(`有 ${skipped} 个已打开页面已不存在，已跳过。`)
+        const normalizeKey = (key: string | null) => key?.replace(/^resource:/, 'metadata:') ?? null
+        layout.activeKey = normalizeKey(layout.activeKey); layout.storageKey = normalizeKey(layout.storageKey)
         const keys = new Set(restoredTabs.map(tab => tab.key))
         const active = layout.activeKey && keys.has(layout.activeKey) ? layout.activeKey : null
         const activeTab = active ? restoredTabs.find(tab => tab.key === active) : undefined
@@ -160,7 +162,7 @@ function App() {
     const titles = new Map(items.map(item => [item.id, item.title || item.original_name]))
     setTabs(previous => {
       let changed = false
-      const next = previous.map(tab => {
+      const next = previous.filter(tab => { if (!isStorageTab(tab) || titles.has(tab.id)) return true; changed = true; clearMetadataDraft(tab.id); return false }).map(tab => {
         if (!isStorageTab(tab)) return tab
         const title = titles.get(tab.id)
         if (title !== undefined && title !== tab.title) { changed = true; return { ...tab, title } }
@@ -169,6 +171,10 @@ function App() {
       return changed ? next : previous
     })
   }, [])
+  useEffect(() => {
+    if (activeKey && !tabs.some(tab => tab.key === activeKey)) setActiveKey(null)
+    if (storageKey && !tabs.some(tab => tab.key === storageKey)) setStorageKey(null)
+  }, [tabs, activeKey, storageKey])
   const updateTopicTitles = useCallback((items: Topic[]) => {
     const titles = new Map(items.map(item => [item.id, item.title]))
     setTabs(previous => {
@@ -209,10 +215,12 @@ function App() {
     if (tab.kind === 'topic-manage') return gardenBook().manageDirty(tab.id)
     if (tab.kind === 'topic') return gardenBook().hasUnsavedTopic(tab.id)
     if (tab.kind === 'ai') return gardenBook().hasUnsavedReview(tab.id)
+    if (tab.kind === 'metadata') return hasMetadataDraft(tab.id)
     if (tab.kind === 'history') return false
     return tab.kind === 'document' || tab.kind === 'notes' ? documentHasUnsavedNotes(tab.id) : false
   }
   function askClose(tab: WorkspaceTab): Promise<CloseChoice> {
+    if (tab.kind === 'metadata' && isMetadataSaving(tab.id)) { setLayoutNotice('元数据正在保存，请稍后再关闭。'); return Promise.resolve('cancel') }
     if (!tabIsUnsaved(tab)) return Promise.resolve('discard')
     return new Promise(resolve => { closeResolver.current = resolve; setClosePrompt(tab) })
   }
@@ -223,6 +231,7 @@ function App() {
     resolve?.(choice)
   }
   async function saveTab(tab: WorkspaceTab): Promise<boolean> {
+    if (tab.kind === 'metadata') return saveMetadataDraft(tab.id)
     if(tab.kind==='settings')return await houseForms.get(tab.id)?.save() ?? true
     if (tab.kind === 'topic-create') {
       try {
@@ -260,14 +269,17 @@ function App() {
   }
   function expandTool(document: DocumentRecord, tool: StorageTool) {
     const title = document.title || document.original_name
+    tool = tool === 'resource' ? 'metadata' : tool
     const key = `${tool}:${document.id}`
     setTabs(previous => addWorkspaceTab(previous, toolTab(tool, document.id, title)))
     setActiveKey(key)
     setStorageKey(key)
     setModule('Storage')
-    if (tool !== 'resource' && tool !== 'metadata') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
+    if (tool !== 'metadata' && tool !== 'enrichment') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: false })
   }
   function closeMetadataTab(document: DocumentRecord) {
+    const tab = tabs.find(item => item.key === `metadata:${document.id}`)
+    if (tab) { void closeTab(tab); return }
     clearMetadataDraft(document.id)
     const key = `metadata:${document.id}`
     setTabs(previous => previous.filter(tab => tab.key !== key))
@@ -282,7 +294,7 @@ function App() {
     setActiveKey(documentKey)
     setStorageKey(documentKey)
     setModule('Storage')
-    if (tool !== 'resource' && tool !== 'metadata') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
+    if (tool !== 'resource' && tool !== 'metadata' && tool !== 'enrichment') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
   }
   function expandGardenTool(topic: Topic, tool: GardenTool) {
     const key = `${tool}:${topic.id}`
@@ -431,7 +443,7 @@ function App() {
       {tabs.length ? <div className="workspace-tablist" role="tablist" aria-label="工作标签">{tabs.map(tab => <div className={`workspace-tab-item${activeKey === tab.key ? ' active' : ''}`} role="presentation" key={tab.key}>
         <button type="button" role="tab" id={`tab-${tab.key}`} data-tab-key={tab.key} aria-selected={activeKey === tab.key} aria-controls={tab.kind==='settings' ? 'house-panel' : isStorageTab(tab) ? 'storage-panel' : 'garden-panel'} tabIndex={tab.key === tabStopKey ? 0 : -1} className="workspace-tab" title={`${tabKindLabel(tab)} · ${tab.title}`} ref={element => { if (element) tabRefs.current.set(tab.key, element); else tabRefs.current.delete(tab.key) }} onClick={() => activateTab(tab)} onKeyDown={event => onTabKeyDown(event, tab)}>
           <span className="workspace-tab-title">{tab.title}</span><span className="workspace-tab-kind">{tabKindLabel(tab)}</span>
-          {((tab.kind === 'document' || tab.kind === 'notes') ? unsaved.documents.has(tab.id) : tab.kind === 'topic' ? unsaved.topics.has(tab.id) : tab.kind === 'topic-create' ? unsaved.create : tab.kind === 'topic-manage' ? unsaved.manage.has(tab.id) : tab.kind === 'ai' ? unsaved.reviews.has(tab.id) : false) && <span className="workspace-tab-dirty" aria-label="有未保存内容" title="有未保存内容">●</span>}
+          {(tab.kind === 'metadata' ? hasMetadataDraft(tab.id) : (tab.kind === 'document' || tab.kind === 'notes') ? unsaved.documents.has(tab.id) : tab.kind === 'topic' ? unsaved.topics.has(tab.id) : tab.kind === 'topic-create' ? unsaved.create : tab.kind === 'topic-manage' ? unsaved.manage.has(tab.id) : tab.kind === 'ai' ? unsaved.reviews.has(tab.id) : false) && <span className="workspace-tab-dirty" aria-label="有未保存内容" title="有未保存内容">●</span>}
         </button>
         <button type="button" className="workspace-tab-close" aria-label={`关闭${tabKindLabel(tab)} ${tab.title}`} title={`关闭${tabKindLabel(tab)}`} onClick={event => { event.stopPropagation(); void closeTab(tab) }}>×</button>
       </div>)}</div> : null}

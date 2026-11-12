@@ -1,6 +1,6 @@
 import {DocumentResourceView} from './DocumentResource'
 import React, { useEffect, useState } from 'react'
-import type { DocumentRecord } from '../shared/status'
+import type { DocumentRecord, ReaderTarget } from '../shared/status'
 import { MetadataEditor } from './MetadataEditor'
 
 const errorText = (code: string) => ({
@@ -11,11 +11,13 @@ const errorText = (code: string) => ({
 } as Record<string, string>)[code] ?? '文献加载失败，请重试。'
 
 /** Dedicated workspace tab for organizing one document without covering the library. */
-export function MetadataTool({ document, onOpenDocument, onClose, onSaved }: {
+export function MetadataTool({ document, onOpenDocument, onClose, onSaved, onOpenEnrichment, onNavigate }: {
   document: DocumentRecord
   onOpenDocument(): void
   onClose(): void
   onSaved(warning?: string, saved?: DocumentRecord): void
+  onOpenEnrichment(): void
+  onNavigate(target: ReaderTarget): void
 }) {
   const [current, setCurrent] = useState<DocumentRecord | null>(null)
   const [notice, setNotice] = useState('')
@@ -37,15 +39,15 @@ export function MetadataTool({ document, onOpenDocument, onClose, onSaved }: {
   }, [document.id, attempt])
 
   const title = current?.title || current?.original_name || document.title || document.original_name
-  return <div className="document-tool-view metadata-tool-view" aria-label={`整理文献 · ${title}`}>
+  return <div className="document-tool-view metadata-tool-view" aria-label={`编辑元数据 · ${title}`}>
     <div className="document-tool-header">
-      <div className="document-tool-identity"><strong>{title}</strong><span>整理文献</span></div>
-      <div className="document-tool-actions"><button onClick={onOpenDocument}>打开阅读</button><button onClick={onClose}>关闭整理</button></div>
+      <div className="document-tool-identity"><strong>{title}</strong><span>编辑元数据</span></div>
+      <div className="document-tool-actions"><button onClick={onOpenDocument}>打开阅读</button><button onClick={onClose}>关闭编辑</button></div>
     </div>
     <div className="document-tool-body metadata-tool">
       {notice && <p role="status">{notice}{!current && !loading && <button onClick={() => setAttempt(value => value + 1)}>重试加载</button>}</p>}
       {loading ? <p className="metadata-tool-loading">正在读取文献与专题…</p> : current
-        ? <><MetadataEditor document={current} onClose={onClose} onSaved={onSaved} /><DocumentResourceView key={current.id} mode="metadata" document={current} onEditMetadata={()=>{}} onOpenNotes={()=>{}} onOpenSearch={()=>{}} onOpenChat={()=>{}} onOpenTopic={()=>{}} onNavigate={()=>{}}/></>
+        ? <><button className="enrichment-entry" onClick={onOpenEnrichment}>AI 辅助文献整理</button><MetadataEditor document={current} onClose={onClose} onSaved={onSaved} /><DocumentResourceView key={current.id} mode="metadata" document={current} onEditMetadata={()=>{}} onOpenNotes={()=>{}} onOpenSearch={()=>{}} onOpenChat={()=>{}} onOpenTopic={()=>{}} onNavigate={onNavigate}/></>
         : <p className="metadata-tool-loading">文献暂不可用，请返回文献库。</p>}
     </div>
   </div>

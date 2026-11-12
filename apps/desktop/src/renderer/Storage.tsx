@@ -2,6 +2,7 @@ import {DirectorySplitter,useDirectoryWidth} from './DirectorySplitter'
 import {LibraryDirectory,directDocuments,folderPath,type Folder} from './LibraryDirectory'
 import React, { useEffect, useState } from 'react'
 import { ReadingWorkspace } from './ReadingWorkspace'
+import { hasMetadataDraft } from './MetadataEditor'
 import { documentHasUnsavedNotes } from './notebook'
 import type { DocumentRecord, ImportItem, ReaderTarget, Topic } from '../shared/status'
 import { DocumentTool } from './DocumentTool'
@@ -55,6 +56,8 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
   const [imports, setImports] = useState<ImportItem[]>([])
+  const [managementOpen, setManagementOpen] = useState<Record<string, boolean>>({})
+  const [parsersOpen, setParsersOpen] = useState<Record<string, boolean>>({})
   const [reparseChoice, setReparseChoice] = useState<Record<string, 'builtin' | 'enhanced'>>({})
   useEffect(() => {
     let active = true
@@ -101,10 +104,10 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
     void window.yorw.documents.list().then(result => { if (result.ok) { setDocuments(result.value.items); onTitles(result.value.items) } })
   }
   async function remove(document: DocumentRecord) {
-    if (documentHasUnsavedNotes(document.id)) { setMessage('这篇文献仍有未保存笔记，请打开阅读器保存或放弃更改后再移除。'); return }
+    if (documentHasUnsavedNotes(document.id) || hasMetadataDraft(document.id)) { setMessage('这篇文献仍有未保存笔记或元数据，请打开阅读器保存或放弃更改后再移除。'); return }
     if (!window.confirm(`移除“${document.title || document.original_name}”？将删除受管原文与可检索内容块；历史笔记和 Wiki 的来源快照将保留并标记失效。`)) return
     setBusy(true)
-    try { const result = await window.yorw.documents.remove({ id: document.id, version: document.version }); setMessage(result.ok ? result.value.cleanup_pending ? '记录已移除，文件清理待重试，请关闭重开知栖。' : '文献已移除。' : explain(result.code)); if (result.ok) setDocuments(items => items.filter(item => item.id !== document.id)) }
+    try { const result = await window.yorw.documents.remove({ id: document.id, version: document.version }); setMessage(result.ok ? result.value.cleanup_pending ? '记录已移除，文件清理待重试，请关闭重开知栖。' : '文献已移除。' : explain(result.code)); if (result.ok) { const remaining = documents.filter(item => item.id !== document.id); setDocuments(remaining); onTitles(remaining) } }
     catch { setMessage('移除失败，请重试。') } finally { setBusy(false) }
   }
   async function cancel(document: DocumentRecord) {
@@ -129,15 +132,15 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
   if (activeDocumentId) {
     if (!loaded) return <p role="status" className="library-view">正在加载文献…</p>
     if (!reading) return <section className="library-missing card" aria-label="文献不可用"><h2>文献不可用</h2><p>这篇文献可能已被移除，请从文献库重新选择。</p><button onClick={onShowLibrary}>返回文献库</button></section>
-    if (activeTool === 'metadata') return <MetadataTool key={`metadata:${reading.id}`} document={reading} onOpenDocument={() => onOpenDocument(reading)} onClose={() => onCloseMetadata(reading)} onSaved={metadataSaved} />
-    if (activeTool && activeTool !== 'document') return <DocumentTool key={`${activeTool}:${reading.id}`} document={reading} tool={activeTool} onOpenDocument={() => onOpenDocument(reading)} onCollapse={() => activeTool !== 'resource' && onCollapseTool(activeTool, reading)} onEditMetadata={() => onOpenTool('metadata', reading)} onNavigate={target => onNavigate(reading, target)} onShowNotes={() => onShowNotes(reading)} onOpenSearch={() => onOpenTool('search', reading)} onOpenChat={() => onOpenTool('chat', reading)} onOpenTopic={onOpenTopic} />
-    return <ReadingWorkspace key={reading.id} document={reading} onClose={closeReading} onExpand={tool => onOpenTool(tool, reading)} onResource={() => onOpenTool('resource', reading)} jump={pendingJump?.documentId === reading.id ? pendingJump : undefined} onJumpApplied={onJumpApplied} />
+    if (activeTool === 'metadata' || activeTool === 'resource') return <MetadataTool key={`metadata:${reading.id}`} document={reading} onOpenDocument={() => onOpenDocument(reading)} onClose={() => onCloseMetadata(reading)} onSaved={metadataSaved} onOpenEnrichment={() => onOpenTool('enrichment', reading)} onNavigate={target => onNavigate(reading, target)} />
+    if (activeTool && activeTool !== 'document') return <DocumentTool key={`${activeTool}:${reading.id}`} document={reading} tool={activeTool} onOpenDocument={() => onOpenDocument(reading)} onCollapse={() => onCollapseTool(activeTool, reading)} onEditMetadata={() => onOpenTool('metadata', reading)} onNavigate={target => onNavigate(reading, target)} onShowNotes={() => onShowNotes(reading)} onOpenSearch={() => onOpenTool('search', reading)} onOpenChat={() => onOpenTool('chat', reading)} onOpenTopic={onOpenTopic} />
+    return <ReadingWorkspace key={reading.id} document={reading} onClose={closeReading} onExpand={tool => onOpenTool(tool, reading)} onResource={() => onOpenTool('metadata', reading)} jump={pendingJump?.documentId === reading.id ? pendingJump : undefined} onJumpApplied={onJumpApplied} />
   }
   const visible = filterDocuments(directDocuments(documents,selectedFolder), query)
   return <div className={`storage-workspace${storageDirectoryCollapsed ? ' collapsed' : ''}`} style={{'--directory-width':`${directoryWidth.width}px`} as React.CSSProperties}>
     {!storageDirectoryCollapsed && <aside className="storage-directory" aria-label="文献目录">
       <div className="storage-directory-header"><h2>文献目录</h2><span>{directDocuments(documents,selectedFolder).length} 篇</span></div>
-      <LibraryDirectory documents={documents} folders={folders} busy={busy} selected={selectedFolder} onSelect={setSelectedFolder} onChange={()=>{setFolderRevision(v=>v+1);void window.yorw.documents.list().then(r=>{if(r.ok)setDocuments(r.value.items)})}} onOpen={onOpenDocument} onMetadata={d=>onOpenTool('resource',d)} onEdit={d=>onOpenTool('metadata',d)} onRemove={d=>void remove(d)} onImport={()=>void importPdfs()}/>
+      <LibraryDirectory documents={documents} folders={folders} busy={busy} selected={selectedFolder} onSelect={setSelectedFolder} onChange={()=>{setFolderRevision(v=>v+1);void window.yorw.documents.list().then(r=>{if(r.ok)setDocuments(r.value.items)})}} onOpen={onOpenDocument} onMetadata={d=>onOpenTool('metadata',d)} onEdit={d=>onOpenTool('metadata',d)} onRemove={d=>void remove(d)} onImport={()=>void importPdfs()}/>
 
     </aside>}
     {!storageDirectoryCollapsed&&<DirectorySplitter width={directoryWidth.width} onResize={directoryWidth.update}/>}
@@ -161,7 +164,7 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
             {parseStatus && parseStatus !== document.extraction_status && <p className="file-name">{parseStatus === 'running' ? '正在重新解析' : `上次解析：${parseLabels[parseStatus] ?? parseStatus}`}{parseStatus !== 'running' && document.parse_warning ? ` · ${explain(document.parse_warning)}` : ''}{parseStatus !== 'running' && ['ready', 'partial'].includes(document.extraction_status) ? '（继续使用上一可用版本）' : ''}</p>}
             {document.warning && <p className="warning">{explain(document.warning)}</p>}
             {document.parse_warnings?.length ? <p className="file-name">解析提示：{document.parse_warnings.slice(0, 2).map(item => explain(item.code)).join('；')}</p> : null}
-            <div className="document-actions"><button className="primary" disabled={busy} onClick={() => onOpenDocument(document)}>打开阅读</button><button disabled={busy} onClick={() => onOpenTool('resource', document)}>文献资料</button><details className="document-management"><summary>管理文献</summary><div className="document-management-actions"><button disabled={busy} onClick={() => onOpenTool('metadata', document)}>编辑元数据</button>{parsing ? <button disabled={busy} onClick={() => void cancel(document)}>停止解析</button> : <><select aria-label={`重新解析处理器 ${document.title || document.original_name}`} value={processor} disabled={busy} onChange={event => setReparseChoice(previous => ({ ...previous, [document.id]: event.target.value as 'builtin' | 'enhanced' }))}><option value="builtin">内置解析</option><option value="enhanced">增强解析（可选 Docling）</option></select><button disabled={busy} onClick={() => void reparse(document, processor)}>重新解析</button></>}{['failed', 'partial'].includes(document.extraction_status) && !parsing && <button disabled={busy} onClick={() => void retry(document)}>内置解析重试</button>}<button disabled={busy} className="danger" onClick={() => void remove(document)}>移除文献</button></div></details></div></section>
+            <div className="document-actions"><button className="primary" disabled={busy} onClick={() => onOpenDocument(document)}>打开阅读</button><button disabled={busy} className={managementOpen[document.id] ? 'management-toggle active' : 'management-toggle'} aria-expanded={!!managementOpen[document.id]} aria-controls={`management-${document.id}`} onClick={() => setManagementOpen(previous => ({...previous, [document.id]: !previous[document.id]}))}>管理文献</button>{managementOpen[document.id] && <div className="document-management" id={`management-${document.id}`}><div className="document-management-actions"><button disabled={busy} onClick={() => onOpenTool('metadata', document)}>编辑元数据</button><button disabled={busy} onClick={() => onOpenTool('notes', document)}>笔记</button><button disabled={busy} onClick={() => onOpenTool('search', document)}>检索</button><button disabled={busy} onClick={() => onOpenTool('chat', document)}>问答</button><button disabled={busy} aria-expanded={!!parsersOpen[document.id]} aria-controls={`parsers-${document.id}`} onClick={() => setParsersOpen(previous => ({...previous, [document.id]: !previous[document.id]}))}>解析</button><button disabled={busy} className="danger" onClick={() => void remove(document)}>删除文献</button></div>{parsersOpen[document.id] && <div className="document-parser-actions" id={`parsers-${document.id}`}>{parsing ? <button disabled={busy} onClick={() => void cancel(document)}>停止解析</button> : <><select aria-label={`重新解析处理器 ${document.title || document.original_name}`} value={processor} disabled={busy} onChange={event => setReparseChoice(previous => ({ ...previous, [document.id]: event.target.value as 'builtin' | 'enhanced' }))}><option value="builtin">内置解析</option><option value="enhanced">增强解析（可选 Docling）</option></select><button disabled={busy} onClick={() => void reparse(document, processor)}>重新解析</button></>}{['failed', 'partial'].includes(document.extraction_status) && !parsing && <button disabled={busy} onClick={() => void retry(document)}>内置解析重试</button>}</div>}</div>}</div></section>
         })}</div>
       </div>
     </div>

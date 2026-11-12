@@ -21,3 +21,15 @@ test('automatic scan passes only pending IDs and never overlaps',async()=>{
  expect(request.mock.calls.filter(([path])=>path.endsWith('/pending'))).toHaveLength(1)
  expect(request).toHaveBeenCalledWith(`/v1/enrichment/documents/${id}/generate`,'POST',{automatic:true,regenerate:false},undefined,expect.anything())
 })
+
+
+test('selection adoption forwards only allowed per-field operations and snapshot',async()=>{
+ const request=vi.fn(async()=>({}))
+ const service=new Enrichment({request} as unknown as Backend,{} as Providers)
+ const input={id,enrichment_id:1,version:2,operations:{authors:'append',topics:'replace'},relation_snapshot:'snapshot'}
+ await service.apply(input)
+ expect(request).toHaveBeenCalledWith(`/v1/enrichment/documents/${id}/apply-selection`,'POST',{enrichment_id:1,version:2,operations:input.operations,relation_snapshot:'snapshot'})
+ expect(()=>service.apply({...input,operations:{path:'replace'}})).toThrow('INVALID_INPUT')
+ expect(()=>service.apply({...input,operations:{title:'execute'}})).toThrow('INVALID_INPUT')
+ expect(()=>service.apply({...input,relation_snapshot:null})).toThrow('INVALID_INPUT')
+})

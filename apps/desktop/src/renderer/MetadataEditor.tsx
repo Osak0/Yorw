@@ -12,7 +12,25 @@ const summarySource = (source: string | null) => source === 'manual' ? '人工�
 
 type MetadataValues = { title: string; authors: string; year: string; tags: string; summary: string }
 const metadataDrafts = new Map<string, MetadataValues>()
-export function clearMetadataDraft(documentId: string) { metadataDrafts.delete(documentId) }
+const metadataBases = new Map<string, DocumentRecord>()
+const metadataSaving = new Set<string>()
+export function isMetadataSaving(id: string) { return metadataSaving.has(id) }
+export function hasMetadataDraft(id: string) { return metadataDrafts.has(id) || metadataSaving.has(id) }
+export function hasAnyMetadataDraft() { return metadataDrafts.size > 0 || metadataSaving.size > 0 }
+export async function saveMetadataDraft(id: string): Promise<boolean> {
+  const values = metadataDrafts.get(id), base = metadataBases.get(id)
+  if (metadataSaving.has(id)) return false
+  if (!values || !base) return true
+  if (values.year && (!/^\d{4}$/.test(values.year) || +values.year < 1000)) return false
+  metadataSaving.add(id)
+  try {
+    const result = await window.yorw.documents.update(metadataUpdatePayload(base, values))
+    if (!result.ok) return false
+    clearMetadataDraft(id)
+    return true
+  } catch { return false } finally { metadataSaving.delete(id) }
+}
+export function clearMetadataDraft(documentId: string) { metadataDrafts.delete(documentId); metadataBases.delete(documentId) }
 
 /** Build a partial update so untouched PDF-extracted fields keep their value and provenance. */
 export function metadataUpdatePayload(document: DocumentRecord, values: MetadataValues): DocumentInput {
@@ -46,18 +64,21 @@ export function MetadataEditor({ document, topicOptions, onClose, onSaved }: { d
   const [message, setMessage] = useState('')
   useEffect(() => {
     const values = { title, authors, year, tags, summary }
-    if (Object.keys(metadataUpdatePayload(document, values)).length > 2) metadataDrafts.set(document.id, values)
-    else metadataDrafts.delete(document.id)
+    if (Object.keys(metadataUpdatePayload(metadataBases.get(document.id) ?? document, values)).length > 2) { metadataDrafts.set(document.id, values); if (!metadataBases.has(document.id)) metadataBases.set(document.id, document) }
+    else clearMetadataDraft(document.id)
   }, [document, title, authors, year, tags, summary])
   function cancel() {
+    if (hasMetadataDraft(document.id) && !window.confirm('放弃未保存的元数据修改？')) return
     clearMetadataDraft(document.id)
     onClose()
   }
   async function save() {
     if (year && (!/^\d{4}$/.test(year) || +year < 1000)) { setMessage('年份应为四位数字，未知可留空。'); return }
+    if (metadataSaving.has(document.id)) return
+    metadataSaving.add(document.id)
     setBusy(true)
     try {
-      const result = await window.yorw.documents.update(metadataUpdatePayload(document, { title, authors, year, tags, summary }))
+      const result = await window.yorw.documents.update(metadataUpdatePayload(metadataBases.get(document.id) ?? document, { title, authors, year, tags, summary }))
       if (!result.ok) { setMessage(explain(result.code)); return }
       clearMetadataDraft(document.id)
       let warning = ''
@@ -70,8 +91,9 @@ export function MetadataEditor({ document, topicOptions, onClose, onSaved }: { d
         }
       }
       onSaved(warning, result.value)
+      metadataSaving.delete(document.id)
       onClose()
-    } catch { setMessage('保存失败，草稿已保留。') } finally { setBusy(false) }
+    } catch { setMessage('保存失败，草稿已保留。') } finally { metadataSaving.delete(document.id); setBusy(false) }
   }
   return <section className="card" aria-label="编辑文献元数据">
     <h2>编辑元数据</h2>
