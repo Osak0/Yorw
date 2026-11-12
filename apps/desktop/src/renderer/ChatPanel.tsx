@@ -1,3 +1,4 @@
+import {createPortal} from 'react-dom'
 import React,{useEffect,useRef,useState} from 'react'
 import type {ChatMessage,ChatSource,ReaderTarget} from '../shared/status'
 import {useAiTask,aiError} from './ai-task'
@@ -6,13 +7,17 @@ import {MarkdownPreview} from './MarkdownPreview'
 import {sessionStore,useDocumentSession} from './session-state'
 import './chat.css'
 
-export function ChatPanel({documentId,onPage,onNavigate,onNote}:{documentId:string;onPage?:(page:number)=>void;onNavigate?:(target:ReaderTarget)=>void;onNote(id:string):void}){
+export function ChatPanel({documentId,onPage,onNavigate,onNote,searchHost}:{documentId:string;searchHost?:HTMLElement|null;onPage?:(page:number)=>void;onNavigate?:(target:ReaderTarget)=>void;onNote(id:string):void}){
  const session=useDocumentSession(documentId),question=session.chatQuestion
  const setQuestion=(value:string|((current:string)=>string))=>{const current=sessionStore().document(documentId).chatQuestion;sessionStore().updateDocument(documentId,{chatQuestion:typeof value==='function'?value(current):value})}
  const [messages,setMessages]=useState<ChatMessage[]>([]),[notice,setNotice]=useState('')
  const [atBottom,setAtBottom]=useState(true)
  const history=useRef<HTMLDivElement>(null)
  const composing=useRef(false)
+ const [highlight,setHighlight]=useState<string|null>(null)
+ const highlightTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined)
+ useEffect(()=>()=>clearTimeout(highlightTimer.current),[])
+ function locate(id:string){setAtBottom(false);setHighlight(id);clearTimeout(highlightTimer.current);highlightTimer.current=setTimeout(()=>setHighlight(null),1800);requestAnimationFrame(()=>history.current?.querySelector(`[data-message-id="${id}"]`)?.scrollIntoView({block:'center'}))}
  const job=useAiTask('chat',documentId)
  const running=job.running||messages.some(message=>message.status==='running')
  useEffect(()=>{let active=true,loading=false
@@ -29,10 +34,14 @@ export function ChatPanel({documentId,onPage,onNavigate,onNote}:{documentId:stri
  const place=(source:ChatSource)=>source.physical_page?`第 ${source.physical_page} 页`:source.section_path?.length?source.section_path.join(' / '):'内容块'
  function retry(message:ChatMessage){setQuestion(message.question);setNotice('');setAtBottom(true);void job.start(message.question).then(started=>{if(started)requestAnimationFrame(scrollToLatest)})}
  function onComposeKeyDown(event:React.KeyboardEvent<HTMLTextAreaElement>){if(event.key!=='Enter'||event.shiftKey)return;if(composing.current||event.nativeEvent.isComposing||event.keyCode===229)return;event.preventDefault();void send()}
+ const historyQuery=session.chatHistoryQuery??''
+ const matches=historyQuery.trim()?messages.filter(m=>(m.question+' '+m.body_md).toLocaleLowerCase().includes(historyQuery.trim().toLocaleLowerCase())):[]
+ const searchControl=<div className="chat-history-search"><input type="search" aria-label="搜索当前文献问答" placeholder="搜索对话历史" value={historyQuery} onChange={e=>{setHighlight(null);sessionStore().updateDocument(documentId,{chatHistoryQuery:e.target.value})}}/>{historyQuery.trim()&&<div className="chat-search-matches"><p>{matches.length} 条匹配记录</p>{matches.map(message=><button key={message.id} onClick={()=>locate(message.id)}>{message.question} · {message.body_md.slice(0,100)}</button>)}</div>}</div>
  return <div className="chat-panel">
+  {searchHost?createPortal(searchControl,searchHost):searchControl}
   <div className="chat-history-wrap">
    <div className="chat-history" ref={history} onScroll={onHistoryScroll} aria-label="问答历史">
-    {messages.map(message=><article key={message.id} className={`chat-message ${message.status}`}>
+    {messages.map(message=><article key={message.id} data-message-id={message.id} className={`chat-message ${message.status}${highlight===message.id?' history-match':''}`}>
      <div className="chat-question">{message.question}</div>
      <div className="chat-answer">
       {message.status==='running'&&!message.body_md&&<p className="chat-progress">正在查找原文并生成回答…</p>}

@@ -5,8 +5,8 @@ import type { WorkspaceLayout, WorkspaceLayoutModule, WorkspaceLayoutSidebarMode
 
 const MODULES = new Set<WorkspaceLayoutModule>(['Storage', 'Garden', 'House'])
 const SIDEBAR_MODES = new Set<WorkspaceLayoutSidebarMode>(['notes', 'search', 'chat'])
-const TAB_KINDS = new Set(['settings', 'document', 'topic', 'topic-create', 'topic-manage', 'notes', 'search', 'chat', 'resource', 'metadata', 'ai', 'history', 'materials'])
-const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat', 'resource', 'metadata'])
+const TAB_KINDS = new Set(['settings', 'document', 'topic', 'topic-create', 'topic-manage', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment', 'ai', 'history', 'materials'])
+const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment'])
 const GARDEN_TAB_KINDS = new Set(['topic', 'topic-create', 'topic-manage', 'ai', 'history', 'materials'])
 const GARDEN_VIEWS = new Set(['tree', 'paths'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

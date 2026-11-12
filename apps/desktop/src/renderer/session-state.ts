@@ -14,6 +14,11 @@ export interface DocumentSession {
   sidebarOpen: boolean | null
   sidebarWidth: number
   searchQuery: string
+  searchResultsCleared?: boolean
+  searchHistoryOpen?: boolean
+  searchHistoryId?: string
+  chatHistoryQuery?: string
+  chatHistoryId?: string
   chatQuestion: string
 }
 

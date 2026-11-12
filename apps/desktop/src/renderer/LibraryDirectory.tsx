@@ -103,8 +103,8 @@ export function LibraryDirectory({documents,folders,selected,busy:importing,onSe
       }
     }}>
       {menu.document?<>
-        {item('打开阅读',()=>onOpen(menu.document!))}{item('查看文献资料',()=>onMetadata(menu.document!))}
-        <hr/>{item('编辑标题',()=>onEdit(menu.document!))}{item('移动到…',()=>begin({kind:'assign',document:menu.document}))}
+        {item('打开阅读',()=>onOpen(menu.document!))}{item('编辑元数据',()=>onMetadata(menu.document!))}
+        <hr/>{item('移动到…',()=>begin({kind:'assign',document:menu.document}))}
         <hr/>{item('查看原件存储位置',()=>void system('path',menu.document!))}{item('复制绝对路径',()=>void system('copy',menu.document!))}
         {item('使用默认应用打开',()=>void system('open',menu.document!))}{item('在资源管理器中显示',()=>void system('reveal',menu.document!))}
         <hr/>{item('从文献库移除',()=>onRemove(menu.document!),true)}

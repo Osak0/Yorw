@@ -50,7 +50,8 @@ test('tool tabs are valid Storage pages and persist as the active page', async (
         { kind: 'notes', id: documentId, title: 'Paper' },
         { kind: 'chat', id: documentId, title: 'Paper' },
         { kind: 'resource', id: documentId, title: 'Paper' },
-        { kind: 'metadata', id: documentId, title: 'Paper' }
+        { kind: 'metadata', id: documentId, title: 'Paper' },
+        { kind: 'enrichment', id: documentId, title: 'Paper' }
       ],
       activeKey: `notes:${documentId}`,
       storageKey: `notes:${documentId}`,

@@ -1,11 +1,11 @@
 import type { WorkspaceLayoutTab } from '../shared/status'
 
 export type WorkspaceModule = 'Storage' | 'Garden' | 'House'
-export type StorageTool = 'notes' | 'search' | 'chat' | 'resource' | 'metadata'
+export type StorageTool = 'notes' | 'search' | 'chat' | 'resource' | 'metadata' | 'enrichment'
 export type GardenTool = 'ai' | 'history' | 'materials'
 export type WorkspaceTabKind = 'settings' | 'document' | 'topic' | 'topic-create' | 'topic-manage' | StorageTool | GardenTool
 export const CREATE_TOPIC_TAB_ID = 'new'
-const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat', 'resource', 'metadata']
+const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment']
 
 export type WorkspaceTab = {
   key: string
@@ -27,7 +27,7 @@ export function topicTab(id: string, title: string): WorkspaceTab {
 }
 
 export function toolTab(tool: StorageTool, id: string, title: string): WorkspaceTab {
-  return makeTab(tool, id, title)
+  return makeTab(tool === 'resource' ? 'metadata' : tool, id, title)
 }
 
 export function gardenToolTab(tool: GardenTool, id: string, title: string): WorkspaceTab {
@@ -56,7 +56,7 @@ export function moduleForTab(tab: WorkspaceTab): WorkspaceModule {
 }
 
 export function tabKindLabel(tab: WorkspaceTab): string {
-  return { settings:'设置', document: '文献', topic: '专题', 'topic-create': '新建专题', 'topic-manage': '专题管理', notes: '笔记', search: '检索', chat: '问答', resource: '文献资料', metadata: '整理文献', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
+  return { settings:'设置', document: '文献', topic: '专题', 'topic-create': '新建专题', 'topic-manage': '专题管理', notes: '笔记', search: '检索', chat: '问答', resource: '编辑元数据', metadata: '编辑元数据', enrichment: 'AI 辅助文献整理', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
 }
 
 /** Restores saved pages against the current workspace and reports pages that no longer exist. */
@@ -67,9 +67,13 @@ export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, 
     if(item.kind==='topic-create'){tabs.push(topicCreateTab());continue}
     const garden = !STORAGE_KINDS.includes(item.kind)
     const title = (garden ? topics : documents).get(item.id)
-    if (title !== undefined) tabs.push(makeTab(item.kind, item.id, title))
+    if (title !== undefined) {
+      const kind = item.kind === 'resource' ? 'metadata' : item.kind
+      const tab = makeTab(kind, item.id, title)
+      if (!tabs.some(existing => existing.key === tab.key)) tabs.push(tab)
+    }
   }
-  return { tabs, skipped: items.length - tabs.length }
+  return { tabs, skipped: items.filter(item => item.kind !== 'settings' && item.kind !== 'topic-create' && !(STORAGE_KINDS.includes(item.kind) ? documents : topics).has(item.id)).length }
 }
 
 /** Closing a background tab keeps the active page; closing the active tab picks its neighbour. */

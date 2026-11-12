@@ -1,3 +1,5 @@
+import {runHistoryLayoutSmoke} from './history-layout-smoke'
+import {runDocumentManagementSmoke} from './document-management-smoke'
 import {runMetadataReviewSmoke} from './metadata-review-smoke'
 import {runUiSmoke,captureUiContent} from './ui-smoke'
 import {runFoldersSmoke} from './folders-smoke'
@@ -225,6 +227,8 @@ else app.whenReady().then(async () => {
           await new Promise(resolve => setTimeout(resolve, 100))
         }
       }
+      if (readerSmoke && process.argv.includes('--document-management-smoke')) await writeFile(join(reportDir, 'document-management-smoke.json'), JSON.stringify(await runDocumentManagementSmoke(window, reportDir), null, 2))
+      if(readerSmoke&&process.argv.includes('--history-layout-smoke')) await writeFile(join(reportDir,'history-layout-smoke.json'),JSON.stringify(await runHistoryLayoutSmoke(window,backend,providers,reportDir),null,2))
       const tabProof = readerSmoke && process.argv.includes('--tabs-smoke') ? await runWorkspaceTabsSmoke(window) : null
       if(tabProof)await writeFile(join(reportDir,'topic-menu-smoke.json'),JSON.stringify(await runTopicMenuSmoke(window,reportDir),null,2))
       const tabResumeProof = readerSmoke && process.argv.includes('--tabs-resume-smoke') ? await runWorkspaceTabsResumeSmoke(window) : null
@@ -311,7 +315,7 @@ else app.whenReady().then(async () => {
         await writeFile(join(reportDir, 'resource-relations-layouts.json'), JSON.stringify(layouts, null, 2))
         if (layouts.some(layout => layout.opened === false || layout.visible !== true || layout.horizontalOverflow || layout.viewOverflow)) throw new Error('RESOURCE_LAYOUT_OVERFLOW')
       }
-      if (readerSmoke && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
+      if (readerSmoke && !process.argv.includes('--document-management-smoke') && !process.argv.includes('--tabs-close-smoke') && !process.argv.includes('--tabs-fault-smoke')) {
         await window.webContents.executeJavaScript(`(async()=>{
           const tab=[...document.querySelectorAll('.workspace-tab')].find(t=>t.querySelector('.workspace-tab-kind')?.textContent==='文献')
           if(!tab)throw new Error('READER_TAB_MISSING');tab.click()

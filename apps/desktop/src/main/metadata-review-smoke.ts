@@ -9,9 +9,9 @@ export async function runMetadataReviewSmoke(window:BrowserWindow,backend:Backen
  let calls=0,contextSeen=false
  const server=createServer((request,response)=>{let raw='';request.on('data',d=>raw+=d);request.on('end',()=>{
   try{
-   calls++;const body=JSON.parse(raw),question=JSON.parse(JSON.parse(body.messages[1].content).question)
+   calls++;const body=JSON.parse(raw),input=JSON.parse(body.messages[1].content),question=input.question?JSON.parse(input.question):input
    contextSeen ||= question.current_metadata?.summary_md==='Original user summary'
-   const value={overview:'Synthetic summary based on the original evidence.',tags:['shared','Proposed'],synonyms:[],metadata:{title:'Suggested document title',authors:['Synthetic Author'],year:2026},evidence_ids:question.blocks.map((b:{id:string})=>b.id)}
+   const value={summary_md:'Synthetic summary based on the original evidence. '.repeat(24),tags:['shared','Proposed'],title:'Suggested document title',authors:[],year:null,evidence_ids:question.blocks.map((b:{id:string})=>b.id)}
    response.writeHead(200,{'Content-Type':'text/event-stream'});response.end('data: '+JSON.stringify({choices:[{delta:{content:JSON.stringify(value)}}]})+'\n\ndata: '+JSON.stringify({choices:[{delta:{},finish_reason:'stop'}]})+'\n\ndata: [DONE]\n\n')
   }catch{response.writeHead(500);response.end()}
  })})
@@ -22,61 +22,50 @@ export async function runMetadataReviewSmoke(window:BrowserWindow,backend:Backen
   let record=(await backend.request('/v1/documents')).items[0]
   record=await backend.request('/v1/documents/'+record.id,'PATCH',{version:record.version,tags:['Shared'],summary_md:'Original user summary'})
   const proof=await window.webContents.executeJavaScript(`(async()=>{
-   const wait=async(fn,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,100))}throw new Error('METADATA_UI_'+label)}
-   const visible=n=>n.getClientRects().length>0
-   const button=text=>[...document.querySelectorAll('button')].find(n=>visible(n)&&n.textContent.trim()===text)
+   const wait=async(fn,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,100))}throw Error('SELECTION_'+label)}
+   const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent===text||b.getAttribute('aria-label')===text)
    const click=async text=>{await wait(()=>button(text)&&!button(text).disabled,text);button(text).click()}
-   const set=(element,value)=>{Object.getOwnPropertyDescriptor(element.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(element,value);element.dispatchEvent(new Event(element.tagName==='SELECT'?'change':'input',{bubbles:true}))}
-   await click('资料');await wait(()=>document.querySelector('[aria-label="AI 文献整理"]'),'resource')
-   if(document.querySelector('[aria-label="文献资料"] [aria-label="所属专题"]'))throw new Error('RELATIONS_IN_ACTIVITY')
-   await click('生成 / 重试');await wait(()=>document.querySelector('[aria-label="AI 生成记录"]')?.options.length===1,'first-result')
-   await click('重新生成');await wait(()=>document.querySelector('[aria-label="AI 生成记录"]')?.options.length===2,'second-result')
-   await click('隐藏本条结果');await wait(()=>button('恢复显示完整结果'),'hidden')
-   await click('恢复显示完整结果');await wait(()=>button('替换标题'),'restored')
-   const history=document.querySelector('[aria-label="AI 生成记录"]');set(history,history.options[1].value)
-   await wait(()=>document.querySelector('[data-enrichment-id]')?.dataset.enrichmentId===history.options[1].value&&button('添加到标签'),'older-result')
-   await click('添加到标签');await wait(()=>document.querySelector('.enrichment-suggestions')?.textContent.includes('Proposed、Shared'),'tags-merged')
-   await click('添加到总结');await wait(()=>document.querySelector('.enrichment-suggestions')?.textContent.includes('Original user summary')&&document.querySelector('.enrichment-suggestions')?.textContent.includes('Synthetic summary'),'summary-merged')
+   await click('编辑元数据');await wait(()=>button('AI 辅助文献整理'),'metadata')
+   await click('AI 辅助文献整理');await wait(()=>document.querySelector('[aria-label="AI 生成记录"]'),'auto-result')
+   const count=document.querySelector('[aria-label="AI 生成记录"]').options.length
+   if(count!==1)throw Error('AUTO_DUPLICATE')
+   const labels=['标题','作者','年份','关键词／标签','总结','相关文献','所属专题']
+   for(const label of labels)if(!document.querySelector('[aria-label="添加'+label+'"]'))throw Error('MISSING_FIELD_'+label)
+   if(!document.querySelector('.enrichment-suggestions').textContent.includes('缺少信息'))throw Error('MISSING_EMPTY_STATE')
+   const host=document.querySelector('.enrichment-tool')
+   if(host.scrollHeight<=host.clientHeight)throw Error('NO_VERTICAL_SCROLL')
+   host.scrollTop=host.scrollHeight
+   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))
+   const bottom=host.querySelector('.enrichment-panel').getBoundingClientRect().bottom
+   if(bottom>host.getBoundingClientRect().bottom+1)throw Error('CLIPPED_BOTTOM')
+   if(document.querySelector('.enrichment-panel dl'))throw Error('LEGACY_SECTIONS')
+   if(document.querySelector('.enrichment-suggestions input[type="checkbox"]'))throw Error('CHECKBOX_REMAINS')
+   await click('添加关键词／标签');await wait(()=>document.querySelector('.enrichment-panel').textContent.includes('已添加关键词／标签'),'add-tags')
+   await click('添加总结');await wait(()=>document.querySelector('.enrichment-panel').textContent.includes('已添加总结'),'add-summary')
    const confirm=window.confirm;window.confirm=()=>true
-   await click('替换标题');await wait(()=>document.querySelector('.resource-header h2')?.textContent==='Suggested document title','title-applied');window.confirm=confirm
-   await click('编辑元数据');await wait(()=>document.querySelector('[aria-label="编辑文献元数据"]'),'metadata-page')
-   await wait(()=>document.querySelector('[aria-label="文献关联"]'),'relations-in-metadata')
-   if(document.querySelector('[aria-label="元数据建议"]')||document.querySelector('[aria-label="笔记"]'))throw new Error('ACTIVITY_IN_METADATA')
-   if(!document.querySelector('[aria-label="总结"]').value.includes('Synthetic summary'))throw new Error('CANONICAL_SUMMARY')
-   return {history:true,restore:true,oldRecordAdoption:true,canonicalTags:true,canonicalSummary:true,pageResponsibilities:true}
+   await click('替换标题');await wait(()=>document.querySelector('.enrichment-panel').textContent.includes('已替换标题'),'replace-title');window.confirm=confirm
+   await click('隐藏本条结果');await wait(()=>button('恢复显示完整结果'),'hidden')
+   await click('恢复显示完整结果');await wait(()=>document.querySelector('[aria-label="添加标题"]'),'restored')
+   const tab=[...document.querySelectorAll('.workspace-tab')].find(t=>t.textContent.includes('编辑元数据'))
+   tab.click();await wait(()=>button('AI 辅助文献整理'),'return')
+   await click('AI 辅助文献整理');await wait(()=>document.querySelector('[aria-label="AI 生成记录"]'),'reopen')
+   if(document.querySelector('[aria-label="AI 生成记录"]').options.length!==1)throw Error('REOPEN_GENERATED')
+   return {sevenMetadataFields:true,missingInfo:true,scrollReachable:true,noLegacySections:true,autoGeneratedOnce:true,perFieldButtons:true,checkboxesRemoved:true,added:true,replaced:true,history:true,restore:true,reopenReused:true}
   })()`)
-  await writeFile(join(folder,'metadata-editor.png'),(await window.webContents.capturePage()).toPNG())
+  await writeFile(join(folder,'metadata-selection.png'),(await window.webContents.capturePage()).toPNG())
+  for(const width of [1024,1280,1440]){
+   window.setContentSize(width,768)
+   await new Promise(r=>setTimeout(r,180))
+   const fits=await window.webContents.executeJavaScript(`(async()=>{
+    const host=document.querySelector('.enrichment-tool');host.scrollTop=host.scrollHeight
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))
+    return host.scrollHeight>host.clientHeight && document.querySelector('.enrichment-panel').getBoundingClientRect().bottom<=host.getBoundingClientRect().bottom+1 && document.documentElement.scrollWidth<=innerWidth
+   })()`)
+   if(!fits)throw Error('METADATA_SCROLL_LAYOUT_'+width)
+   await writeFile(join(folder,'metadata-bottom-'+width+'.png'),(await window.webContents.capturePage()).toPNG())
+  }
   const current=await backend.request('/v1/documents/'+record.id)
-  if(current.tags.join('|')!=='Proposed|Shared'||current.summary_md!=='Original user summary\n\nSynthetic summary based on the original evidence.')throw new Error('CANONICAL_METADATA')
-  const f=(await backend.request('/v1/library-folders','POST',{name:'Competition'})).items.find((v:any)=>v.name==='Competition')
-  await backend.request('/v1/library-folder-assignment','POST',{folder_id:f.id,documents:{[current.id]:current.version}})
-  await window.webContents.executeJavaScript(`document.querySelector('[aria-label="文献关联"]').scrollIntoView({block:'start'})`);await new Promise(r=>setTimeout(r,150))
-  await writeFile(join(folder,'metadata-relations.png'),(await window.webContents.capturePage()).toPNG())
-  const directory=await window.webContents.executeJavaScript(`(async()=>{
-   const wait=async(fn,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,100))}throw new Error('DIRECTORY_UI_'+label)}
-   ;[...document.querySelectorAll('nav button')].find(n=>n.textContent==='Storage').click()
-   await wait(()=>document.querySelector('.directory-folder[title="Competition"]'),'folder')
-   await wait(()=>!document.querySelector('.directory-file'),'assignment')
-   const f=document.querySelector('.directory-folder[title="Competition"]');f.click()
-   await wait(()=>document.querySelector('.directory-subtree .directory-file'),'single-click-expand')
-   if(!document.querySelector('.directory-location').textContent.includes('根目录'))throw new Error('SINGLE_CLICK_NAVIGATED')
-   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))
-   return {singleClickExpand:true}
-  })()`)
-  await writeFile(join(folder,'folder-expanded.png'),(await window.webContents.capturePage()).toPNG())
-  const navigation=await window.webContents.executeJavaScript(`(async()=>{
-   const wait=async(fn,label)=>{const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,100))}throw new Error('DIRECTORY_UI_'+label)}
-   const f=document.querySelector('.directory-folder[title="Competition"]')
-   f.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));await wait(()=>document.querySelector('.directory-location').textContent.includes('Competition'),'double-click-enter')
-   await wait(()=>document.querySelector('.document-management summary'),'management')
-   const summary=document.querySelector('.document-management summary'),before=getComputedStyle(summary,'::after').content
-   summary.click();await wait(()=>summary.parentElement.open,'open')
-   const after=getComputedStyle(summary,'::after').content
-   if(before===after)throw new Error('EXPANSION_INDICATOR')
-   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))
-   return {doubleClickEnter:true,expandedManagementIndicator:true}
-  })()`)
-  await writeFile(join(folder,'folder-entered.png'),(await window.webContents.capturePage()).toPNG())
-  return {...proof,...directory,...navigation,metadataInPrompt:contextSeen,modelCalls:calls,schema:22,confirmationStub:true}
+  if(!current.tags.includes('Proposed')||!current.summary_md.includes('Original user summary')||!current.summary_md.includes('Synthetic summary'))throw Error('CANONICAL_METADATA')
+  return {...proof,metadataInPrompt:contextSeen,modelCalls:calls,schema:23}
  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
 }
