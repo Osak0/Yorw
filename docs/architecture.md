@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-本文描述当前 feature/ai-cowork-in-garden 工作树；应用／后端仍为 0.3.0、schema 24。此前 v0.4.0 四阶段已 review，当前增量改动待 review。提交及验证状态见 [PLAN](../PLAN.md)，最终范围见 [计划](../PLAN_v0_4_0.md)，命令见 [开发指南](development.md)，合同演进及旧测试见 [开发历史](history/v0.4.0.md)。
+本文描述当前 feature/ai-cowork-in-garden 工作树；应用／后端仍为 0.3.0、schema 25。v0.4.0 四阶段及后续阅读／问答增量均已 review 通过，继续在该分支开发。提交及验证状态见 [PLAN](../PLAN.md)，最终范围见 [计划](history/PLAN_v0_4_0.md#四阶段最终范围归档2026-11-15-合并)，命令见 [开发指南](development.md)，合同演进及旧测试见 [开发历史](history/v0.4.0.md)。
 
 ## 模块与通信
 
@@ -195,3 +195,11 @@ chat_history.py 集中预算：总结最多 1200、近期最多 2400、整个历
 PdfReader 以 sequence 消费每次来源请求，ReadingWorkspace 同时清除已应用的本地 pending jump；回调或 evidence 对象重建不会重新导航。PdfPage 将画布／文字层渲染和高亮分离，文字层完成后报告首个唯一匹配节点，阅读视口按该节点实际坐标滚动；先消费待定位状态再滚动。滚轮、触摸和滚动键取消尚未完成的定位，点击高亮之外清除高亮，避免异步渲染把用户拉回。缩放／宽度变化按当前页内相对滚动位置恢复，不重新执行来源请求。
 
 单页模式只挂载当前物理页，连续模式保留各页占位并按需绘制。PdfNavigation 缩略图按导航视口懒绘制，离屏释放画布；目录读取 PDF 原生 outline，并仅解析受限页目的地，不执行外部动作。展示方式／导航开关按文献保存到会话，不新增数据库迁移；导航默认关闭。专注阅读为应用内覆盖布局，Esc 退出，工具操作恢复普通阅读布局。
+
+### 阶段一模型配置与工具协议
+
+迁移 025_model_profiles.sql 增加 model_profiles 与 model_defaults。旧 provider_configs 不改写，已有聊天配置复制为独立 profile，记录 legacy_version；main 首次读取将相应密文复制到 profile 专用文件，在修改旧配置删除旧密文前也先完成该复制。各 profile 密钥按 ID／版本由 safeStorage 加密管理，renderer 只得到 has_key／key_error，不得到明文。更换端点需重输或清除密钥。研究默认与记忆默认独立存储，memory_id 为空表示沿用研究模型；现阶段旧问答／生成继续读取原 provider_configs，阶段二才将新默认接入助理。
+
+固定 profiles:list/save/defaults/remove/test/check/cancel IPC 映射 /v1/providers/profiles：列表 GET，UUID 项 PUT／DELETE，defaults PUT，/{id}/checks/{chat|tools} POST，/checks/{job_id} GET 及 /cancel POST。版本冲突拒绝写入；配置变更清除两个检测状态，删除配置清空对应默认。检测状态带配置版本与时间，未检测、失败及通过明确区分。
+
+聊天检测复用既有 probe；工具检测使用自编写的 search_local／read_local 工具与验证事实，不接收资料路径或用户论文。ToolTurn 聚合 SSE 参数、验证完整参数后才执行，保留 assistant 厂商扩展字段回传，工具结果按 tool_call_id 配对。每个 HTTP 请求无自动重试、禁止重定向；固定额度和时间限制，未知／重复／截断工具不执行。停止立即结束业务调用链，已在途系统网络读取可能等待至 socket 超时，但全局单网络槽在真正释放前不启动下一请求；不会因此叠加后台网络线程。能力检测任务只保存有限的进程内诊断，重启后需显式重新检测；完成能力结果存数据库，取消不发布成功。此基础并非阶段二的研究会话执行器。

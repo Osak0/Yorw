@@ -1,3 +1,4 @@
+import {runModelProfilesSmoke} from './model-profiles-smoke'
 import {runReaderNavigationSmoke} from './reader-navigation-smoke'
 import {runChatMemorySmoke} from './chat-memory-smoke'
 import {runContinuousReadingSmoke} from './continuous-reading-smoke'
@@ -159,6 +160,13 @@ else app.whenReady().then(async () => {
   ipcMain.handle('tasks:get', providerAction(input => documents.task(input)))
   ipcMain.handle('tasks:cancel', providerAction(input => documents.cancel(input)))
   ipcMain.handle('tasks:retry', providerAction(input => documents.retry(input)))
+  ipcMain.handle('profiles:list', providerAction(() => providers.profileList()))
+  ipcMain.handle('profiles:save', providerAction(input => providers.profileSave(input)))
+  ipcMain.handle('profiles:defaults', providerAction(input => providers.profileDefaults(input)))
+  ipcMain.handle('profiles:remove', providerAction(input => providers.profileRemove(input)))
+  ipcMain.handle('profiles:test', providerAction(input => providers.profileTest(input)))
+  ipcMain.handle('profiles:check', providerAction(input => providers.profileCheck(input)))
+  ipcMain.handle('profiles:cancel', providerAction(input => providers.profileCancel(input)))
   ipcMain.handle('providers:list', providerAction(() => providers.list()))
   ipcMain.handle('providers:save', providerAction(input => providers.save(input)))
   ipcMain.handle('providers:test', providerAction(input => providers.test(input)))
@@ -172,6 +180,11 @@ else app.whenReady().then(async () => {
   if (devUrl) await window.loadURL(devUrl)
   else await window.loadFile(join(__dirname, '../renderer/index.html'))
   await backend.start()
+  if(readerSmoke && process.argv.includes('--model-profiles-smoke')){
+    try{await runModelProfilesSmoke(window,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'model-profiles-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
+    return
+  }
   // Restore only main-owned, unchanged component approvals; never launch a probe.
   await parsers.status().catch(() => null)
   if (process.argv.includes('--yorw-smoke')) {

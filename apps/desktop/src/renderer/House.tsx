@@ -1,3 +1,4 @@
+import {ModelProfiles} from './ModelProfiles'
 import {SettingsIcon} from './SettingsIcon'
 import {EnrichmentSettingsPanel} from './EnrichmentPanel'
 import React, { useEffect, useState } from 'react'
@@ -5,7 +6,7 @@ import type { ParserCapability, ParserSettings, ParserStatus, ProviderConfig, Pr
 import {WorkspacePanel} from './WorkspacePanel'
 import type {AiPreferences} from '../shared/status'
 
-export const houseTitles:Record<string,string> = {parsers:'文献解析与预览',chat:'聊天模型',retrieval:'检索',data:'数据与导出'}
+export const houseTitles:Record<string,string> = {parsers:'文献解析与预览',chat:'聊天模型',models:'研究助理模型',retrieval:'检索',data:'数据与导出'}
 export const houseForms = new Map<string,{dirty:boolean;save:()=>Promise<boolean>}>()
 function useHouseForm(id:string,dirty:boolean,save:()=>Promise<boolean>){
   useEffect(()=>{houseForms.set(id,{dirty,save});return()=>{houseForms.delete(id)}},[id,dirty,save])
@@ -163,8 +164,8 @@ export function House({active=true, page, onOpen}:{active?:boolean;page?:string;
   useEffect(() => { void load() }, [])
   if(!page)return <section className="house-home" aria-label="工作区设置"><header className="house-home-header"><h1>工作区设置</h1></header><div className="house-entries">{Object.entries(houseTitles).map(([id,title])=>{
     const config=configs?.find(c=>c.kind===(id==='chat'?'chat':'embedding'))
-    const state=id==='parsers'?'基础解析已内置':id==='data'?'本机保存':config?config.model:configs?'尚未配置':'正在读取…'
-    return <button type="button" key={id} onClick={()=>onOpen?.(id)}><span className="house-entry-icon"><SettingsIcon kind={id}/></span><span className="house-entry-copy"><strong>{title}</strong><small>{id==='parsers'?'原件预览、可选组件与自动整理':id==='chat'?'聊天服务、密钥与连接测试':id==='retrieval'?'语义检索与 Embedding 服务':'数据位置、笔记与专题导出'}</small></span><span className="house-entry-status">{state}</span><span className="house-entry-chevron" aria-hidden="true">›</span></button>
+    const state=id==='models'?'多配置与能力检测':id==='parsers'?'基础解析已内置':id==='data'?'本机保存':config?config.model:configs?'尚未配置':'正在读取…'
+    return <button type="button" key={id} onClick={()=>onOpen?.(id)}><span className="house-entry-icon"><SettingsIcon kind={id}/></span><span className="house-entry-copy"><strong>{title}</strong><small>{id==='parsers'?'原件预览、可选组件与自动整理':id==='chat'?'聊天服务、密钥与连接测试':id==='models'?'研究与记忆模型、工具闭环检测':id==='retrieval'?'语义检索与 Embedding 服务':'数据位置、笔记与专题导出'}</small></span><span className="house-entry-status">{state}</span><span className="house-entry-chevron" aria-hidden="true">›</span></button>
   })}</div></section>
-  return <div className="house-settings-page"><header className="house-settings-header"><h1>{houseTitles[page]}</h1></header>{page==='parsers'&&<><ParserPanel active={active}/><EnrichmentSettingsPanel/></>} {page==='retrieval'&&<AiSettings active={active}/>}{notice&&<p role="status">{notice}</p>}{configs&&(page==='chat'||page==='retrieval')&&<ProviderForm kind={page==='chat'?'chat':'embedding'} saved={configs.find(config=>config.kind===(page==='chat'?'chat':'embedding'))} onSaved={saved=>setConfigs(previous=>[...(previous??[]).filter(config=>config.kind!==saved.kind),saved])}/>} {page==='data'&&<WorkspacePanel active={active}/>}</div>
+  return <div className="house-settings-page"><header className="house-settings-header"><h1>{houseTitles[page]}</h1></header>{page==='parsers'&&<><ParserPanel active={active}/><EnrichmentSettingsPanel/></>} {page==='retrieval'&&<AiSettings active={active}/>}{notice&&<p role="status">{notice}</p>}{configs&&(page==='chat'||page==='retrieval')&&<ProviderForm kind={page==='chat'?'chat':'embedding'} saved={configs.find(config=>config.kind===(page==='chat'?'chat':'embedding'))} onSaved={saved=>setConfigs(previous=>[...(previous??[]).filter(config=>config.kind!==saved.kind),saved])}/>} {page==='models'&&<ModelProfiles/>} {page==='data'&&<WorkspacePanel active={active}/>}</div>
 }

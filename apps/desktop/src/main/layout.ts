@@ -28,7 +28,7 @@ function validate(value: unknown): WorkspaceLayout | null {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null
     const tab = item as Record<string, unknown>
     if (typeof tab.kind !== 'string' || !TAB_KINDS.has(tab.kind)) return null
-    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','retrieval','data'].includes(tab.id) : tab.kind === 'topic-create' ? tab.id !== 'new' : !UUID.test(tab.id))) return null
+    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','models','retrieval','data'].includes(tab.id) : tab.kind === 'topic-create' ? tab.id !== 'new' : !UUID.test(tab.id))) return null
     if (tab.title !== undefined && (typeof tab.title !== 'string' || tab.title.length > MAX_TITLE)) return null
     const kind = tab.kind as WorkspaceLayoutTab['kind']
     const key = tabKey({ kind, id: tab.id })

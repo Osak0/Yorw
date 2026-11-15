@@ -63,7 +63,7 @@ export function tabKindLabel(tab: WorkspaceTab): string {
 export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, string>, topics: Map<string, string>): { tabs: WorkspaceTab[]; skipped: number } {
   const tabs: WorkspaceTab[] = []
   for (const item of items) {
-    if(item.kind==='settings'){tabs.push(makeTab('settings',item.id,({parsers:'文献解析与预览',chat:'聊天模型',retrieval:'检索',data:'数据与导出'} as Record<string,string>)[item.id]));continue}
+    if(item.kind==='settings'){tabs.push(makeTab('settings',item.id,({parsers:'文献解析与预览',chat:'聊天模型',models:'研究助理模型',retrieval:'检索',data:'数据与导出'} as Record<string,string>)[item.id]));continue}
     if(item.kind==='topic-create'){tabs.push(topicCreateTab());continue}
     const garden = !STORAGE_KINDS.includes(item.kind)
     const title = (garden ? topics : documents).get(item.id)

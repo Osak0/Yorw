@@ -143,3 +143,14 @@ test('Garden create and manage tabs plus view and expansion state persist', asyn
     await expect(store.save({ ...value, gardenExpanded: [topicId, topicId] })).rejects.toThrow('INVALID_LAYOUT')
   })
 })
+
+
+test('research model settings restore without persisting credentials',async()=>{
+ await withDirectory(async directory=>{
+  const store=new Layout(directory)
+  const value:WorkspaceLayout={version:1,module:'House',tabs:[{kind:'settings',id:'models',title:'研究助理模型'}],activeKey:'settings:models',storageKey:null,gardenKey:null}
+  await store.save(value)
+  expect((await store.load()).layout).toEqual(value)
+  expect(await readFile(join(directory,'workspace-layout.json'),'utf8')).not.toContain('key:')
+ })
+})

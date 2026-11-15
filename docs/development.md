@@ -95,11 +95,11 @@ services/api/.venv/Scripts/python.exe scripts/verify-docling.py `
 
 历史集中在[设计](history/design.md)、[v0.1.0](history/v0.1.0.md)、[v0.2.0 AI 改进](history/v0.2.0.md)和[v0.2.0 工作区改进](history/v0.2.0-workspace.md)。已完成计划和 A/B/C 原始记录保留路径、校验摘要与验证事实；历史命令及绝对路径不保证适用于当前源码或新克隆。
 
-CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和命令。历史版本名 v0.2.1 仅用于说明被并入 v0.2.0 的原计划与旧验证现场。当前应用 0.3.0，已 review 通过的最终范围见 [v0.4.0 计划](../PLAN_v0_4_0.md)。
+CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和命令。历史版本名 v0.2.1 仅用于说明被并入 v0.2.0 的原计划与旧验证现场。当前应用 0.3.0，已 review 通过的最终范围见 [v0.4.0 计划](history/PLAN_v0_4_0.md#四阶段最终范围归档2026-11-15-合并)。
 
 ## 候选制品与发布流程
 
-当前分支基线为 faa2865（PR #22），本轮阅读及批量元数据改动待 review；schema 24／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
+当前分支 feature/ai-cowork-in-garden 的实现提交为 1fc846b，用户已 review 并推送，尚未合并 main，继续开发 v0.4.0；schema 25／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -140,3 +140,7 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 问答历史／PDF 高亮专项：`--yorw-smoke --reader-smoke --chat-memory-smoke --report-dir=<新绝对目录>`，目录预放自编写两页 fixture.pdf。输出 chat-memory-smoke.json、chat-memory.png、chat-memory-toolbar.png；本地 SSE 夹具先模拟有部分正文的截断，再验证“请回答完全”上下文、高亮、History.md 查看与固定导出。history-layout-smoke 同时核验 History.md 入口和精简导航。后端新增 test_chat_history.py 验证文献隔离、压缩回退、导出文件不作为输入、原文版本失效及空输出问题；test_completion_stream.py 捕获实际消息角色／输入预算。新增迁移后必须重建冻结服务再跑 pytest，schema 当前为 24。最终成绩与迭代失败只记入开发历史。
 
 阅读导航专项：构建后使用 `--yorw-smoke --reader-smoke --reader-navigation-smoke --report-dir=<新绝对目录>`。目录预放至少 10 页自编写 fixture.pdf，英文依据置于页底并包含指向第 9 页的内置目录。输出 reader-navigation-smoke.json 和三宽度截图；验证段落可见、滚走不回跳、再次显式定位、外部点击清除、单页／连续、缩略图、目录和专注阅读／Esc。仅本地关键词检索，不调用模型。
+
+阶段一模型专项：构建后运行 `--yorw-smoke --reader-smoke --model-profiles-smoke --report-dir=<新绝对目录>`，使用隔离工作区和本地自编写 SSE 服务，无需 PDF。输出 model-profiles-smoke.json、models-1024/1280/1440.png，核验加密存储、聊天、三轮工具闭环及设置页。真实请求仅在明确授权后追加 main 专用 --live-config=<只含地址和模型的JSON>、--live-key-file=<已有加密密钥文件>；密钥不在命令行或报告中明文出现，不自动读取用户论文。工具／配置专项为 test_model_profiles.py、test_tool_protocol.py；schema 25，完整回归先重建冻结服务。供应商工具协议依据 DeepSeek 官方 https://api-docs.deepseek.com/guides/tool_calls/ 与通用兼容协议；厂商能力仍须实际检测，不凭预设断言已实测。
+
+阶段一已完成真实 DeepSeek deepseek-flash 的聊天与三轮工具闭环；Kimi／GLM／Qwen 仍需账号实测。若使用已有密文做独立隔离 profile 验证，需授权使用该密钥并同时提供其加密上下文；完成后清除隔离密钥副本和复制的 Local State，报告只保留脱敏诊断。
