@@ -295,6 +295,7 @@ function App() {
     setStorageKey(documentKey)
     setModule('Storage')
     if (tool !== 'resource' && tool !== 'metadata' && tool !== 'enrichment') sessionStore().updateDocument(document.id, { sidebarMode: tool, sidebarOpen: true })
+    else sessionStore().updateDocument(document.id, {sidebarOpen:true})
   }
   function expandGardenTool(topic: Topic, tool: GardenTool) {
     const key = `${tool}:${topic.id}`

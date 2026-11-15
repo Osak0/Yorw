@@ -99,7 +99,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## 候选制品与发布流程
 
-当前工作树起点为 c9a6cb2，HEAD 为 978f865，后续功能待用户提交；schema 23／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
+当前分支基线为 faa2865（PR #22），本轮阅读及批量元数据改动待 review；schema 24／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -130,7 +130,13 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 | 标志 | 输出与主要覆盖 |
 | --- | --- |
 | `--document-management-smoke` | `document-management-smoke.json`、`management-1024/1280/1440.png`：六入口、稳定位置、解析二级项、草稿切换、关闭保护与保存、renderer 重载恢复、取消／确认删除后标签清理。该流程会删除隔离测试文献，跳过末尾要求文献仍存在的通用截图循环。 |
-| `--metadata-review-smoke` | `metadata-review-smoke.json`、`metadata-selection.png` 与三宽度底部截图：七栏、缺少信息、无勾选框、逐栏添加／替换、首次生成一次、重新进入复用、历史隐藏／恢复和长页底部。 |
+| `--metadata-review-smoke` | `metadata-review-smoke.json`、`metadata-selection.png` 与三宽度底部截图：七栏、缺少信息、无勾选框、逐栏及全部添加／替换、取消确认、空建议跳过、首次生成一次、重新进入复用、历史隐藏／恢复和长页底部。 |
 | `--history-layout-smoke` | `history-layout-smoke.json` 与三宽度截图：阅读侧栏无历史、独立检索左栏／固定搜索／右结果、历史只读、空 Enter 清空但保留历史、问答顶栏搜索顺序、正文搜索和定位高亮消退。 |
 
 全部使用自编写 PDF、本地 loopback SSE 模型夹具；不验证真实服务质量。完整端到端重启／旧库升级与安装器验收不能由专项窗口替代。后端 `test_enrichment.py` 覆盖结构化请求、有限修正、原子采纳、关系冲突／回滚及候选校验；当前已运行成绩和失败事实只记在[开发历史](history/v0.4.0.md)。
+
+连续阅读专项：同样的隔离启动参数加 `--continuous-reading-smoke`，报告目录需放置自编写至少 10 页 `fixture.pdf`（可将生成器的两页样例重复组合）。输出 `continuous-reading-smoke.json` 和 `continuous-reading-1024/1280/1440.png`，覆盖连续页交界、滚动同步页码、末页保存、上一页／直接跳页、侧栏开关、离屏画布释放与阅读高度。通用阅读探针按当前物理页查找画布，不依赖第一页始终挂载；不得使用真实用户资料运行烟测。
+
+问答历史／PDF 高亮专项：`--yorw-smoke --reader-smoke --chat-memory-smoke --report-dir=<新绝对目录>`，目录预放自编写两页 fixture.pdf。输出 chat-memory-smoke.json、chat-memory.png、chat-memory-toolbar.png；本地 SSE 夹具先模拟有部分正文的截断，再验证“请回答完全”上下文、高亮、History.md 查看与固定导出。history-layout-smoke 同时核验 History.md 入口和精简导航。后端新增 test_chat_history.py 验证文献隔离、压缩回退、导出文件不作为输入、原文版本失效及空输出问题；test_completion_stream.py 捕获实际消息角色／输入预算。新增迁移后必须重建冻结服务再跑 pytest，schema 当前为 24。最终成绩与迭代失败只记入开发历史。
+
+阅读导航专项：构建后使用 `--yorw-smoke --reader-smoke --reader-navigation-smoke --report-dir=<新绝对目录>`。目录预放至少 10 页自编写 fixture.pdf，英文依据置于页底并包含指向第 9 页的内置目录。输出 reader-navigation-smoke.json 和三宽度截图；验证段落可见、滚走不回跳、再次显式定位、外部点击清除、单页／连续、缩略图、目录和专注阅读／Esc。仅本地关键词检索，不调用模型。

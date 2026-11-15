@@ -2,6 +2,8 @@
 
 更新：2026-11-12。状态：四个阶段均已由 osako review 通过；阶段一已提交，其余改动待用户提交。本文为最终范围与验收约定，过程及计划变更见[历史快照](docs/history/PLAN_v0_4_0.md)和[开发记录](docs/history/v0.4.0.md)。
 
+本文保留 PR #22 对应四阶段的最终范围与 schema 23 时点；后续 feature 分支的新增改动和 schema 24 状态统一见 [PLAN](PLAN.md)，不将后续能力倒写为此前验收成果。
+
 ## 基线与协作方式
 
 - 开发分支：`codex/v0.4.0-reading-document-management`，从 main `c9a6cb2478fb6e49af8e62698430651e0b481d99` 创建；该基线包含 PR #21。

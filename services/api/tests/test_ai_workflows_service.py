@@ -32,7 +32,7 @@ def ai_provider():
                 self.wfile.write(json.dumps({'data': [{'index': i, 'embedding': [1., 0.]} for i in range(len(body['input']))]}).encode())
                 return
             instruction = body['messages'][0]['content']
-            data = json.loads(body['messages'][1]['content'])
+            data = json.loads([m for m in body['messages'] if m['role']=='user'][0]['content'])
             if '筛选器' in instruction:
                 choices = json.loads(data['question'])['candidates']
                 text = json.dumps({'items': [{'id': row['id'], 'sentence': 0} for row in choices]})

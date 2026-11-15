@@ -34,3 +34,12 @@ test('sidebar preference applies to new sessions without changing existing ones'
   expect(store.document(existing).sidebarMode).toBe('notes')
   expect(store.sidebarPreferenceFor(existing)).toEqual({ mode: 'notes', width: 380 })
 })
+
+
+test('PDF navigation and display preferences are isolated by document',()=>{
+ const store=sessionStore()
+ store.updateDocument(a,{pdfDisplayMode:'single',pdfNavigation:'outline'})
+ store.updateDocument(b,{pdfDisplayMode:'continuous',pdfNavigation:null})
+ expect(store.document(a)).toMatchObject({pdfDisplayMode:'single',pdfNavigation:'outline'})
+ expect(store.document(b)).toMatchObject({pdfDisplayMode:'continuous',pdfNavigation:null})
+})

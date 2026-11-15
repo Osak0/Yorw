@@ -14,3 +14,12 @@ test('chat credentials never cross renderer; bounded IDs and version are validat
  await expect(chat.ask({...input,segment_ids:[]})).rejects.toThrow('INVALID_INPUT')
  await expect(chat.ask({...input,segment_ids:Array(9).fill(id)})).rejects.toThrow('INVALID_INPUT')
 })
+
+
+test('chat history is constrained to a document UUID and fixed read route',()=>{
+ const request=vi.fn(async()=>({})),chat=new Chat({request} as unknown as Backend,{} as Providers)
+ const id='12345678-1234-1234-1234-123456789abc'
+ chat.history(id)
+ expect(request).toHaveBeenCalledWith(`/v1/documents/${id}/chat/history`)
+ expect(()=>chat.history('../History.md')).toThrow('INVALID_INPUT')
+})

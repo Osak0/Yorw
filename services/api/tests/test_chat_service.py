@@ -44,12 +44,18 @@ def test_chat_http_sse_restart_note_and_removed_source(frozen,tmp_path):
             assert received[0][0]=='/chat/completions'
             payload=received[0][1]
             assert payload['stream'] and payload['model']=='fixture'
-            assert json.loads(payload['messages'][1]['content'])['evidence'][0]['text']==source['text']
+            assert json.loads([m for m in payload['messages'] if m['role']=='user'][0]['content'])['evidence'][0]['text']==source['text']
             assert 'fixture-key' not in json.dumps(payload)
+            assert [m['role'] for m in payload['messages']] == ['system','system','user']
+            memory=request(f'/v1/documents/{doc}/chat/history')
+            assert 'What does the evidence say?' in memory['markdown']
+            assert memory['token_estimate']<=memory['token_limit'] and memory['export_available']
+            assert (workspace/'chat-history'/doc/'History.md').read_text(encoding='utf-8')==memory['markdown']
             note=request('/v1/chat/'+message['id']+'/note','POST',{})
         with running(frozen,workspace) as (request,_):
             restored=request(f'/v1/documents/{doc}/chat')['items'][0]
             assert restored['status']=='completed' and restored['citations']==[1]
+            assert 'What does the evidence say?' in request(f'/v1/documents/{doc}/chat/history')['markdown']
             notes=request('/v1/notes?document_id='+doc)['items']
             assert notes[0]['id']==note['id'] and notes[0]['sources'][0]['chunk_id']==source['chunk_id']
             version=request('/v1/documents/'+doc)['version']

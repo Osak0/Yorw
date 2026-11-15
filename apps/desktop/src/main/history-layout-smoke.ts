@@ -43,7 +43,7 @@ export async function runHistoryLayoutSmoke(window:BrowserWindow,backend:Backend
   await writeFile(join(report,'search-history-'+width+'.png'),(await window.webContents.capturePage()).toPNG())
  }
  const server=createServer((req,res)=>{let raw='';req.on('data',d=>raw+=d);req.on('end',()=>{
-  const body=JSON.parse(raw),system=body.messages[0].content,data=JSON.parse(body.messages[1].content)
+  const body=JSON.parse(raw),system=body.messages[0].content,data=JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
   let text='Fixture history answer with visual evidence [S1].'
   if(system.includes('筛选器')){const value=JSON.parse(data.question);text=JSON.stringify({items:value.candidates.map((v:{id:string})=>({id:v.id,sentence:0}))})}
   else if(system.includes('改写'))text=JSON.stringify({query:'English evidence'})
@@ -69,8 +69,11 @@ export async function runHistoryLayoutSmoke(window:BrowserWindow,backend:Backend
    await new Promise(r=>setTimeout(r,2200))
    if(document.querySelector('.history-match'))throw Error('PERMANENT_HIGHLIGHT')
    button('展开为标签').click();await wait(()=>document.querySelector('.chat-header-search input'),'HEADER_SEARCH')
-   const search=document.querySelector('.chat-header-search input'),read=[...document.querySelectorAll('.document-tool-actions button')].find(b=>b.textContent==='打开阅读')
+   const search=document.querySelector('.chat-header-search input'),read=[...document.querySelectorAll('.document-tool-actions button')].find(b=>b.textContent==='返回阅读侧栏')
    if(search.getBoundingClientRect().right>read.getBoundingClientRect().left)throw Error('HEADER_ORDER')
+   if(!button('查看 History.md')||button('打开阅读'))throw Error('CHAT_HEADER_ACTIONS')
+   button('查看 History.md').click();await wait(()=>document.querySelector('.chat-memory-content')?.textContent.includes('English evidence'),'MEMORY_VIEW')
+   document.querySelector('.chat-memory-dialog header button:last-child').click()
    if(document.querySelector('.chat-panel').textContent.includes('搜索问答记录'))throw Error('REDUNDANT_SEARCH_LABEL')
    return {headerSearch:true,searchBeforeRead:true,searchAlwaysVisible:true,bodySearch:true,highlightCleared:true}
   })()`)

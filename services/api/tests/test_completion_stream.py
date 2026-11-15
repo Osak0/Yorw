@@ -85,3 +85,26 @@ def test_malformed_stream_is_a_safe_protocol_error(invalid):
     with pytest.raises(ProbeError) as caught:
         list(output)
     assert caught.value.code == 'INVALID_RESPONSE'
+
+
+def test_history_is_an_explicit_system_message_before_plain_user_question():
+    output, payloads = consume([event('Answer [S1]'),event(finish='stop')],history_context='# History.md\nPrevious user focus')
+    assert ''.join(output)=='Answer [S1]'
+    messages=payloads[0]['messages']
+    assert [m['role'] for m in messages]==['system','system','user']
+    assert 'History.md' in messages[1]['content']
+    assert json.loads(messages[2]['content'])['question']=='question'
+
+
+def test_full_chat_input_including_evidence_respects_conservative_budget():
+    captured=[]
+    class Opener:
+        def open(self,request,timeout):
+            captured.append(json.loads(request.data))
+            return BytesIO(b'data: [DONE]\n\n')
+    sources=[{'text':'原文'*2000,'physical_page':i+1} for i in range(8)]
+    with patch('urllib.request.build_opener',return_value=Opener()):
+        list(stream({'model':'fixture','base_url':'https://example.invalid'},'fixture','当前问题'*1000,sources,history_context='历史'*4000))
+    messages=captured[0]['messages']
+    assert len(json.dumps(messages,ensure_ascii=False).encode('utf-8'))+256<=24576
+    assert len(json.loads(messages[-1]['content'])['evidence'])==8

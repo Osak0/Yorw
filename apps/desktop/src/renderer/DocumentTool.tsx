@@ -1,3 +1,4 @@
+import {ChatHistoryButton} from './ChatHistoryButton'
 import React,{useState} from 'react'
 import { EnrichmentPanel } from './EnrichmentPanel'
 import type { DocumentRecord, ReaderTarget, Topic } from '../shared/status'
@@ -26,7 +27,7 @@ export function DocumentTool({ document, tool, onOpenDocument, onCollapse, onEdi
   return <div className="document-tool-view" aria-label={`${label} · ${title}`}>
     <div className="document-tool-header">
       <div className="document-tool-identity"><strong>{title}</strong><span>{label}</span></div>
-      <div className="document-tool-actions">{tool==='chat'&&<div className="chat-header-search" ref={setChatSearchHost}/>}<button onClick={onOpenDocument}>打开阅读</button>{tool !== 'resource' && tool !== 'enrichment' && <button onClick={onCollapse}>返回阅读侧栏</button>}</div>
+      <div className="document-tool-actions">{tool==='chat'&&<div className="chat-header-search" ref={setChatSearchHost}/>}{tool==='chat'&&<ChatHistoryButton documentId={document.id}/>}<button onClick={onCollapse}>返回阅读侧栏</button></div>
     </div>
     <div className={`document-tool-body ${tool}-tool`}>
       {tool === 'enrichment' && <EnrichmentPanel id={document.id} onNavigate={onNavigate} onChanged={()=>{}} />}

@@ -577,7 +577,7 @@ export async function runWorkspaceCitationSmoke(window: BrowserWindow, providers
         res.end(JSON.stringify({ data: body.input.map((_text: string, index: number) => ({ index, embedding: [1, 0] })) }))
         return
       }
-      const system = body.messages[0].content, data = JSON.parse(body.messages[1].content)
+      const system = body.messages[0].content, data = JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
       let text: string
       if (system.includes('筛选器')) {
         const parsed = JSON.parse(data.question)
@@ -794,7 +794,7 @@ export async function runWorkspaceChatSmoke(window: BrowserWindow, providers: Pr
         res.end(JSON.stringify({ data: body.input.map((_text: string, index: number) => ({ index, embedding: [1, 0] })) }))
         return
       }
-      const system = body.messages[0].content, data = JSON.parse(body.messages[1].content)
+      const system = body.messages[0].content, data = JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
       if (system.includes('筛选器') || system.includes('改写')) {
         const text = system.includes('筛选器')
           ? JSON.stringify({ items: JSON.parse(data.question).candidates.map((item: { id: string }) => ({ id: item.id, sentence: 0 })) })

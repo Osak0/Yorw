@@ -1,3 +1,6 @@
+import {runReaderNavigationSmoke} from './reader-navigation-smoke'
+import {runChatMemorySmoke} from './chat-memory-smoke'
+import {runContinuousReadingSmoke} from './continuous-reading-smoke'
 import {runHistoryLayoutSmoke} from './history-layout-smoke'
 import {runDocumentManagementSmoke} from './document-management-smoke'
 import {runMetadataReviewSmoke} from './metadata-review-smoke'
@@ -130,6 +133,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('resources:addTopicDocument', providerAction(input => resources.addTopicDocument(input)))
   ipcMain.handle('resources:removeTopicDocument', providerAction(input => resources.removeTopicDocument(input)))
   const chat = new Chat(backend, providers)
+  ipcMain.handle('chat:history', providerAction(input => chat.history(input)))
   ipcMain.handle('chat:list', providerAction(input => chat.list(input)))
   ipcMain.handle('chat:ask', providerAction(input => chat.ask(input)))
   ipcMain.handle('chat:cancel', providerAction(input => chat.cancel(input)))
@@ -192,10 +196,11 @@ else app.whenReady().then(async () => {
           const next = document.querySelector('[aria-label="下一页"]')
           if (!next.disabled) next.click()
           await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'))
-          const before = document.querySelector('.pdf-page canvas').width
+          const currentPage = () => document.querySelector('[data-page-number="'+document.querySelector('[aria-label="物理页码"]').value+'"]')
+          const before = currentPage().querySelector('canvas').width
           const select = document.querySelector('select[aria-label="缩放"]')
           select.value = '1.5'; select.dispatchEvent(new Event('change', { bubbles: true }))
-          await waitFor(() => document.querySelector('.pdf-page canvas').width !== before && document.querySelector('.reader-feedback')?.textContent.includes('已保存'))
+          await waitFor(() => currentPage()?.querySelector('canvas')?.width > 0 && currentPage().querySelector('canvas').width !== before && document.querySelector('.reader-feedback')?.textContent.includes('已保存'))
           button('返回文献库').click()
           await waitFor(() => button('打开阅读'))
           await new Promise(r => setTimeout(r, 1300))
@@ -203,13 +208,13 @@ else app.whenReady().then(async () => {
           await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'))
           await new Promise(r => setTimeout(r, 1000))
           await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'))
-          const text = document.querySelector('.textLayer').textContent
+          const text = currentPage().querySelector('.textLayer').textContent
           if (text !== 'Yorw fixed English fixture evidence.') throw new Error('TEXT_LAYER_MISMATCH')
-          const canvas = document.querySelector('.pdf-page canvas')
+          const canvas = currentPage().querySelector('canvas')
           const pixels = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data
           let dark = 0; for (let i = 0; i < pixels.length; i += 4) if (pixels[i] < 150 && pixels[i+1] < 150 && pixels[i+2] < 150 && pixels[i+3] > 0) dark++
           if (!dark) throw new Error('EMPTY_CANVAS')
-          return { restoredPage: 2, darkPixels: dark, text: document.querySelector('.textLayer').textContent }
+          return { restoredPage: 2, darkPixels: dark, text: currentPage().querySelector('.textLayer').textContent }
         })()`)
       } else if(!readerSmoke) {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
@@ -250,6 +255,9 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--reader-navigation-smoke'))await writeFile(join(reportDir,'reader-navigation-smoke.json'),JSON.stringify(await runReaderNavigationSmoke(window,backend,reportDir),null,2))
+      if(readerSmoke && process.argv.includes('--chat-memory-smoke'))await writeFile(join(reportDir,'chat-memory-smoke.json'),JSON.stringify(await runChatMemorySmoke(window,backend,providers,reportDir),null,2))
+      if(readerSmoke && process.argv.includes('--continuous-reading-smoke'))await writeFile(join(reportDir,'continuous-reading-smoke.json'),JSON.stringify(await runContinuousReadingSmoke(window,reportDir),null,2))
       if(readerSmoke && process.argv.includes('--metadata-review-smoke')){await writeFile(join(reportDir,'metadata-review-smoke.json'),JSON.stringify(await runMetadataReviewSmoke(window,backend,providers,reportDir),null,2))}
       if(readerSmoke && process.argv.includes('--folders-smoke')) {
         const proof=await runFoldersSmoke(window,backend,reportDir)

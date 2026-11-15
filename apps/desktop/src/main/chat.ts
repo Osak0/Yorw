@@ -5,6 +5,7 @@ const id = (value: unknown): string => { if(typeof value !== 'string' || !/^[0-9
 export class Chat {
   constructor(private backend: Backend, private providers: Providers) {}
   list(value: unknown) { return this.backend.request(`/v1/documents/${id(value)}/chat`) }
+  history(value:unknown) { return this.backend.request(`/v1/documents/${id(value)}/chat/history`) }
   cancel(value: unknown) { return this.backend.request(`/v1/chat/${id(value)}/cancel`,'POST',{}) }
   note(value: unknown) { return this.backend.request(`/v1/chat/${id(value)}/note`,'POST',{}) }
   async ask(input: ChatInput) {

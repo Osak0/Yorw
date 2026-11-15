@@ -8,9 +8,9 @@
 
 ## 当前状态
 
-当前开发分支 `codex/v0.4.0-reading-document-management` 的四个阶段均已由 osako review 通过，包含 PDF 适合宽度修复、文献管理统一入口、七类 AI 元数据建议与逐栏采纳、检索和问答历史界面改进。[PLAN](PLAN.md) 是当前状态与下一步入口，[v0.4.0 计划](PLAN_v0_4_0.md) 记录最终范围，[开发历史](docs/history/v0.4.0.md) 保留整改、测试和验证限制。
+当前分支 `feature/ai-cowork-in-garden` 的已提交基线为 **faa2865（PR #22）**，已包含 v0.4.0 四阶段改动。本轮新增批量元数据采纳、PDF 单页／连续阅读、缩略图／内置目录、专注阅读与一次性依据定位高亮，以及按文献隔离的问答历史总结和追问上下文，等待用户 review；应用／后端仍为 **0.3.0**，当前工作树 schema **24**（新增迁移 024）。
 
-起点为 **c9a6cb2（PR #21）**，阶段一提交为 **978f865**；其余改动待用户提交。应用／后端仍为 **0.3.0**、schema **23**，不代表已发布 v0.4.0。旧候选见 [v0.3.0 工作区记录](docs/history/v0.3.0-workspace.md)；远端 Release 状态本轮未核验。
+[PLAN](PLAN.md) 是当前状态与下一步入口，[v0.4.0 计划](PLAN_v0_4_0.md) 记录此前最终范围，[开发历史](docs/history/v0.4.0.md) 保留整改、测试和验证限制。旧候选见 [v0.3.0 工作区记录](docs/history/v0.3.0-workspace.md)；远端 Release 状态本轮未核验。
 
 PDF、DOCX、Markdown、TXT 基础处理无需外装解析组件；旧 DOC、OCR 和 Word 版式转换的可选配置见[使用指南](docs/user-guide.md#house内置能力与可选解析组件)。自动整理需用户授权和聊天模型，不阻塞阅读；元数据辅助检索默认关闭，仍返回原文依据。真实模型质量和独立干净 Windows 验收后置。内容导出不是完整备份。
 
