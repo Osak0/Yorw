@@ -186,7 +186,10 @@ class EvidenceRetriever:
                 identities) if identities else []
         else:
             topics = self.library.rows('SELECT t.id,t.title,r.id AS revision_id,r.body_md,r.sources_json FROM topics t JOIN revisions r ON r.id=t.current_revision_id WHERE t.deleted_at IS NULL')
+        from .notebooks import notebook_heads,visible_topics
+        live_heads=set(notebook_heads(self.db,[t['id'] for t in visible_topics(self.db)]))
         for row in topics:
+            if row['id'] not in live_heads:continue
             if row['id'] == exclude_topic:
                 continue
             source = {'kind': 'wiki', 'source_object_id': row['id'], 'source_version': row['revision_id'],

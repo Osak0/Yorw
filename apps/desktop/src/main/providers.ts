@@ -140,4 +140,15 @@ export class Providers {
   profileCheck(id:string){return this.backend.request(`/v1/providers/profiles/checks/${this.profileId(id)}`)}
   profileCancel(id:string){return this.backend.request(`/v1/providers/profiles/checks/${this.profileId(id)}/cancel`,'POST',{})}
 
+  async researchCredentials(id?:string){
+    await this.queue.catch(()=>{})
+    const profiles=await this.profileList()
+    const chosen=id??profiles.defaults.research_id
+    if(!chosen)throw new Error('CONFIG_MISSING')
+    this.profileId(chosen)
+    const profile=profiles.items.find((item:ModelProfile)=>item.id===chosen) as ModelProfile|undefined
+    if(!profile)throw new Error('PROFILE_NOT_FOUND')
+    return {profile_id:chosen,config_version:profile.version,key:await this.profileKey(profile)}
+  }
+
 }

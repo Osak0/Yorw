@@ -1,3 +1,6 @@
+import {runNotebooksSmoke,resumeNotebooksSmoke} from './notebooks-smoke'
+import {runResearchSmoke} from './research-smoke'
+import {Research,ResearchMemory} from './research'
 import {runModelProfilesSmoke} from './model-profiles-smoke'
 import {runReaderNavigationSmoke} from './reader-navigation-smoke'
 import {runChatMemorySmoke} from './chat-memory-smoke'
@@ -103,6 +106,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('garden:reject',providerAction(input=>garden.reject(input)))
   ipcMain.handle('garden:restore',providerAction(input=>garden.restore(input)))
   ipcMain.handle('garden:remove',providerAction(input=>garden.remove(input)))
+  for(const name of ['prepareReadingNote','readingHistory','notebookCatalog','overview','noteScope','saveNoteScope','notebook','createNotebook','renameNotebook','removeNotebook','movePreview'] as const)ipcMain.handle('garden:'+name,providerAction(input=>(garden[name] as (value:any)=>Promise<unknown>).call(garden,input)))
   ipcMain.handle('garden:list',providerAction(()=>garden.list()))
   ipcMain.handle('garden:get',providerAction(input=>garden.get(input)))
   ipcMain.handle('garden:create',providerAction(input=>garden.create(input)))
@@ -160,6 +164,22 @@ else app.whenReady().then(async () => {
   ipcMain.handle('tasks:get', providerAction(input => documents.task(input)))
   ipcMain.handle('tasks:cancel', providerAction(input => documents.cancel(input)))
   ipcMain.handle('tasks:retry', providerAction(input => documents.retry(input)))
+  const memory=new ResearchMemory(backend,providers)
+  ipcMain.handle('memory:view',providerAction(key=>memory.view(key)))
+  ipcMain.handle('memory:edit',providerAction(input=>memory.edit(input)))
+  ipcMain.handle('memory:preferences',providerAction(input=>memory.preferences(input)))
+  ipcMain.handle('memory:export',providerAction(key=>memory.export(key)))
+  const memoryTimer=setInterval(()=>void memory.scan(),5000)
+  memoryTimer.unref()
+  app.once('will-quit',()=>clearInterval(memoryTimer))
+  const research=new Research(backend,providers)
+  ipcMain.handle('research:list',providerAction(()=>research.list()))
+  ipcMain.handle('research:get',providerAction(input=>research.get(input)))
+  ipcMain.handle('research:ask',providerAction(input=>research.ask(input)))
+  ipcMain.handle('research:edit',providerAction(input=>research.edit(input)))
+  ipcMain.handle('research:remove',providerAction(input=>research.remove(input)))
+  ipcMain.handle('research:cancel',providerAction(input=>research.cancel(input)))
+  ipcMain.handle('research:events',providerAction(input=>research.events(input)))
   ipcMain.handle('profiles:list', providerAction(() => providers.profileList()))
   ipcMain.handle('profiles:save', providerAction(input => providers.profileSave(input)))
   ipcMain.handle('profiles:defaults', providerAction(input => providers.profileDefaults(input)))
@@ -180,6 +200,21 @@ else app.whenReady().then(async () => {
   if (devUrl) await window.loadURL(devUrl)
   else await window.loadFile(join(__dirname, '../renderer/index.html'))
   await backend.start()
+  if(readerSmoke && process.argv.includes('--notebooks-resume-smoke')){
+    try{await resumeNotebooksSmoke(window,backend,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'notebooks-resume-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
+    return
+  }
+  if(readerSmoke && process.argv.includes('--notebooks-smoke')){
+    try{await runNotebooksSmoke(window,backend,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'notebooks-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));if(!window.isDestroyed())await writeFile(join(smokeReport!,'notebooks-error.png'),(await window.webContents.capturePage()).toPNG());await backend.stop();app.exit(1)}
+    return
+  }
+  if(readerSmoke && process.argv.includes('--research-smoke')){
+    try{await runResearchSmoke(window,backend,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'research-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
+    return
+  }
   if(readerSmoke && process.argv.includes('--model-profiles-smoke')){
     try{await runModelProfilesSmoke(window,providers,smokeReport!);await backend.stop();app.exit(0)}
     catch(error){await writeFile(join(smokeReport!,'model-profiles-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}

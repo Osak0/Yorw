@@ -143,7 +143,7 @@ def test_schema24_upgrade_copies_chat_without_secrets_and_is_repeatable(tmp_path
     db=Database(workspace,migrations)
     with db.write() as conn:conn.execute("INSERT INTO provider_configs(kind,base_url,model,version,updated_at) VALUES('chat','https://api.deepseek.com','existing',7,'time')")
     db.close();upgraded=Database(workspace)
-    assert upgraded.version==25
+    assert upgraded.version==28
     assert upgraded.connection.execute('SELECT model,legacy_version FROM model_profiles').fetchall()==[('existing',7)]
     assert upgraded.connection.execute('SELECT model,version FROM provider_configs').fetchall()==[('existing',7)]
     assert list((workspace.root/'backups').glob('*.sqlite3'))

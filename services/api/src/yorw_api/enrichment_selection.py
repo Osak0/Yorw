@@ -23,7 +23,7 @@ def generate_links(service, identity, result, config, key, check):
     terms=set(query_terms(result['overview']+' '+' '.join(result['tags'])))
     groups={
         'related':service.library.rows('SELECT id,title,original_name,summary_md,version FROM documents WHERE deleted_at IS NULL AND id!=?',(identity,)),
-        'topics':service.library.rows('SELECT id,title,version FROM topics WHERE deleted_at IS NULL')
+        'topics':service.library.rows('SELECT id,title,version FROM topics WHERE deleted_at IS NULL AND notebook_only=0')
     }
     for kind, rows in groups.items():
         ranked=[]

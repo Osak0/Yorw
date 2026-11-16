@@ -10,10 +10,21 @@ function fields(value:TopicFields):TopicFields {
 }
 export class Garden {
  constructor(private backend:Backend){}
- remove(input:{id:string;version:number}){
+ remove(input:{id:string;version:number;notebook_action?:string;destination_topic_id?:string|null}){
   if(!input||!Number.isSafeInteger(input.version)||input.version<1)throw new Error('INVALID_INPUT')
-  return this.backend.request(`/v1/topics/${id(input.id)}`,'DELETE',{version:input.version})
+  return this.backend.request(`/v1/topics/${id(input.id)}`,'DELETE',{version:input.version,...(input.notebook_action?{notebook_action:input.notebook_action}:{}),...(input.destination_topic_id?{destination_topic_id:id(input.destination_topic_id)}:{})})
  }
+ prepareReadingNote(input:{id:string;version:number}){return this.backend.request(`/v1/notes/${id(input.id)}/prepare-optimization`,'POST',{version:input.version})}
+ readingHistory(value:string){return this.backend.request(`/v1/notes/${id(value)}/revisions`)}
+ notebookCatalog(){return this.backend.request('/v1/notebooks')}
+ overview(value:string){return this.backend.request(`/v1/topics/${id(value)}/overview`)}
+ noteScope(value:string){return this.backend.request(`/v1/topics/${id(value)}/note-scope`)}
+ saveNoteScope(input:any){return this.backend.request(`/v1/topics/${id(input.id)}/note-scope`,'PUT',{version:input.version,rules:input.rules})}
+ notebook(value:string){return this.backend.request(`/v1/notebooks/${id(value)}`)}
+ createNotebook(input:any){return this.backend.request(`/v1/topics/${id(input.topic_id)}/notebooks`,'POST',{id:id(input.id),title:input.title})}
+ renameNotebook(input:any){return this.backend.request(`/v1/notebooks/${id(input.id)}`,'PATCH',{title:input.title,version:input.version})}
+ removeNotebook(input:any){return this.backend.request(`/v1/notebooks/${id(input.id)}`,'DELETE',{version:input.version})}
+ movePreview(input:any){return this.backend.request(`/v1/topics/${id(input.id)}/move-preview`,'POST',{parent_id:input.parent_id===null?null:id(input.parent_id)})}
  list(){return this.backend.request('/v1/topics')}
  get(value:unknown){return this.backend.request(`/v1/topics/${id(value)}`)}
  history(value:unknown){return this.backend.request(`/v1/topics/${id(value)}/revisions`)}

@@ -24,13 +24,13 @@ test('one-submit bridge validates IDs and keeps distinct credentials out of rend
  expect(()=>api.savePreferences({semantic_enabled:'yes' as unknown as boolean,version:1})).toThrow('INVALID_INPUT')
 })
 
-test('draft AI panel defaults to topic scope and exposes an explicit workspace switch',()=>{
- expect(aiError('NO_SCOPED_MATERIALS')).toContain('全工作区')
+test('draft AI panel uses the unified saved notebook scope',()=>{
+ expect(aiError('NO_SCOPED_MATERIALS')).toContain('笔记范围')
  const html=renderToStaticMarkup(<SuggestionsPanel topicId={id} baseRevisionId={id} dirty={false} onReview={()=>{}}/>)
- expect(html).toContain('AI 材料范围')
- expect(html).toContain('当前专题及子专题')
- expect(html).toContain('全工作区')
- expect(html).toContain('本专题及子专题关联的文献、笔记和子专题 Wiki')
+ expect(html).toContain('笔记范围')
+ expect(html).toContain('与概览展示同步')
+ expect(html).not.toContain('全工作区')
+ expect(html).toContain('不代替论文证据')
 })
 
 test('search and chat expose a single primary submission without index, threshold or consent controls',()=>{

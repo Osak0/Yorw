@@ -11,6 +11,12 @@ import json
 
 
 def resolve_evidence(database, ref):
+    # Availability must not observe another thread's intermediate transaction.
+    with database.lock:
+        return _resolve_evidence(database, ref)
+
+
+def _resolve_evidence(database, ref):
     """Return normalized evidence, or None when it is stale or invalid."""
     if not isinstance(ref, dict):
         return None
@@ -125,12 +131,22 @@ def source_status(database, sources):
         elif kind == 'note':
             row = conn.execute('SELECT n.version,d.deleted_at FROM notes n JOIN documents d ON d.id=n.document_id WHERE n.id=?', (identity,)).fetchone()
             valid = bool(row and row[1] is None and str(row[0]) == version)
+            if source.get('notebook_snapshot') is True:
+                snapshot=conn.execute('SELECT body_md FROM reading_note_revisions WHERE note_id=? AND version=?',(identity,version)).fetchone()
+                valid=bool(row and row[1] is None and snapshot and isinstance(source.get('excerpt'),str) and source['excerpt'] in snapshot[0])
         elif kind == 'message':
             row = conn.execute('SELECT m.body_md,m.sources_json,m.status,d.deleted_at FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN documents d ON d.id=c.document_id WHERE m.id=?', (identity,)).fetchone()
             valid = bool(row and row[2] == 'completed' and row[3] is None and sha256((row[0]+'\n'+row[1]).encode()).hexdigest() == version)
         elif kind == 'wiki':
+            from .notebooks import notebook_heads,visible_topics
+            if identity not in notebook_heads(database,[t['id'] for t in visible_topics(database)]):
+                source['available']=False
+                continue
             row = conn.execute('SELECT current_revision_id FROM topics WHERE id=? AND deleted_at IS NULL', (identity,)).fetchone()
             valid = bool(row and row[0] == version)
+            if source.get('notebook_snapshot') is True:
+                snapshot=conn.execute('SELECT body_md FROM revisions WHERE id=? AND topic_id=?',(version,identity)).fetchone()
+                valid=bool(row and snapshot and isinstance(source.get('excerpt'),str) and source['excerpt'] in snapshot[0])
         for ref in evidence:
             if not isinstance(ref, dict):
                 valid = False

@@ -25,6 +25,8 @@ class UpdateTopic(TopicFields):
 class RemoveTopic(BaseModel):
     model_config = ConfigDict(extra='forbid')
     version: int = Field(ge=1, strict=True)
+    notebook_action: str | None = None
+    destination_topic_id: UUID | None = None
 
 
 class SaveBody(BaseModel):
@@ -43,10 +45,12 @@ class Garden:
         return [dict(zip(columns,row)) for row in cursor.fetchall()]
 
     def _topic(self, identity):
-        rows = self._rows('SELECT id,parent_id,title,current_revision_id,version,created_at,updated_at FROM topics WHERE id=? AND deleted_at IS NULL',(identity,))
+        rows = self._rows('SELECT id,parent_id,title,current_revision_id,version,created_at,updated_at,notebook_only FROM topics WHERE id=? AND deleted_at IS NULL',(identity,))
         if not rows:
             raise HTTPException(404,detail='TOPIC_NOT_FOUND')
-        return rows[0]
+        value=rows[0]
+        if not value.get('notebook_only'):value.pop('notebook_only',None)
+        return value
 
     def _revision(self, identity, topic_id):
         rows = self._rows('SELECT * FROM revisions WHERE id=? AND topic_id=?',(identity,topic_id))
@@ -63,11 +67,13 @@ class Garden:
             if parent_id in seen:
                 raise HTTPException(409,detail='TOPIC_CYCLE')
             seen.add(parent_id)
-            parent_id = self._topic(parent_id)['parent_id']
+            parent=self._topic(parent_id)
+            if parent.get('notebook_only'):raise HTTPException(404,detail='TOPIC_NOT_FOUND')
+            parent_id = parent['parent_id']
 
     def list(self):
         with self.db.lock:
-            return {'items':self._rows('SELECT id,parent_id,title,current_revision_id,version,created_at,updated_at FROM topics WHERE deleted_at IS NULL ORDER BY created_at,id')}
+            return {'items':self._rows('SELECT id,parent_id,title,current_revision_id,version,created_at,updated_at FROM topics WHERE deleted_at IS NULL AND notebook_only=0 ORDER BY created_at,id')}
 
     def get(self, identity):
         with self.db.lock:
@@ -90,6 +96,7 @@ class Garden:
             conn.execute('INSERT INTO topics(id,parent_id,title,created_at,updated_at) VALUES(?,?,?,?,?)',(identity,parent_id,value.title,timestamp,timestamp))
             conn.execute("INSERT INTO revisions(id,topic_id,ordinal,body_md,origin,created_at) VALUES(?,?,1,'','manual',?)",(revision_id,identity,timestamp))
             conn.execute('UPDATE topics SET current_revision_id=? WHERE id=?',(revision_id,identity))
+            if self.db.version>=28:conn.execute('INSERT INTO topic_note_scope VALUES(?,?,1)',(identity,identity))
             return self.get(identity)
 
     def update(self, identity, value: UpdateTopic):
@@ -110,13 +117,29 @@ class Garden:
             topic = self._topic(identity)
             if topic['version'] != value.version:
                 raise HTTPException(409, detail='TOPIC_CONFLICT')
+            owned=self._rows('SELECT id FROM topic_notebooks WHERE topic_id=? AND deleted_at IS NULL',(identity,))
+            if owned and value.notebook_action not in ('move','delete'):raise HTTPException(409,detail='NOTE_DISPOSITION_REQUIRED')
+            stamp=datetime.now(timezone.utc).isoformat()
+            if owned and value.notebook_action=='move':
+                target=str(value.destination_topic_id) if value.destination_topic_id else None
+                if not target or target==identity or self._topic(target).get('notebook_only'):raise HTTPException(422,detail='INVALID_INPUT')
+                conn.execute('UPDATE topic_notebooks SET topic_id=?,updated_at=? WHERE topic_id=? AND deleted_at IS NULL',(target,stamp,identity))
+                for note in owned:conn.execute('UPDATE topics SET notebook_only=1,version=version+1,updated_at=? WHERE id=?',(stamp,note['id']))
+            elif owned:
+                for note in owned:
+                    conn.execute('UPDATE topic_notebooks SET deleted_at=?,updated_at=? WHERE id=?',(stamp,stamp,note['id']))
+                    if note['id']!=identity:conn.execute('UPDATE topics SET deleted_at=?,version=version+1,updated_at=? WHERE id=?',(stamp,stamp,note['id']))
             timestamp = datetime.now(timezone.utc).isoformat()
             conn.execute('UPDATE topics SET parent_id=?,version=version+1,updated_at=? '
                          'WHERE parent_id=? AND deleted_at IS NULL',
                          (topic['parent_id'], timestamp, identity))
             conn.execute('UPDATE topics SET deleted_at=?,version=version+1,updated_at=? WHERE id=?',
                          (timestamp, timestamp, identity))
+            if owned and value.notebook_action=='move' and any(n['id']==identity for n in owned):
+                conn.execute('UPDATE topics SET deleted_at=NULL,notebook_only=1 WHERE id=?',(identity,))
             conn.execute('DELETE FROM document_topics WHERE topic_id=?', (identity,))
+            from .notebooks import invalidate
+            invalidate(self.db)
             conn.execute("DELETE FROM knowledge_sources WHERE kind='wiki' AND object_id=?", (identity,))
             return {'removed': True, 'items': self.list()['items']}
 

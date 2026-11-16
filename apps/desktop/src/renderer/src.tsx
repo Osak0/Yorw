@@ -1,3 +1,6 @@
+import {scopeDrafts,dirtyScope,dirtyScopeIds} from './note-scope-state'
+import {ResearchAssistant} from './ResearchAssistant'
+import {RESEARCH_TAB_ID} from './research-launch'
 import {SourceNavigationContext} from './source-navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -48,8 +51,8 @@ function App() {
   const storageDocumentId = storageTab?.id ?? null
   const storageTool: 'document' | StorageTool | null = storageTab ? storageTab.kind as 'document' | StorageTool : null
   const gardenTab = gardenKey ? tabs.find(tab => tab.key === gardenKey && !isStorageTab(tab) && tab.kind !== 'settings') : undefined
-  const gardenTopicId = gardenTab && gardenTab.kind !== 'topic-create' ? gardenTab.id : null
-  const gardenPage: GardenPage | null = gardenTab ? gardenTab.kind as GardenPage : null
+  const gardenTopicId = gardenTab && gardenTab.kind !== 'assistant' && gardenTab.kind !== 'topic-create' ? gardenTab.id : null
+  const gardenPage: GardenPage | null = gardenTab && gardenTab.kind!=='assistant' ? gardenTab.kind as GardenPage : null
   useEffect(() => {
     let active = true
     const update = () => window.yorw.getStatus().then(value => { if (active) setStatus(value) }).catch(() => { if (active) setStatus({ state: 'failed', message: '无法连接桌面服务，请重新打开知栖' }) })
@@ -60,7 +63,7 @@ function App() {
   useEffect(() => { if (status.state === 'ready') setStarted(true) }, [status.state])
   useEffect(() => {
     const protect = (event: BeforeUnloadEvent) => {
-      if (hasAnyMetadataDraft() || hasUnsavedNotes() || hasUnsavedGarden() || [...houseForms.values()].some(form=>form.dirty)) {
+      if (dirtyScopeIds().length>0 || hasAnyMetadataDraft() || hasUnsavedNotes() || hasUnsavedGarden() || [...houseForms.values()].some(form=>form.dirty)) {
         event.preventDefault()
         // Electron explicitly accepts false; DOM typings model browser message strings.
         ;(event as unknown as { returnValue: boolean }).returnValue = false
@@ -72,7 +75,7 @@ function App() {
   useEffect(() => {
     const update = () => {
       const documents = new Set(unsavedDocumentIds())
-      const topics = new Set(unsavedTopicIds())
+      const topics = new Set([...unsavedTopicIds(),...dirtyScopeIds()])
       const reviews = new Set(unsavedReviewTopicIds())
       const create = gardenBook().createDirty()
       const manage = new Set(gardenBook().manageDirtyIds())
@@ -101,7 +104,9 @@ function App() {
           return
         }
         const documentTitles = new Map(documents.ok ? documents.value.items.map(item => [item.id, item.title || item.original_name] as const) : [])
+        const catalog=await window.yorw.garden.notebookCatalog()
         const topicTitles = new Map(topics.ok ? topics.value.items.map(item => [item.id, item.title] as const) : [])
+        if(catalog.ok)for(const note of catalog.value.items)topicTitles.set(note.id,note.title)
         const { tabs: restoredTabs, skipped } = restoreTabs(layout.tabs, documentTitles, topicTitles)
         if (skipped) setLayoutNotice(`有 ${skipped} 个已打开页面已不存在，已跳过。`)
         const normalizeKey = (key: string | null) => key?.replace(/^resource:/, 'metadata:') ?? null
@@ -195,6 +200,8 @@ function App() {
     if (isStorageTab(tab)) setStorageKey(tab.key)
     else if(tab.kind!=='settings') setGardenKey(tab.key)
   }
+  useEffect(()=>{const open=()=>openTab({kind:'assistant',id:RESEARCH_TAB_ID,title:'研究助理',key:`assistant:${RESEARCH_TAB_ID}`});window.addEventListener('research-open',open);return()=>window.removeEventListener('research-open',open)},[])
+  useEffect(()=>{const reading=(event:Event)=>{const value=(event as CustomEvent).detail;void window.yorw.documents.list().then(async r=>{const doc=r.ok?r.value.items.find(d=>d.id===value.document_id):undefined;if(doc){await notebookFor(doc.id).importSaved(value.note_id);expandTool(doc,'notes')}})};const optimize=(event:Event)=>{const value=(event as CustomEvent).detail;void window.yorw.garden.prepareReadingNote(value).then(r=>{if(r.ok)expandGardenTool(r.value.topic,'ai');else setLayoutNotice('笔记优化准备失败，请先保存并检查笔记版本。')})};const removed=(event:Event)=>{const note=(event as CustomEvent).detail;setTabs(t=>t.filter(tab=>!(tab.id===note.id&&['topic-note','ai','history'].includes(tab.kind))));void window.yorw.garden.get(note.topic_id).then(r=>{if(r.ok)openTab(topicTab(r.value.topic.id,r.value.topic.title))})};const manage=(event:Event)=>openManage((event as CustomEvent).detail);window.addEventListener('reading-note-ai-open',optimize);window.addEventListener('reading-note-open',reading);window.addEventListener('topic-manage-open',manage);window.addEventListener('notebook-deleted',removed);return()=>{window.removeEventListener('reading-note-ai-open',optimize);window.removeEventListener('reading-note-open',reading);window.removeEventListener('topic-manage-open',manage);window.removeEventListener('notebook-deleted',removed)}},[])
   function activateTab(tab: WorkspaceTab) {
     setActiveKey(tab.key)
     setModule(moduleForTab(tab))
@@ -210,10 +217,11 @@ function App() {
   }
   function showLibrary() { setStorageKey(null); setActiveKey(null) }
   function tabIsUnsaved(tab: WorkspaceTab) {
+    if(tab.kind==='note-scope')return dirtyScope(tab.id)
     if (tab.kind === 'settings') return houseForms.get(tab.id)?.dirty ?? false
     if (tab.kind === 'topic-create') return gardenBook().createDirty()
     if (tab.kind === 'topic-manage') return gardenBook().manageDirty(tab.id)
-    if (tab.kind === 'topic') return gardenBook().hasUnsavedTopic(tab.id)
+    if (tab.kind === 'topic'||tab.kind==='topic-note') return gardenBook().hasUnsavedTopic(tab.id)
     if (tab.kind === 'ai') return gardenBook().hasUnsavedReview(tab.id)
     if (tab.kind === 'metadata') return hasMetadataDraft(tab.id)
     if (tab.kind === 'history') return false
@@ -231,6 +239,7 @@ function App() {
     resolve?.(choice)
   }
   async function saveTab(tab: WorkspaceTab): Promise<boolean> {
+    if(tab.kind==='note-scope')return (await scopeDrafts.get(tab.id)?.save?.())??!dirtyScope(tab.id)
     if (tab.kind === 'metadata') return saveMetadataDraft(tab.id)
     if(tab.kind==='settings')return await houseForms.get(tab.id)?.save() ?? true
     if (tab.kind === 'topic-create') {
@@ -251,7 +260,7 @@ function App() {
       await notebook.saveAll()
       return !notebook.hasUnsaved()
     }
-    if (tab.kind === 'topic') {
+    if (tab.kind === 'topic'||tab.kind==='topic-note') {
       const book = gardenBook()
       await book.save(tab.id)
       const draft = book.getSnapshot().drafts[tab.id]
@@ -260,11 +269,12 @@ function App() {
     return true
   }
   function discardTab(tab: WorkspaceTab) {
+    if(tab.kind==='note-scope')scopeDrafts.delete(tab.id)
     if (tab.kind === 'metadata') clearMetadataDraft(tab.id)
     if (tab.kind === 'topic-create') gardenBook().discardCreate()
     else if (tab.kind === 'topic-manage') gardenBook().discardManage(tab.id)
     if (tab.kind === 'document' || tab.kind === 'notes') notebookFor(tab.id).discardAll()
-    else if (tab.kind === 'topic') gardenBook().discardTopic(tab.id)
+    else if (tab.kind === 'topic'||tab.kind==='topic-note') gardenBook().discardTopic(tab.id)
     else if (tab.kind === 'ai') gardenBook().discardReview(tab.id)
   }
   function expandTool(document: DocumentRecord, tool: StorageTool) {
@@ -305,11 +315,16 @@ function App() {
     setModule('Garden')
   }
   function collapseGardenTool(topic: Topic, tool: GardenTool) {
-    const topicKey = `topic:${topic.id}`
-    setTabs(previous => addWorkspaceTab(previous.filter(tab => tab.key !== `${tool}:${topic.id}`), topicTab(topic.id, topic.title)))
-    setActiveKey(topicKey)
-    setGardenKey(topicKey)
-    setModule('Garden')
+    void window.yorw.garden.notebook(topic.id).then(result=>{
+      if(result.ok&&result.value.kind==='document'&&result.value.document_id){
+        setTabs(t=>t.filter(tab=>tab.key!==`${tool}:${topic.id}`))
+        window.dispatchEvent(new CustomEvent('reading-note-open',{detail:{document_id:result.value.document_id,note_id:result.value.reading_note_id}}));return
+      }
+      const targetKind=(tool==='ai'||tool==='history')?'topic-note':'topic'
+      const key=`${targetKind}:${topic.id}`
+      setTabs(previous=>addWorkspaceTab(previous.filter(tab=>tab.key!==`${tool}:${topic.id}`),{key,kind:targetKind,id:topic.id,title:topic.title}))
+      setActiveKey(key);setGardenKey(key);setModule('Garden')
+    })
   }
   function openCreate(parentId: string | null = null) {
     gardenBook().startCreate(parentId)
@@ -444,7 +459,7 @@ function App() {
       {tabs.length ? <div className="workspace-tablist" role="tablist" aria-label="工作标签">{tabs.map(tab => <div className={`workspace-tab-item${activeKey === tab.key ? ' active' : ''}`} role="presentation" key={tab.key}>
         <button type="button" role="tab" id={`tab-${tab.key}`} data-tab-key={tab.key} aria-selected={activeKey === tab.key} aria-controls={tab.kind==='settings' ? 'house-panel' : isStorageTab(tab) ? 'storage-panel' : 'garden-panel'} tabIndex={tab.key === tabStopKey ? 0 : -1} className="workspace-tab" title={`${tabKindLabel(tab)} · ${tab.title}`} ref={element => { if (element) tabRefs.current.set(tab.key, element); else tabRefs.current.delete(tab.key) }} onClick={() => activateTab(tab)} onKeyDown={event => onTabKeyDown(event, tab)}>
           <span className="workspace-tab-title">{tab.title}</span><span className="workspace-tab-kind">{tabKindLabel(tab)}</span>
-          {(tab.kind === 'metadata' ? hasMetadataDraft(tab.id) : (tab.kind === 'document' || tab.kind === 'notes') ? unsaved.documents.has(tab.id) : tab.kind === 'topic' ? unsaved.topics.has(tab.id) : tab.kind === 'topic-create' ? unsaved.create : tab.kind === 'topic-manage' ? unsaved.manage.has(tab.id) : tab.kind === 'ai' ? unsaved.reviews.has(tab.id) : false) && <span className="workspace-tab-dirty" aria-label="有未保存内容" title="有未保存内容">●</span>}
+          {(tab.kind === 'metadata' ? hasMetadataDraft(tab.id) : (tab.kind === 'document' || tab.kind === 'notes') ? unsaved.documents.has(tab.id) : (tab.kind === 'topic'||tab.kind==='topic-note'||tab.kind==='note-scope') ? unsaved.topics.has(tab.id) : tab.kind === 'topic-create' ? unsaved.create : tab.kind === 'topic-manage' ? unsaved.manage.has(tab.id) : tab.kind === 'ai' ? unsaved.reviews.has(tab.id) : false) && <span className="workspace-tab-dirty" aria-label="有未保存内容" title="有未保存内容">●</span>}
         </button>
         <button type="button" className="workspace-tab-close" aria-label={`关闭${tabKindLabel(tab)} ${tab.title}`} title={`关闭${tabKindLabel(tab)}`} onClick={event => { event.stopPropagation(); void closeTab(tab) }}>×</button>
       </div>)}</div> : null}
@@ -454,7 +469,7 @@ function App() {
     {status.state !== 'ready' && <p role="status" className={`app-status ${status.state}`}>{status.message}</p>}
     {(status.state === 'ready' || started) && (layoutReady ? <main className="app-main">
       <div className="module-view" id="storage-panel" role={module === 'Storage' && activeTab && isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Storage' && activeTab && isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Storage'}><Storage activeDocumentId={storageDocumentId} activeTool={storageTool} storageDirectoryCollapsed={storageDirectoryCollapsed} onToggleStorageDirectory={() => setStorageDirectoryCollapsed(value => !value)} onOpenDocument={document => openTab(documentTab(document.id, document.title || document.original_name))} onOpenTool={(tool, document) => expandTool(document, tool)} onCollapseTool={(tool, document) => collapseTool(document, tool)} onCloseMetadata={closeMetadataTab} onNavigate={(document, target) => openDocumentAt(document, target)} onShowNotes={document => expandTool(document, 'notes')} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} pendingJump={pendingJump} onJumpApplied={clearJump} onShowLibrary={showLibrary} onTitles={updateDocumentTitles} /></div>
-      <div className="module-view" id="garden-panel" role={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Garden'}><Garden onDeleted={topicDeleted} activeTopicId={gardenTopicId} activePage={gardenPage} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} onOpenTool={(tool, topic) => expandGardenTool(topic, tool)} onCollapseTool={(tool, topic) => collapseGardenTool(topic, tool)} onOpenCreate={parentId => openCreate(parentId)} onCloseCreate={closeCreateTab} onCreateComplete={createComplete} onOpenManage={openManage} onCloseManage={closeManage} directoryCollapsed={directoryCollapsed} onToggleDirectory={() => setDirectoryCollapsed(value => !value)} view={gardenView} onViewChange={setGardenView} expanded={gardenExpanded} onExpandedChange={setGardenExpanded} onTitles={updateTopicTitles} /></div>
+      <div className="module-view" id="garden-panel" role={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? 'tabpanel' : undefined} aria-labelledby={module === 'Garden' && activeTab && !isStorageTab(activeTab) ? `tab-${activeTab.key}` : undefined} hidden={module !== 'Garden'}><div className="garden-content-host" hidden={activeTab?.kind==='assistant'}><Garden onDeleted={topicDeleted} activeTopicId={gardenTopicId} activePage={gardenPage} onOpenTopic={topic => openTab(topicTab(topic.id, topic.title))} onOpenTool={(tool, topic) => expandGardenTool(topic, tool)} onCollapseTool={(tool, topic) => collapseGardenTool(topic, tool)} onOpenCreate={parentId => openCreate(parentId)} onCloseCreate={closeCreateTab} onCreateComplete={createComplete} onOpenManage={openManage} onCloseManage={closeManage} directoryCollapsed={directoryCollapsed} onToggleDirectory={() => setDirectoryCollapsed(value => !value)} view={gardenView} onViewChange={setGardenView} expanded={gardenExpanded} onExpandedChange={setGardenExpanded} onTitles={updateTopicTitles} /></div>{tabs.some(tab=>tab.kind==='assistant')&&<div className="research-host" hidden={activeTab?.kind!=='assistant'}><ResearchAssistant onOpenTopic={id=>{void window.yorw.garden.get(id).then(r=>{if(r.ok)openTab(gardenToolTab('topic-note',r.value.topic.id,r.value.topic.title))})}} onOpenNote={id=>{void window.yorw.documents.list().then(r=>{const d=r.ok?r.value.items.find(d=>d.id===id):null;if(d)expandTool(d,'notes')})}}/></div>}</div>
       <div className="module-view house-view" id="house-panel" role={module==='House'&&activeTab?.kind==='settings'?'tabpanel':undefined} aria-labelledby={module==='House'&&activeTab?.kind==='settings'?`tab-${activeTab.key}`:undefined} hidden={module !== 'House'}><div hidden={activeTab?.kind==='settings'}><House onOpen={id=>openTab({kind:'settings',id,title:houseTitles[id],key:`settings:${id}`})}/></div>{tabs.filter(tab=>tab.kind==='settings').map(tab=><div key={tab.key} hidden={activeKey!==tab.key}><House page={tab.id} active={module==='House'&&activeKey===tab.key}/></div>)}</div>
     </main> : <p className="app-status" role="status">正在恢复工作标签…</p>)}
     {closePrompt && <div className="close-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) answerClose('cancel') }}>

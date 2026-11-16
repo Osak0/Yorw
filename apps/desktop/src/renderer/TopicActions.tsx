@@ -14,6 +14,8 @@ type Props={children:React.ReactNode;onOpen(topic:Topic):void;onManage(topic:Top
 export function TopicActions({children,onOpen,onManage,onHistory,onCreate,onDeleted}:Props){
  const [menu,setMenu]=useState<{topic:Topic;x:number;y:number}|null>(null)
  const [target,setTarget]=useState<Topic|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('')
+ const [owned,setOwned]=useState<{id:string;title:string}[]>([]),[destinations,setDestinations]=useState<Topic[]>([]),[disposition,setDisposition]=useState(''),[destination,setDestination]=useState(''),[impactLoading,setImpactLoading]=useState(false)
+ useEffect(()=>{if(!target)return;let active=true;setOwned([]);setDisposition('');setDestination('');setImpactLoading(true);void Promise.all([window.yorw.garden.overview(target.id),window.yorw.garden.list()]).then(([r,all])=>{if(!active)return;if(r.ok){setOwned(r.value.owned_notes);setTarget(r.value.topic)}else setError('无法核对删除影响，请重新打开。');if(all.ok)setDestinations(all.value.items.filter(t=>t.id!==target.id))}).finally(()=>{if(active)setImpactLoading(false)});return()=>{active=false}},[target?.id])
  const ref=useRef<HTMLDivElement>(null),trigger=useRef<HTMLElement|null>(null),dialog=useRef<HTMLDialogElement>(null)
  function dismiss(){setMenu(null);if(trigger.current?.isConnected)trigger.current.focus()}
  const show:OpenMenu=(event,topic)=>{event.preventDefault();event.stopPropagation();trigger.current=event.currentTarget as HTMLElement;const rect=trigger.current.getBoundingClientRect();setMenu({topic,x:'clientX' in event?event.clientX:rect.left+16,y:'clientY' in event?event.clientY:rect.bottom})}
@@ -33,7 +35,7 @@ export function TopicActions({children,onOpen,onManage,onHistory,onCreate,onDele
  async function remove(){
   if(!target||busy)return
   setBusy(true);setError('')
-  try{await gardenBook().remove(target);onDeleted(target.id);setTarget(null)}catch(e){setError(e instanceof Error?e.message:'删除失败，请重试。')}finally{setBusy(false)}
+  try{await gardenBook().remove(target,owned.length?{notebook_action:disposition,destination_topic_id:destination||null}:undefined);onDeleted(target.id);setTarget(null)}catch(e){setError(e instanceof Error?e.message:'删除失败，请重试。')}finally{setBusy(false)}
  }
  function item(label:string,action:()=>void,danger=false){return <button role="menuitem" className={danger?'danger':''} onClick={()=>{dismiss();action()}}>{label}</button>}
  return <TopicMenuContext.Provider value={show}>{children}
@@ -49,8 +51,9 @@ export function TopicActions({children,onOpen,onManage,onHistory,onCreate,onDele
    <h3 id="topic-delete-title">删除专题“{target.title}”？</h3>
    <p>仅删除此专题。直接子专题移至其父级（根专题的子专题移至根目录）；关联文献保留，当前专题关联解除。历史修订保留，但此专题不再作为可用来源。</p>
    <p>此操作没有界面撤销入口。未保存编辑须先保存，或关闭相应标签并放弃编辑。</p>
+   {!!owned.length&&<section><p>此专题拥有 {owned.length} 份笔记：{owned.map(n=>n.title).join('、')}。必须选择处理方式；共享显示的其他笔记与文献笔记保留。</p><label><input type="radio" name="notebook-disposition" checked={disposition==='move'} onChange={()=>setDisposition('move')}/>迁移到其他专题</label>{disposition==='move'&&<select aria-label="迁移笔记到专题" value={destination} onChange={e=>setDestination(e.target.value)}><option value="">选择目标专题</option>{destinations.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select>}<label><input type="radio" name="notebook-disposition" checked={disposition==='delete'} onChange={()=>setDisposition('delete')}/>明确删除所属笔记（历史修订保留）</label></section>}
    {error&&<p role="alert">{error}</p>}
-   <div className="directory-edit-actions"><button disabled={busy} onClick={cancel}>取消</button><button className="danger" disabled={busy} onClick={()=>void remove()}>{busy?'正在删除…':'确认删除专题'}</button></div>
+   <div className="directory-edit-actions"><button disabled={busy} onClick={cancel}>取消</button><button className="danger" disabled={busy||impactLoading||!!error||!!owned.length&&(!disposition||disposition==='move'&&!destination)} onClick={()=>void remove()}>{busy?'正在删除…':'确认删除专题'}</button></div>
   </dialog>,document.body)}
  </TopicMenuContext.Provider>
 }

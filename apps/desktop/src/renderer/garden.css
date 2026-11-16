@@ -91,3 +91,14 @@
 
 @media(max-width:900px){.garden-workspace{flex-direction:column}.garden-directory{width:100%;height:auto;max-height:28vh}.garden-content{width:100%;flex:1;min-height:0}.garden-home-header{align-items:flex-start;flex-direction:column;gap:6px}.garden-home-toolbar .garden-search{max-width:none;width:100%;margin-left:0}.topic-form-view{margin-top:8px;padding:18px}}
 .topic-delete-dialog p{font-size:13px;line-height:1.65;color:#526174}.topic-delete-dialog .danger{border-color:#ddabb0;color:#ae3340;background:#fff4f4}.topic-delete-dialog [role=alert]{color:#ae3340}
+
+.topic-overview{width:min(1120px,100%);margin:0 auto;padding:20px;overflow:auto;height:100%;min-width:0}
+.topic-overview header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.topic-overview header h2,.topic-overview header h3{flex:1;margin:12px 0}
+.topic-overview section{padding:12px 0 22px;border-top:1px solid #d7dfed}.topic-overview-list{list-style:none;padding:0}.topic-overview-list li{padding:12px 4px;border-bottom:1px solid #e5eaf2;overflow-wrap:anywhere}.topic-overview-list p{color:#56677e;white-space:pre-line;margin:8px 0}.topic-overview-list small{display:block;color:#60718a}.topic-overview-link{font-weight:600}.topic-overview form{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.topic-overview form input{margin-left:10px}
+.note-scope-tree,.note-scope-tree ul{list-style:none;padding:0}.note-scope-tree li>div{display:flex;align-items:center;gap:8px;padding-top:6px;padding-bottom:6px}.note-scope-tree input{width:18px;height:18px}.notebook-detail-owner{padding:8px 20px;border-bottom:1px solid #dde4ee}
+
+.topic-overview-list li{display:grid;grid-template-columns:minmax(140px,.4fr) minmax(0,1fr);gap:4px 16px;padding:10px 4px;align-items:start}
+.topic-overview-list .topic-overview-link{background:transparent;border:0;padding:0;text-align:left;min-height:0;line-height:1.6}
+.topic-overview-list p{margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.topic-overview-list small{grid-column:1/-1;font-size:12px}
+
+.garden-content>button{align-self:flex-start;margin-left:20px}

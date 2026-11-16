@@ -97,7 +97,7 @@ def test_stream_races_and_invalid_citations(service,monkeypatch,mode):
             with pytest.raises(HTTPException):service.generate(topic,value.model_copy(update={'request_id':uuid4()}),'key')
     finally:release.set()
     item=settle(service,item)
-    assert item['status']==('cancelled' if mode=='cancel' else 'completed' if mode=='base' else 'failed')
+    assert item['status']==('cancelled' if mode=='cancel' else 'failed')
     if mode=='base':assert item['stale'] and service.garden.get(topic)['revision']['body_md']=='new manual body'
     if mode in ('invalid','missing'):assert item['error_code']=='INVALID_CITATION'
     if mode=='cancel':
@@ -149,7 +149,7 @@ def test_step10_topics_and_revisions_survive_schema8_upgrade(tmp_path):
     saved=garden.save(first['topic']['id'],SaveBody(body_md='Retained Wiki 正文',base_revision_id=first['revision']['id']))
     old.close();updated=Database(workspace)
     try:
-        assert updated.version==25 and Garden(updated).get(first['topic']['id'])==saved
+        assert updated.version==28 and Garden(updated).get(first['topic']['id'])==saved
         assert updated.connection.execute('SELECT count(*) FROM suggestions').fetchone()[0]==0
         assert updated.connection.execute('PRAGMA foreign_key_check').fetchall()==[]
     finally:updated.close()

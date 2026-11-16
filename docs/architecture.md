@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-本文描述当前 feature/ai-cowork-in-garden 工作树；应用／后端仍为 0.3.0、schema 25。v0.4.0 四阶段及后续阅读／问答增量均已 review 通过，继续在该分支开发。提交及验证状态见 [PLAN](../PLAN.md)，最终范围见 [计划](history/PLAN_v0_4_0.md#四阶段最终范围归档2026-11-15-合并)，命令见 [开发指南](development.md)，合同演进及旧测试见 [开发历史](history/v0.4.0.md)。
+本文描述当前 feature/ai-cowork-in-garden 工作树；应用／后端仍为 0.3.0、schema 28。此前四阶段及后续阅读／问答增量已 review 通过；当前研究助理计划实施至阶段四；review 与后续授权统一见 PLAN，继续在该分支开发。提交及验证状态见 [PLAN](../PLAN.md)，最终范围见 [计划](history/PLAN_v0_4_0.md#四阶段最终范围归档2026-11-15-合并)，命令见 [开发指南](development.md)，合同演进及旧测试见 [开发历史](history/v0.4.0.md)。
 
 ## 模块与通信
 
@@ -48,7 +48,7 @@ AI 优化的材料范围默认是当前专题及子专题，显式切换到全�
 - `documents` 保存格式、媒体类型、活动抽取版本、解析版本/状态、解析器与配置指纹；`document_blocks` 保存按版本和顺序排列的内容块、类型、章节路径、物理页（仅 PDF/OCR 有真实页）和定位。旧 `chunks` 继续作为 PDF 兼容索引，内容块 ID 与对应 chunk ID 一致；旧引用快照不重写，来源可用性按活动版本动态计算。
 - 解析版本与活动版本分离：尝试解析递增 `parse_version`；成功才切换 `extraction_version` 并删除/失效派生索引；失败保留上一活动版本和其内容块，记录 `parse_status/parse_warning`。重新解析成功后旧内容块仍可按版本读取，但不再作为当前来源。
 - `parser_settings` 保存增强解析开关、Docling/LibreOffice 路径、超时、OCR 开关/模式/引擎和版本；能力检测与测试只读取独立用户环境，不把组件装进 Yorw 运行时。
-- 当前 schema 由 001–024 顺序迁移组成；020 文献整理、021 逻辑目录、022 生成历史与采纳审计、023 专题删除、024 文献问答压缩状态，相关合同见后文。001–019 的主要变更：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎，019 增加 document_previews 和 preview_locations。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
+- 当前 schema 由 001–028 顺序迁移组成；020 文献整理、021 逻辑目录、022 生成历史与采纳审计、023 专题删除、024 文献问答压缩状态，025 模型配置、026 研究会话、027 研究记忆、028 笔记身份与范围，相关合同见后文。001–019 的主要变更：012 增加文献标签与总结，013 增加检索历史，014 增加文献关系，015 增加文献—专题关系，016 增加内容块与解析版本，017 增加处理器设置，018 增加 OCR 引擎，019 增加 document_previews 和 preview_locations。升级已有库前用 SQLite backup API 备份；逐迁移事务、外键及完整性检查；校验历史 checksum，拒绝较新数据库。不要修改已应用 SQL。写入经 RLock 与短事务串行化，网络请求不占写事务，启用 WAL 和 busy_timeout。
 - 正文保存比较 base_revision_id，目录修改比较 version。追加保留旧正文，合并原始来源并重排新增 S 编号；替换及回退创建新修订。动态 available 状态不写回不可变来源。
 
 ## 统一 AI 工作流
@@ -198,8 +198,54 @@ PdfReader 以 sequence 消费每次来源请求，ReadingWorkspace 同时清除�
 
 ### 阶段一模型配置与工具协议
 
-迁移 025_model_profiles.sql 增加 model_profiles 与 model_defaults。旧 provider_configs 不改写，已有聊天配置复制为独立 profile，记录 legacy_version；main 首次读取将相应密文复制到 profile 专用文件，在修改旧配置删除旧密文前也先完成该复制。各 profile 密钥按 ID／版本由 safeStorage 加密管理，renderer 只得到 has_key／key_error，不得到明文。更换端点需重输或清除密钥。研究默认与记忆默认独立存储，memory_id 为空表示沿用研究模型；现阶段旧问答／生成继续读取原 provider_configs，阶段二才将新默认接入助理。
+迁移 025_model_profiles.sql 增加 model_profiles 与 model_defaults。旧 provider_configs 不改写，已有聊天配置复制为独立 profile，记录 legacy_version；main 首次读取将相应密文复制到 profile 专用文件，在修改旧配置删除旧密文前也先完成该复制。各 profile 密钥按 ID／版本由 safeStorage 加密管理，renderer 只得到 has_key／key_error，不得到明文。更换端点需重输或清除密钥。研究默认与记忆默认独立存储，memory_id 为空表示沿用研究模型；现阶段旧问答／生成继续读取原 provider_configs，研究默认已接入助理，记忆默认已接入后台摘要。
 
 固定 profiles:list/save/defaults/remove/test/check/cancel IPC 映射 /v1/providers/profiles：列表 GET，UUID 项 PUT／DELETE，defaults PUT，/{id}/checks/{chat|tools} POST，/checks/{job_id} GET 及 /cancel POST。版本冲突拒绝写入；配置变更清除两个检测状态，删除配置清空对应默认。检测状态带配置版本与时间，未检测、失败及通过明确区分。
 
-聊天检测复用既有 probe；工具检测使用自编写的 search_local／read_local 工具与验证事实，不接收资料路径或用户论文。ToolTurn 聚合 SSE 参数、验证完整参数后才执行，保留 assistant 厂商扩展字段回传，工具结果按 tool_call_id 配对。每个 HTTP 请求无自动重试、禁止重定向；固定额度和时间限制，未知／重复／截断工具不执行。停止立即结束业务调用链，已在途系统网络读取可能等待至 socket 超时，但全局单网络槽在真正释放前不启动下一请求；不会因此叠加后台网络线程。能力检测任务只保存有限的进程内诊断，重启后需显式重新检测；完成能力结果存数据库，取消不发布成功。此基础并非阶段二的研究会话执行器。
+聊天检测复用既有 probe；工具检测使用自编写的 search_local／read_local 工具与验证事实，不接收资料路径或用户论文。ToolTurn 聚合 SSE 参数、验证完整参数后才执行，保留 assistant 厂商扩展字段回传，工具结果按 tool_call_id 配对。每个 HTTP 请求无自动重试、禁止重定向；固定额度和时间限制，未知／重复／截断工具不执行。停止立即结束业务调用链，已在途系统网络读取可能等待至 socket 超时，但前台网络槽在真正释放前不启动下一前台请求；阶段三后台摘要使用独立有界连接，不占前台槽。能力检测任务只保存有限的进程内诊断，重启后需显式重新检测；完成能力结果存数据库，取消不发布成功。此基础并非阶段二的研究会话执行器。
+
+### 阶段二研究会话与只读工具
+
+追加迁移 026_research_sessions.sql，research_sessions 保存范围／版本及归档删除状态，research_tasks 保存请求幂等标识、问题、部分正文、来源、模型快照及用量，research_events 保存递增序号的工具状态与范围事件。scope／profile 内容不含密钥；请求凭据仅由 main 从已加密 profile 读取并经私有 HTTP 头传递。服务启动将遗留 running 任务标记 interrupted，不自动提交模型请求。
+
+/v1/research 固定接口：sessions GET，ask POST，sessions/{UUID} GET／PATCH／DELETE，sessions/{UUID}/events?after=N GET，tasks/{UUID}/cancel POST；main 仅暴露 research:list/get/ask/edit/remove/events/cancel。读取分页每次最多 100 轮，事件最多 200 条；查询历史不重新生成。相同 request_id 与相同输入复用原任务，不同输入冲突。创建会话与登记任务同事务，未配置／未验证工具／忙碌／空问题不留下空会话。
+
+ResearchTools 按工作区或专题子树计算当前文献、笔记与旧正文范围，SQL 在结果上限前过滤范围；工具包括 search_local、read_local、inspect_scope。搜索只返回已签发的片段 handle，read_local 必须使用本任务已签发 handle，按实体版本和摘录 hash 再核对；读取后才分配 S 编号。工具没有任意 SQL、文件路径或写接口。原文、笔记和专题正文分别标记来源性质；模型只得到受限摘录，来源跳转复用已有入口。工具结果和资料内容是不可信数据，不提升为系统指令。
+
+运行任务校验会话版本、模型版本和资料范围快照；用户改范围／归档／删除停止相关任务，来源／配置变化阻止后续工具及成功提交。近期最多 3 轮同范围版本对话作为上下文，重新核对来源可用性并去掉旧引用编号；不直接复制其他会话全文；跨会话背景由下文研究记忆提供。单请求与累计 token、8 轮模型、16 次工具和 180 秒限制复用阶段一合同；文本增量由 adapter 回调持久化，不存隐藏 reasoning。首版关键词检索，不依赖新增 embedding 请求。
+
+foreground.assert_idle 在同一 SQLite 写事务中检查运行的研究任务、旧消息／建议及聊天／草稿／整理任务；旧工作流内部交接不重新抢占，显式入口繁忙拒绝，不自动排队。来源可用性检查与旧 Chat.message 的完整读取现持有数据库锁，避免并发事务中间态被误认为来源失效。
+
+前端采用独立 assistant 工作标签，左侧会话列表与右侧消息区域；标签可恢复但当前会话不自动选中，launch 请求一次消费，关闭重开不能重放付费操作。正式资料修改方案仍为后续阶段；笔记迁移与研究记忆见下文。
+
+### 阶段三研究轨迹与记忆
+
+027_research_memory.sql 追加 research_activity、research_memory_state／entries／versions／exclusions／preferences／usage。业务表触发器与原修改同事务，终态与对象版本键去重，失败回滚不留下假活动。迁移为现存文献、笔记、当前专题正文和终态对话补“迁移时快照”，原对象及历史不改写。阅读翻页与流式增量不产生活动噪声。
+
+scope_key 为 global 或专题 UUID；全局只自动保留当前方向索引，专题背景按当前子树关联材料及来源版本过滤。活动账本保留原记录；可检索集合另排除忘记、删除、来源版本变化及范围不符的记录。摘要保存事件 ID 和原始来源依赖；任一混合依赖失效则整条排除。旧全文仍在原会话／正文，Log 只有摘要和对象版本引用。最小进度包含事项、状态、下一步、更新时间及事件依据；本地回退仅记用户表达，模型整理统一标为待核对，不推定实验完成或期限。
+
+用户指引和纠正递增 content_version 并保存用户版本；自动维护只递增 summary_version。后台按启动时两种版本提交，期间纠正或另一摘要先提交则旧结果不覆盖。用户纠正／忘记使可能使用旧背景的运行任务 context_changed，不执行下一工具／模型请求；自动摘要不打断前台。恢复指引版本不会撤销忘记状态，也不会覆盖已有纠正；明确重新引入才解除相应排除。
+
+默认 6 轮终态讨论／20 条可用活动或待处理保守估计超过 6000 触发；main 每 5 秒查询 pending，前台忙时不安排。全局索引本地生成，专题选择 memory_id，未设置则沿用 research_id；密钥只在 main 解密并通过受限后端请求头发送。后台单线程最多一个摘要，独立网络连接、60 秒和 1024 输出上限，不占前台传输槽；无自动网络重试。每专题 600 秒冷却、全工作区本地日期每日 20 次调用，启动请求前持久化额度；无配置／密钥、达限或异常时不阻塞前台，保留账本并采用本地背景回退；暂停时不安排新维护。暂停后不再安排新维护，在途结果不提交。
+
+消息顺序为固定规则、用户研究指引、普通消息中明确标记的历史背景、最多 4000 保守估计近期对话、当前问题及工具结果。全局与当前范围记忆合计 4000，自动内容可裁剪，用户指引和固定纠正超过上限则发起任务前拒绝并提示精简。估计采用 UTF-8 字节作为保守 token 上界，非精确计费。单请求输入可在记忆设置调整（默认 24000），累计输入／输出及工具限制沿用执行器固定上限。search_research_history 只返回受范围／排除约束的历史片段，不分配原文引用编号。
+
+固定接口 /v1/research-memory/preferences GET／PUT、pending GET、{global或UUID} GET／PATCH、compress／local／export POST。IPC 仅 memory:view／edit／preferences／export，renderer 不获取凭据或自定义路径；后台协调器只在 main。导出固定为 research/Research.md、Log.md 或 research/topics/<UUID>/，检查链接和解析路径后原子替换，不从导出文件导入指令。界面最近 200 条活动，完整账本仍在 SQLite、完整 Log 可导出。
+
+### 阶段四：专题概览与笔记身份
+
+028 追加 topics.notebook_only、topic_notebooks、topic_note_scope、reading_note_revisions 和 reading_note_heads。专题目录仅含 notebook_only=0 的可用节点；私有修订头复用已有 revisions／suggestions／wiki_decisions 引擎，不作为专题出现。专题笔记的原始归属保存在 topic_notebooks，文献笔记仍以 notes 为唯一权威。复用修订头避免复制旧不可变修订、改写旧来源 ID 或重建另一套 AI 采纳协议；新笔记用独立头，旧正文的首份笔记保留原专题／修订 ID，新增映射而不迁走历史。
+
+迁移前按现有备份机制做数据库备份，单迁移事务回滚。非空正文、有旧修订或生成记录的专题建立首份映射；初始空修订且无其他记录的专题不制造笔记。文献笔记保留 ID、当前版本、正文和来源，并以升级时版本建立不可变快照；旧版没有存储的过往逐次正文不伪造。以后每次文献笔记版本变化都追加快照。未采纳 AI 记录保留原状态，不转为正式正文。
+
+topic_note_scope 保存针对来源专题的显式选择／排除。最近显式祖先决定是否包含节点，没有被其他规则覆盖的子树随父项继承。展示和 AI 按原始归属分别读取专题笔记，以及文献在所选专题的直接关联所携带的阅读笔记；同 ID 去重，不递归传播其他专题的汇集结果。默认自身子树；空选择持久化为自身排除，避免重启回到默认。源节点移动重算祖先继承，自身规则保留。写范围比较专题版本，移动前可查询范围影响。
+
+笔记编辑／创建／处置推进所属专题版本，避免删除确认遗漏后来新建或修改的笔记。删除拥有笔记的专题必须显式 move 或 delete；迁移保留修订头和原身份，删除保持历史不可变。旧正文笔记单独删除会追加空白当前修订，防止目录导出泄漏已删除正文；迟到的编辑器读取不能重新填回已清除草稿。文献及文献笔记不因专题删除而删除。
+
+专题笔记详情继续使用已有编辑／AI／历史链。文献笔记 AI 准备产生 reading_note_heads 私有快照，仅作建议背景；正式 notes 不变。采纳检查原笔记版本，正式 notes 更新、历史快照、AI 头修订和决定同事务，拒绝或版本变化不写正式笔记。写作快照标记 notebook_snapshot，验证不可变版本和摘录，仍属用户记录；即使被 AI 引用也不成为论文事实。原文事实继续核对活动提取版本，旧来源不重写。
+
+研究工具和旧草稿检索使用同一原始归属范围，沿用来源 kind／ID，读取后才给本轮引用编号；新私有头不混入普通专题目录、推荐或关系选择。导出目录补充可用专题笔记头，阅读笔记仍走原导出身份。旧工作区 API 的显式 workspace 草稿范围保留兼容，新笔记入口不另提供范围开关。
+
+前端 topic-note、notebooks、note-scope、linked-topics 标签按实体 ID 恢复，启动时通过笔记目录补齐私有头标题；不自动发起模型任务。正文复用 GardenBook，文献侧栏复用 Notebook，范围草稿单独按专题保存本次会话状态；关闭保护、异步保存后的新增编辑和迟到响应均不覆盖用户输入。布局仅保存描述，不把未保存正文写入磁盘。
+
+固定接口新增 /v1/notebooks（目录及详情／重命名／删除），/v1/topics/{id}/overview、note-scope、notebooks、move-preview，以及 /v1/notes/{id}/revisions、prepare-optimization；main 仅转发固定 garden:* 操作，不接受任意路径。关联专题当前只有父子目录管理，普通关系和模型正式修改方案尚未实现。

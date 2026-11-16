@@ -28,6 +28,12 @@ class Exports:
         with self.db.lock:
             notes = self.garden._rows('SELECT n.id,n.body_md,n.document_id,n.version,d.title,d.original_name,d.deleted_at FROM notes n JOIN documents d ON d.id=n.document_id ORDER BY n.updated_at DESC,n.id')
             topics = self.garden.list()['items']
+            from .notebooks import notebook_heads,visible_topics
+            existing={t['id'] for t in topics}
+            for head in notebook_heads(self.db,[t['id'] for t in visible_topics(self.db)]):
+                if head not in existing:
+                    value=self.garden.get(head)['topic']
+                    topics.append({**value,'title':'专题笔记 · '+value['title']})
             return {'notes': [{'id': n['id'], 'label': (n['body_md'].splitlines() or ['空笔记'])[0][:100], 'document_title': n['title'] or n['original_name'], 'document_available': n['deleted_at'] is None, 'version': n['version']} for n in notes],
                     'topics': topics}
 

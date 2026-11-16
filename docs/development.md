@@ -99,7 +99,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## 候选制品与发布流程
 
-当前分支 feature/ai-cowork-in-garden 的实现提交为 1fc846b，用户已 review 并推送，尚未合并 main，继续开发 v0.4.0；schema 25／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
+当前分支 feature/ai-cowork-in-garden 尚未合并 main，继续开发 v0.4.0；当前进度、review 与提交状态见 [PLAN](../PLAN.md)；schema 28／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -144,3 +144,14 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 阶段一模型专项：构建后运行 `--yorw-smoke --reader-smoke --model-profiles-smoke --report-dir=<新绝对目录>`，使用隔离工作区和本地自编写 SSE 服务，无需 PDF。输出 model-profiles-smoke.json、models-1024/1280/1440.png，核验加密存储、聊天、三轮工具闭环及设置页。真实请求仅在明确授权后追加 main 专用 --live-config=<只含地址和模型的JSON>、--live-key-file=<已有加密密钥文件>；密钥不在命令行或报告中明文出现，不自动读取用户论文。工具／配置专项为 test_model_profiles.py、test_tool_protocol.py；schema 25，完整回归先重建冻结服务。供应商工具协议依据 DeepSeek 官方 https://api-docs.deepseek.com/guides/tool_calls/ 与通用兼容协议；厂商能力仍须实际检测，不凭预设断言已实测。
 
 阶段一已完成真实 DeepSeek deepseek-flash 的聊天与三轮工具闭环；Kimi／GLM／Qwen 仍需账号实测。若使用已有密文做独立隔离 profile 验证，需授权使用该密钥并同时提供其加密上下文；完成后清除隔离密钥副本和复制的 Local State，报告只保留脱敏诊断。
+
+阶段二专项：构建后 `--yorw-smoke --reader-smoke --research-smoke --report-dir=<新绝对目录>`，目录预放自编写 fixture.pdf。输出 research-smoke.json 与 research-1024/1280/1440.png；本地 SSE 验证工具检测、Garden 空输入不创建会话、发送／检索读取／引用高亮、手动恢复、关闭重开不重发。test_research.py 覆盖范围、幂等、归档删除、互斥、中文来源及事务读取；test_research_service.py 覆盖源码／冻结 HTTP 与重启无自动调用。当前 schema 28，完整 pytest 前先重建冻结后端；不得自动用真实用户论文／密钥替代隔离夹具。
+
+阶段三专项：`test_research_memory.py` 验证事务账本、来源／范围依赖、遗忘与重新引入、用户指引版本、预算、日限额／冷却、后台与前台并发及 26→27 备份升级；`test_research_memory_service.py` 使用本地 SSE 对源码／冻结服务验证模型摘要、遗忘、Markdown 导出与暂停重启。完整测试前重新 build:backend；PowerShell 执行策略受限时仅用上文进程级 Bypass。
+
+现有 `--research-smoke` 同时覆盖记忆入口、指引保存、内联纠正、遗忘、活动、暂停与导出，新增 research-memory-smoke.json 和 research-memory-1024／1440.png。仍须预放自编写 fixture.pdf、使用新的 report-dir 隔离工作区与密钥；不读取真实数据，不把夹具成绩当成研究摘要质量。当前最终证据与失败复跑记录见 history/v0.4.0.md。
+
+
+阶段四验证：test_notebooks.py 覆盖 27→28 备份迁移、空专题／旧草稿区分、重复启动、失败回滚、原始归属范围矩阵、共享去重、删除迁移和历史连续；test_notebook_ai.py 覆盖两类笔记优化的预览／人工采纳及旧版本保护；test_notebooks_service.py 对源码和冻结服务验 HTTP、范围和重启。
+
+窗口验收使用新的绝对 report-dir：`--yorw-smoke --reader-smoke --notebooks-smoke --report-dir=<新目录>`，自生成本地 TXT／笔记与 SSE，不需要用户数据。成功后在同一目录以 `--notebooks-resume-smoke` 重启，核对笔记 ID、编辑器、阅读版本和不重发模型任务。输出 notebooks-smoke.json、notebooks-resume.json、三种宽度笔记截图、概览与文献笔记截图。早期窗口报告保留以记录选择器和异步保护修正，不冒充最终通过证据。最终命令与成绩见 history/v0.4.0.md。

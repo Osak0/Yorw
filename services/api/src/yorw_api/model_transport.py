@@ -19,7 +19,7 @@ def check(stop, deadline):
         raise ProbeError("TIMEOUT")
 
 
-def _stream_turn(config, key, messages, tools, validators, stop, deadline, max_tokens=4000):
+def _stream_turn(config, key, messages, tools, validators, stop, deadline, max_tokens=4000, on_text=None):
     check(stop, deadline)
     if not key:
         raise ProbeError("KEY_MISSING")
@@ -74,6 +74,9 @@ def _stream_turn(config, key, messages, tools, validators, stop, deadline, max_t
                     if reason is not None and choice.get('delta'):
                         raise ProbeError('INVALID_TOOL_STREAM')
                     turn.feed(choice.get('delta') or {})
+                    text=(choice.get('delta') or {}).get('content')
+                    if on_text and isinstance(text,str) and text:
+                        on_text(text)
                     if choice.get('finish_reason'):
                         reason = choice['finish_reason']
             finally:
@@ -102,7 +105,7 @@ def _stream_turn(config, key, messages, tools, validators, stop, deadline, max_t
 _transport_slot = BoundedSemaphore(1)
 
 
-def stream_turn(config, key, messages, tools, validators, stop, deadline, max_tokens=4000):
+def stream_turn(config, key, messages, tools, validators, stop, deadline, max_tokens=4000, on_text=None):
     """Cancellation never waits for a blocked OS recv; outstanding I/O stays bounded.
 
     A cancelled request cannot trigger another tool or retry. The single slot is
@@ -114,7 +117,7 @@ def stream_turn(config, key, messages, tools, validators, stop, deadline, max_to
     result = Queue(maxsize=1)
     def request():
         try:
-            result.put((True, _stream_turn(config,key,messages,tools,validators,stop,deadline,max_tokens)))
+            result.put((True, _stream_turn(config,key,messages,tools,validators,stop,deadline,max_tokens,on_text)))
         except Exception as error:
             result.put((False, error))
         finally:

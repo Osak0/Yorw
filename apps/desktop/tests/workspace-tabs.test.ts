@@ -85,3 +85,22 @@ test('legacy resource tabs collapse into metadata while AI results remain indepe
   expect(tabKindLabel(restored.tabs[0])).toBe('编辑元数据')
   expect(moduleForTab(restored.tabs[1])).toBe('Storage')
 })
+
+
+test('research assistant tab survives restore independently of a topic',()=>{
+ const restored=restoreTabs([{kind:'assistant',id:'00000000-0000-4000-8000-000000000002'}],new Map(),new Map())
+ expect(restored.skipped).toBe(0)
+ expect(restored.tabs[0].kind).toBe('assistant')
+ expect(moduleForTab(restored.tabs[0])).toBe('Garden')
+})
+
+
+test('independent notebook and scope tabs restore by their stable entity ids',()=>{
+ const head='22345678-1234-1234-1234-123456789abc'
+ const items=[{kind:'topic-note' as const,id:head},{kind:'note-scope' as const,id},{kind:'notebooks' as const,id}]
+ const result=restoreTabs(items,new Map(),new Map([[id,'Owner'],[head,'Notebook']]))
+ expect(result.skipped).toBe(0)
+ expect(result.tabs.map(t=>t.key)).toEqual(['topic-note:'+head,'note-scope:'+id,'notebooks:'+id])
+ expect(tabKindLabel(result.tabs[0])).toBe('笔记')
+ expect(result.tabs.every(t=>moduleForTab(t)==='Garden')).toBe(true)
+})

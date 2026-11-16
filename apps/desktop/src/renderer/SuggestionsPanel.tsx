@@ -7,7 +7,7 @@ import {generationError} from './generation-status'
 import {sessionStore,useTopicSession} from './session-state'
 import './suggestions.css'
 
-const labels={document:'论文原文',note:'用户笔记',message:'模型对话',wiki:'已有 Wiki'}
+const labels={document:'论文原文',note:'用户笔记',message:'模型对话',wiki:'专题笔记记录'}
 export function Sources({sources}:{sources:SourceRef[]}){
  const navigate=useContext(SourceNavigationContext)
  return <div className="suggestion-sources">{sources.map((source,index)=><details key={source.source_id??index}>
@@ -17,9 +17,8 @@ export function Sources({sources}:{sources:SourceRef[]}){
  </details>)}</div>
 }
 export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview,onReviewUpdate}:{topicId:string;baseRevisionId:string;dirty:boolean;onReview(suggestion:Suggestion):void;onReviewUpdate?(suggestion:Suggestion):void}){
- const session=useTopicSession(topicId),instruction=session.aiInstruction,scope=session.aiScope
+ const session=useTopicSession(topicId),instruction=session.aiInstruction,scope='topic' as const
  const setInstruction=(value:string)=>sessionStore().updateTopic(topicId,{aiInstruction:value})
- const setScope=(value:'topic'|'workspace')=>sessionStore().updateTopic(topicId,{aiScope:value})
  const [history,setHistory]=useState<Suggestion[]>([]),[notice,setNotice]=useState('')
  const job=useAiTask('draft',topicId),opened=useRef('')
  useEffect(()=>{let active=true,loading=false
@@ -40,9 +39,8 @@ export function SuggestionsPanel({topicId,baseRevisionId,dirty,onReview,onReview
  async function cancel(item:Suggestion){try{await window.yorw.suggestions.cancel(item.id)}catch{setNotice('取消未完成，请重试。')}}
  return <section className="wiki-suggestions"><h3>AI 草稿</h3>
   <form onSubmit={event=>{event.preventDefault();setNotice('');void job.start(instruction,baseRevisionId,scope)}}>
+   <p className="scope-hint">材料范围沿用所属专题的“笔记范围”，与概览展示同步；当前笔记是用户记录，不代替论文证据。</p>
    <label>生成要求<textarea aria-label="Wiki 生成要求" placeholder="例如：整理这些研究对视觉证据依赖的结论和仍待验证的问题" maxLength={2000} value={instruction} onChange={event=>setInstruction(event.target.value)}/></label>
-   <label>材料范围<select aria-label="AI 材料范围" value={scope} disabled={running} onChange={event=>setScope(event.target.value as 'topic'|'workspace')}><option value="topic">当前专题及子专题</option><option value="workspace">全工作区</option></select></label>
-   <p className="scope-hint">{scope==='topic'?'使用本专题及子专题关联的文献、笔记和子专题 Wiki；当前正文只作编辑背景。':'使用整个工作区的已保存文献、笔记和 Wiki。'}</p>
    <button className="primary" disabled={running||!instruction.trim()}>生成草稿</button>
    {job.running&&<button type="button" onClick={()=>void job.cancel()}>取消</button>}
   </form>

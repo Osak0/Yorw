@@ -5,7 +5,7 @@ import type {GardenBridge,TopicView,Result} from '../src/shared/status'
 import type {Backend} from '../src/main/backend'
 const id='12345678-1234-1234-1234-123456789abc'
 const view=(body='',revision='base'):TopicView=>({topic:{id,title:'Topic',parent_id:null,current_revision_id:revision,version:1,created_at:'',updated_at:''},revision:{id:revision,topic_id:id,ordinal:1,body_md:body,sources:[],origin:'manual',base_revision_id:null,restored_from_id:null,created_at:''}})
-function setup(){const bridge={list:vi.fn(async()=>({ok:true,value:{items:[view().topic]}})),get:vi.fn(async()=>({ok:true,value:view()})),save:vi.fn(),create:vi.fn(),update:vi.fn(),history:vi.fn(),accept:vi.fn(),reject:vi.fn(),restore:vi.fn()} as unknown as GardenBridge;return {bridge,book:new GardenBook(bridge)}}
+function setup(){const bridge={overview:vi.fn().mockResolvedValue({ok:true,value:{owned_notes:[]}}),movePreview:vi.fn().mockResolvedValue({ok:true,value:{affected:[]}}),list:vi.fn(async()=>({ok:true,value:{items:[view().topic]}})),get:vi.fn(async()=>({ok:true,value:view()})),save:vi.fn(),create:vi.fn(),update:vi.fn(),history:vi.fn(),accept:vi.fn(),reject:vi.fn(),restore:vi.fn()} as unknown as GardenBridge;return {bridge,book:new GardenBook(bridge)}}
 test('save acknowledgement preserves newer edits, prevents duplicate requests and keeps failed drafts',async()=>{
  const {bridge,book}=setup();await book.refresh();await book.select(id);book.edit(id,'submitted')
  let finish!:(result:Result<TopicView>)=>void
@@ -109,4 +109,16 @@ test('main validates topic deletion identity and version before calling the back
  for(const input of [{id:'../escape',version:1},{id,version:0},{id,version:1.5}])expect(()=>garden.remove(input)).toThrow('INVALID_INPUT')
  expect(request).not.toHaveBeenCalled()
  garden.remove({id,version:2});expect(request).toHaveBeenCalledWith(`/v1/topics/${id}`,'DELETE',{version:2})
+})
+
+
+test('a late notebook response cannot restore an explicitly forgotten draft cache',async()=>{
+ const {bridge,book}=setup()
+ let finish!:(value:Result<TopicView>)=>void
+ vi.mocked(bridge.get).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const pending=book.select(id);book.forgetDraft(id)
+ finish({ok:true,value:view('deleted old body')});await pending
+ expect(book.getSnapshot().drafts[id]).toBeUndefined()
+ vi.mocked(bridge.get).mockResolvedValue({ok:true,value:view('','tombstone')})
+ await book.select(id);expect(book.getSnapshot().drafts[id].body).toBe('')
 })

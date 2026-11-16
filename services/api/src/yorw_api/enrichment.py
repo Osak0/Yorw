@@ -1,3 +1,4 @@
+from .foreground import assert_idle
 """Opt-in, versioned metadata derivation. Original evidence remains authoritative."""
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -259,6 +260,7 @@ class Enrichments:
 
     def start(self,identity,key,version,automatic=False,regenerate=False):
         with self.db.write() as conn:
+            assert_idle(conn)
             doc=self.library.document(identity); config=self.config(); prefs=self.settings()
             if not config: raise HTTPException(409,detail='CONFIG_MISSING')
             if not key: raise HTTPException(409,detail='KEY_MISSING')
@@ -336,7 +338,7 @@ class Enrichments:
         doc=self.library.document(identity)
         terms=set(query_terms(' '.join([doc['title'] or doc['original_name'],*doc['tags'],result['result']['overview'],*result['result']['tags']])))
         candidates=[]
-        rows=self.library.rows('SELECT t.id,t.title,t.parent_id,r.body_md FROM topics t LEFT JOIN revisions r ON r.id=t.current_revision_id WHERE t.deleted_at IS NULL AND t.id NOT IN(SELECT topic_id FROM document_topics WHERE document_id=?)',(identity,))
+        rows=self.library.rows('SELECT t.id,t.title,t.parent_id,r.body_md FROM topics t LEFT JOIN revisions r ON r.id=t.current_revision_id WHERE t.deleted_at IS NULL AND t.notebook_only=0 AND t.id NOT IN(SELECT topic_id FROM document_topics WHERE document_id=?)',(identity,))
         from .resources import DocumentResources
         paths=DocumentResources(self.library)._topic_paths()
         for topic in rows:

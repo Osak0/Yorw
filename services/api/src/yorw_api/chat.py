@@ -1,3 +1,4 @@
+from .foreground import assert_idle
 """Source-bounded streaming turns. Persist partial output; never trust model source IDs."""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -151,6 +152,10 @@ class Chat:
         return rows[0] if rows else None
 
     def message(self, identity):
+        with self.db.lock:
+            return self._message(identity)
+
+    def _message(self, identity):
         rows = self.library.rows('SELECT m.*,c.document_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',(identity,))
         if not rows: raise HTTPException(404,detail='MESSAGE_NOT_FOUND')
         item = rows[0]
@@ -181,6 +186,7 @@ class Chat:
             self.library.document(document_id)
             if self.library.rows("SELECT m.id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.document_id=? AND m.status='running'",(document_id,)):
                 raise HTTPException(409,detail='CHAT_RUNNING')
+            assert_idle(conn)
             sources = []
             for identity in dict.fromkeys(map(str,value.segment_ids)):
                 rows = self.library.rows('SELECT * FROM search_segments WHERE id=? AND document_id=?',(identity,document_id))

@@ -37,11 +37,17 @@ def create_app(token: str, database: Database) -> FastAPI:
     workflows = Workflows(suggestions)
     from .enrichment import Enrichments, router as enrichment_router
     enrichments = Enrichments(library)
+    from .research import Research, router as research_router
+    from .research_memory import ResearchMemory, router as memory_router
+    memory = ResearchMemory(library)
+    research = Research(library, memory=memory)
     @asynccontextmanager
     async def lifespan(app):
         try:
             yield
         finally:
+            research.close()
+            memory.close()
             enrichments.close()
             workflows.close()
             suggestions.close()
@@ -76,6 +82,8 @@ def create_app(token: str, database: Database) -> FastAPI:
         return database.workspace_info()
     from .providers import router
     app.include_router(router(database))
+    app.include_router(research_router(research))
+    app.include_router(memory_router(memory))
     # Register the literal /v1/documents/search route before the document-detail
     # route so FastAPI does not treat "search" as a document UUID.
     from .resources import router as resources_router
@@ -92,6 +100,8 @@ def create_app(token: str, database: Database) -> FastAPI:
     app.include_router(search_router(search))
     app.include_router(chat_router(chat))
     from .garden import router as garden_router
+    from .notebooks import router as notebooks_router
+    app.include_router(notebooks_router(library))
     app.include_router(garden_router(database))
     app.include_router(suggestions_router(suggestions))
     from .wiki_review import router as review_router

@@ -47,6 +47,8 @@ class Notes:
             if isinstance(source, dict) and ('chunk_id' in source or 'block_id' in source):
                 candidate = source if source.get('document_id') else {**source, 'document_id': note['document_id']}
                 source['available'] = note['document_available'] and evidence_available(self.db, candidate)
+        from .source_status import source_status
+        note['sources']=source_status(self.db,[{**source,'document_id':source.get('document_id') or note['document_id']} if isinstance(source,dict) and (source.get('block_id') or source.get('chunk_id')) else source for source in note['sources']])
         return note
 
     def list(self, document_id: str) -> list[dict]:
