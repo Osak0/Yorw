@@ -102,7 +102,7 @@ def test_step9_database_upgrade_preserves_existing_research_assets(tmp_path):
     old.close()
     updated=Database(workspace)
     try:
-        assert updated.version==28
+        assert updated.version==29
         assert updated.connection.execute('SELECT body_md FROM notes').fetchone()[0]=='Retained note 中文'
         assert updated.connection.execute('SELECT body_md FROM messages').fetchone()[0]=='Retained answer'
         assert updated.connection.execute('SELECT count(*) FROM topics').fetchone()[0]==0
@@ -178,7 +178,7 @@ def test_schema22_upgrade_preserves_topic_history_and_starts_visible(tmp_path):
     item=create(PreRemovalGarden(old));old.close()
     upgraded=Database(workspace)
     try:
-        assert upgraded.version==28
+        assert upgraded.version==29
         assert Garden(upgraded).get(item['topic']['id'])==item
         assert upgraded.connection.execute('SELECT deleted_at FROM topics').fetchone()[0] is None
         assert len(list((workspace.root/'backups').glob('*.sqlite3')))==1

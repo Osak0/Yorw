@@ -89,6 +89,19 @@ class ResearchMemory:
         if self.excluded('event',event['id']) or self.excluded(event['kind'],event['object_id']):return False
         kind,identity,version=event['kind'],event['object_id'],event['object_version']
         payload=json.loads(event['payload_json'])
+        if kind=='proposal':
+            origin=payload.get('origin') or {}
+            if origin.get('task_id'):
+                task=self.rows('SELECT session_id FROM research_tasks WHERE id=?',(origin['task_id'],))
+                if not task or not self.history_allowed(origin['task_id'],task[0]['session_id']):return False
+            allowed={'document':{r['id'] for r in tools.initial['documents']},'topic':{r['id'] for r in tools.initial['topics']},'note':{r['id'] for r in tools.initial['notes']+tools.initial['notebooks']}}
+            for obj in payload.get('objects') or []:
+                if obj.get('kind')=='relation':
+                    if any(obj.get(side) not in allowed.get(obj.get(side+'_kind'),set()) for side in ('first','second')):return False
+                elif obj.get('id') not in allowed.get(obj.get('kind'),set()):return False
+        elif kind=='topic_relation':
+            related=payload.get('related_topic_id')
+            if related not in {r['id'] for r in tools.initial['topics']} or not self.rows('SELECT 1 FROM topic_relations WHERE low_id=? AND high_id=?',tuple(sorted((event['topic_id'],related)))):return False
         if kind=='research':
             rows=self.rows('SELECT t.status,s.deleted_at FROM research_tasks t JOIN research_sessions s ON s.id=t.session_id WHERE t.id=?',(identity,))
             if not rows or rows[0]['deleted_at'] or rows[0]['status']!=version or self.excluded('session',payload.get('session_id')):return False

@@ -24,7 +24,7 @@ def test_memory_http_compression_pause_export_and_restart(frozen,tmp_path):
     workspace=tmp_path/'workspace';topic=str(uuid4());pid=str(uuid4())
     try:
         with running(frozen,workspace) as (request,upload):
-            assert request('/v1/health')['schema_version']==28
+            assert request('/v1/health')['schema_version']==29
             request('/v1/topics','POST',{'id':topic,'title':'Owned research','parent_id':None})
             request('/v1/providers/profiles/'+pid,'PUT',{'name':'Owned memory fixture','provider':'compatible','base_url':f'http://127.0.0.1:{server.server_port}','model':'owned','version':0})
             settings=request('/v1/research-memory/preferences')

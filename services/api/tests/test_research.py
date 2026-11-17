@@ -159,7 +159,7 @@ def test_schema25_upgrade_recovers_running_research_without_model_call(tmp_path)
     workspace=Workspace(tmp_path/'old');old=Database(workspace,migrations);old.close()
     db=Database(workspace);lib=Library(db)
     try:
-        assert db.version==28
+        assert db.version==29
         assert list((workspace.root/'backups').glob('*.sqlite3'))
         service=Research(lib,lambda *a,**k:pytest.fail('migration must not call model'))
         assert service.listing()['items']==[]

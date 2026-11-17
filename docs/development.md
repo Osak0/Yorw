@@ -99,7 +99,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## 候选制品与发布流程
 
-当前分支 feature/ai-cowork-in-garden 尚未合并 main，继续开发 v0.4.0；当前进度、review 与提交状态见 [PLAN](../PLAN.md)；schema 28／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
+当前分支 feature/ai-cowork-in-garden 尚未合并 main，继续开发 v0.4.0；当前进度、review 与提交状态见 [PLAN](../PLAN.md)；schema 29／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -130,14 +130,14 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 | 标志 | 输出与主要覆盖 |
 | --- | --- |
 | `--document-management-smoke` | `document-management-smoke.json`、`management-1024/1280/1440.png`：六入口、稳定位置、解析二级项、草稿切换、关闭保护与保存、renderer 重载恢复、取消／确认删除后标签清理。该流程会删除隔离测试文献，跳过末尾要求文献仍存在的通用截图循环。 |
-| `--metadata-review-smoke` | `metadata-review-smoke.json`、`metadata-selection.png` 与三宽度底部截图：七栏、缺少信息、无勾选框、逐栏及全部添加／替换、取消确认、空建议跳过、首次生成一次、重新进入复用、历史隐藏／恢复和长页底部。 |
+| `--metadata-review-smoke` | `metadata-review-smoke.json`、`metadata-selection.png` 与三宽度底部截图：五个元数据字段与独立关系方案入口、缺少信息、元数据无勾选框、逐栏及全部添加／替换、取消确认、空建议跳过、首次生成一次、重新进入复用、历史隐藏／恢复和长页底部。 |
 | `--history-layout-smoke` | `history-layout-smoke.json` 与三宽度截图：阅读侧栏无历史、独立检索左栏／固定搜索／右结果、历史只读、空 Enter 清空但保留历史、问答顶栏搜索顺序、正文搜索和定位高亮消退。 |
 
 全部使用自编写 PDF、本地 loopback SSE 模型夹具；不验证真实服务质量。完整端到端重启／旧库升级与安装器验收不能由专项窗口替代。后端 `test_enrichment.py` 覆盖结构化请求、有限修正、原子采纳、关系冲突／回滚及候选校验；当前已运行成绩和失败事实只记在[开发历史](history/v0.4.0.md)。
 
 连续阅读专项：同样的隔离启动参数加 `--continuous-reading-smoke`，报告目录需放置自编写至少 10 页 `fixture.pdf`（可将生成器的两页样例重复组合）。输出 `continuous-reading-smoke.json` 和 `continuous-reading-1024/1280/1440.png`，覆盖连续页交界、滚动同步页码、末页保存、上一页／直接跳页、侧栏开关、离屏画布释放与阅读高度。通用阅读探针按当前物理页查找画布，不依赖第一页始终挂载；不得使用真实用户资料运行烟测。
 
-问答历史／PDF 高亮专项：`--yorw-smoke --reader-smoke --chat-memory-smoke --report-dir=<新绝对目录>`，目录预放自编写两页 fixture.pdf。输出 chat-memory-smoke.json、chat-memory.png、chat-memory-toolbar.png；本地 SSE 夹具先模拟有部分正文的截断，再验证“请回答完全”上下文、高亮、History.md 查看与固定导出。history-layout-smoke 同时核验 History.md 入口和精简导航。后端新增 test_chat_history.py 验证文献隔离、压缩回退、导出文件不作为输入、原文版本失效及空输出问题；test_completion_stream.py 捕获实际消息角色／输入预算。新增迁移后必须重建冻结服务再跑 pytest，schema 当前为 24。最终成绩与迭代失败只记入开发历史。
+问答历史／PDF 高亮专项：`--yorw-smoke --reader-smoke --chat-memory-smoke --report-dir=<新绝对目录>`，目录预放自编写两页 fixture.pdf。输出 chat-memory-smoke.json、chat-memory.png、chat-memory-toolbar.png；本地 SSE 夹具先模拟有部分正文的截断，再验证“请回答完全”上下文、高亮、History.md 查看与固定导出。history-layout-smoke 同时核验 History.md 入口和精简导航。后端新增 test_chat_history.py 验证文献隔离、压缩回退、导出文件不作为输入、原文版本失效及空输出问题；test_completion_stream.py 捕获实际消息角色／输入预算。新增迁移后必须重建冻结服务再跑 pytest，当前 schema 版本见 PLAN。最终成绩与迭代失败只记入开发历史。
 
 阅读导航专项：构建后使用 `--yorw-smoke --reader-smoke --reader-navigation-smoke --report-dir=<新绝对目录>`。目录预放至少 10 页自编写 fixture.pdf，英文依据置于页底并包含指向第 9 页的内置目录。输出 reader-navigation-smoke.json 和三宽度截图；验证段落可见、滚走不回跳、再次显式定位、外部点击清除、单页／连续、缩略图、目录和专注阅读／Esc。仅本地关键词检索，不调用模型。
 
@@ -145,7 +145,7 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 
 阶段一已完成真实 DeepSeek deepseek-flash 的聊天与三轮工具闭环；Kimi／GLM／Qwen 仍需账号实测。若使用已有密文做独立隔离 profile 验证，需授权使用该密钥并同时提供其加密上下文；完成后清除隔离密钥副本和复制的 Local State，报告只保留脱敏诊断。
 
-阶段二专项：构建后 `--yorw-smoke --reader-smoke --research-smoke --report-dir=<新绝对目录>`，目录预放自编写 fixture.pdf。输出 research-smoke.json 与 research-1024/1280/1440.png；本地 SSE 验证工具检测、Garden 空输入不创建会话、发送／检索读取／引用高亮、手动恢复、关闭重开不重发。test_research.py 覆盖范围、幂等、归档删除、互斥、中文来源及事务读取；test_research_service.py 覆盖源码／冻结 HTTP 与重启无自动调用。当前 schema 28，完整 pytest 前先重建冻结后端；不得自动用真实用户论文／密钥替代隔离夹具。
+阶段二专项：构建后 `--yorw-smoke --reader-smoke --research-smoke --report-dir=<新绝对目录>`，目录预放自编写 fixture.pdf。输出 research-smoke.json 与 research-1024/1280/1440.png；本地 SSE 验证工具检测、Garden 空输入不创建会话、发送／检索读取／引用高亮、手动恢复、关闭重开不重发。test_research.py 覆盖范围、幂等、归档删除、互斥、中文来源及事务读取；test_research_service.py 覆盖源码／冻结 HTTP 与重启无自动调用。当前 schema 29，完整 pytest 前先重建冻结后端；不得自动用真实用户论文／密钥替代隔离夹具。
 
 阶段三专项：`test_research_memory.py` 验证事务账本、来源／范围依赖、遗忘与重新引入、用户指引版本、预算、日限额／冷却、后台与前台并发及 26→27 备份升级；`test_research_memory_service.py` 使用本地 SSE 对源码／冻结服务验证模型摘要、遗忘、Markdown 导出与暂停重启。完整测试前重新 build:backend；PowerShell 执行策略受限时仅用上文进程级 Bypass。
 
@@ -155,3 +155,23 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 阶段四验证：test_notebooks.py 覆盖 27→28 备份迁移、空专题／旧草稿区分、重复启动、失败回滚、原始归属范围矩阵、共享去重、删除迁移和历史连续；test_notebook_ai.py 覆盖两类笔记优化的预览／人工采纳及旧版本保护；test_notebooks_service.py 对源码和冻结服务验 HTTP、范围和重启。
 
 窗口验收使用新的绝对 report-dir：`--yorw-smoke --reader-smoke --notebooks-smoke --report-dir=<新目录>`，自生成本地 TXT／笔记与 SSE，不需要用户数据。成功后在同一目录以 `--notebooks-resume-smoke` 重启，核对笔记 ID、编辑器、阅读版本和不重发模型任务。输出 notebooks-smoke.json、notebooks-resume.json、三种宽度笔记截图、概览与文献笔记截图。早期窗口报告保留以记录选择器和异步保护修正，不冒充最终通过证据。最终命令与成绩见 history/v0.4.0.md。
+
+### 阶段五验证入口
+
+`test_collaboration.py` 覆盖 A01–A06 的来源失效、依赖取消、整组冲突、后续编辑及新增引用阻止撤回、纠正／遗忘／范围／会话失效，并验证事务注入失败无半成品、请求幂等、来源规范化与引用重排、两类笔记修订、候选正文命中与语义缓存开关、28→29 备份升级。`test_collaboration_service.py` 对源码与冻结服务验证真实 HTTP、重启、方案与决定持久化及撤回。
+
+构建后使用全新的绝对目录执行 `--yorw-smoke --reader-smoke --collaboration-smoke --report-dir=<新目录>`；自生成文献和本地 SSE，无须预放论文或真实密钥。报告 `collaboration-smoke.json` 覆盖研究工具只预览、依赖取消、独立项采纳、普通关系不扩大范围、整组撤回及人工补写保护，并从文献整理入口生成新专题与文献关联。1024／1280／1440 截图验证布局。随后在相同目录以 `--collaboration-resume-smoke` 重启，输出 `collaboration-resume.json`，核对任务、决定、笔记、文献关联与不自动续发任务。
+
+最终成绩、源码指纹及失败复跑记录见 [开发历史](history/v0.4.0.md)。仅本地夹具验证协议、事务与界面，不代表真实论文研究质量；安装器、独立干净 Windows 和发布另行验收。
+
+### 阶段六综合回归
+
+先按上文重建冻结后端，再运行完整 pytest、桌面测试、类型检查及前端构建。新增 `test_research_journey_service.py` 对源码和冻结后端执行同一跨专题 HTTP 闭环：自编写文献／共享笔记、显式选择与排除分支、检索读取原文、工具生成方案、纠正实验状态使旧方案失效、进程重启后继续原会话、纠正进入下一轮输入、部分采纳和幂等重试、人工补写阻止撤回、删除会话后正式成果保留、再次重启不自动调用模型。
+
+```powershell
+services/api/.venv/Scripts/python.exe -m pytest services/api/tests/test_research_journey_service.py -q --basetemp=.cache/<新综合测试目录>
+```
+
+窗口复核分别使用全新的绝对 report-dir，复用本页已维护的 `--research-smoke`、`--notebooks-smoke`／`--notebooks-resume-smoke`、`--collaboration-smoke`／`--collaboration-resume-smoke`，以及文献管理、元数据、历史布局专项。只有配对的 resume 在同一目录重启，其余专项不得共用 profile。研究与文献管理专项需放置 `make-mvp-fixtures.py` 新生成的 fixture.pdf；笔记／协作专项自行生成资料。报告与截图保留本轮证据，1024／1280／1440 布局分别检查。
+
+源码／冻结 HTTP 闭环、原生窗口与真实厂商检测分别记录。真实检测沿用 `--model-profiles-smoke` 的受控入口和明确的凭据授权；没有账号、额度或授权时记“本轮未实测”，不伪造通过。真实普通聊天与工具检测只能证明该端点／模型的小样本能力，不能据此断言研究质量或其他厂商均可用。用户后续全面测试、安装器、独立干净 Windows 与发布验收分开记录。

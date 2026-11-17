@@ -15,7 +15,7 @@ from .providers import ProbeError
 from .retrieval import json_completion, query_terms
 from .search import fingerprint
 
-PROMPT_VERSION = 'enrichment-metadata-v6'
+PROMPT_VERSION = 'enrichment-metadata-v7'
 FIELDS = ('overview', 'research_question', 'method', 'data', 'conclusion', 'limitations')
 MAX_INPUT = 12000
 MAX_PARTS = 32
@@ -336,16 +336,9 @@ class Enrichments:
 
     def recommend(self,identity,result,decisions):
         doc=self.library.document(identity)
-        terms=set(query_terms(' '.join([doc['title'] or doc['original_name'],*doc['tags'],result['result']['overview'],*result['result']['tags']])))
-        candidates=[]
-        rows=self.library.rows('SELECT t.id,t.title,t.parent_id,r.body_md FROM topics t LEFT JOIN revisions r ON r.id=t.current_revision_id WHERE t.deleted_at IS NULL AND t.notebook_only=0 AND t.id NOT IN(SELECT topic_id FROM document_topics WHERE document_id=?)',(identity,))
-        from .resources import DocumentResources
-        paths=DocumentResources(self.library)._topic_paths()
-        for topic in rows:
-            if 'topic:'+topic['id'] in decisions: continue
-            overlap=terms & set(query_terms(' '.join(paths.get(topic['id'],[topic['title']]))+' '+(topic['body_md'] or '')[:20000]))
-            if overlap: candidates.append({'topic_id':topic['id'],'title':topic['title'],'reason':'共同主题词：'+', '.join(sorted(overlap)[:6]),'evidence_ids':result['result']['evidence_ids'],'score':len(overlap)})
-        return sorted(candidates,key=lambda r:(-r['score'],r['topic_id']))[:3]
+        from .relations import Relations
+        items=Relations(self.library).candidates('document',identity,result['result']['overview']+' '+' '.join(result['result']['tags']))['items']
+        return [{'topic_id':r['id'],'title':r['title'],'reason':r['reason'],'evidence_ids':result['result']['evidence_ids'],'score':r['score']} for r in items if r['kind']=='topic' and 'topic:'+r['id'] not in decisions][:3]
 
     def decide(self,identity,value):
         with self.db.write() as conn:

@@ -21,6 +21,11 @@ class ResearchTools:
         return self.library.rows(sql,args)
 
     def snapshot(self):
+        # Scope helpers use the shared SQLite connection directly. Hold the same
+        # reentrant lock as writes for the entire snapshot, including cursor reads.
+        with self.library.db.lock:return self._snapshot()
+
+    def _snapshot(self):
         from .notebooks import visible_topics,selected_topics,notebook_heads
         topics=self.rows('SELECT id,parent_id,title,current_revision_id,version FROM topics WHERE deleted_at IS NULL AND notebook_only=0 ORDER BY id')
         allowed={t['id'] for t in topics}
@@ -67,15 +72,24 @@ class ResearchTools:
             if set(value)!={'query'} or not isinstance(value['query'],str) or not 0<len(value['query'].strip())<=500:raise ValueError()
         elif name=='read_local':
             if set(value)!={'handle'} or not isinstance(value['handle'],str) or value['handle'] not in self.issued:raise ValueError()
+        elif name=='find_relations':
+            if set(value)!={'kind','id','query'} or value['kind'] not in ('topic','document') or not isinstance(value['query'],str) or len(value['query'])>200:raise ValueError()
+            if value['id'] not in {r['id'] for r in self.initial['topics' if value['kind']=='topic' else 'documents']}:raise ValueError()
         else:raise ValueError()
         return value
 
     def execute(self,name,value):
         self.check()
+        if name=='find_relations':
+            from .relations import Relations
+            allowed={kind:{r['id'] for r in self.initial[key]} for kind,key in [('topic','topics'),('document','documents')]}
+            return Relations(self.library).candidates(value['kind'],value['id'],value['query'],allowed)
         if name=='inspect_scope':
             docs={d['id'] for d in self.initial['documents']}
             relations=[r for r in self.rows('SELECT low_id,high_id,description FROM document_relations') if r['low_id'] in docs and r['high_id'] in docs]
-            return {'topics':self.initial['topics'][:40],'documents':self.initial['documents'][:40],'relations':relations[:40],'note_count':len(self.initial['notes']),'truncated':len(docs)>40 or len(self.initial['topics'])>40}
+            topics={t['id'] for t in self.initial['topics']}
+            topic_relations=[r for r in self.rows('SELECT low_id,high_id,description FROM topic_relations') if r['low_id'] in topics and r['high_id'] in topics]
+            return {'topics':self.initial['topics'][:40],'documents':self.initial['documents'][:40],'relations':relations[:40],'topic_relations':topic_relations[:40],'notes':self.initial['notes'][:40],'notebooks':self.initial['notebooks'][:40],'note_count':len(self.initial['notes']),'truncated':any(len(self.initial[k])>40 for k in ('documents','topics','notes','notebooks'))}
         if name=='read_local':
             expected=self.issued[value['handle']]
             current=self.resolve(expected['kind'],expected['object_id'])
@@ -130,3 +144,4 @@ class ResearchTools:
 TOOL_SCHEMAS=[]
 for name,description,field in [('search_local','Find relevant original document blocks, reading notes and topic text. Search again with other terms when needed.','query'),('read_local','Read a handle returned by search_local before citing it.','handle'),('inspect_scope','Inspect permitted local topics, documents and document relations.',None)]:
     TOOL_SCHEMAS.append({'type':'function','function':{'name':name,'description':description,'parameters':{'type':'object','properties':{field:{'type':'string'}} if field else {},'required':[field] if field else [],'additionalProperties':False}}})
+TOOL_SCHEMAS.append({'type':'function','function':{'name':'find_relations','description':'Find related existing scoped documents and topics, with reasons and versions. Empty results are valid. Does not change relations or scope.','parameters':{'type':'object','properties':{'kind':{'type':'string','enum':['document','topic']},'id':{'type':'string'},'query':{'type':'string'}},'required':['kind','id','query'],'additionalProperties':False}}})

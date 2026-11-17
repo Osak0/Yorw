@@ -203,6 +203,10 @@ def test_background_compression_does_not_block_foreground_and_correction_stops_i
     assert service.stops[task['task_id']].is_set()
     foreground_release.set();view=finish(service,task['session_id'])
     assert view['items'][0]['error_code']=='MEMORY_CHANGED'
+    # The edit publishes failure before the already-started model fixture returns.
+    # Join that worker before asserting the final number of calls, rather than
+    # treating the database status transition as proof that the thread settled.
+    service.pool.shutdown(wait=True)
     assert len(base.requests)==1 # no subsequent tool or paid model turn after correction
     service.close();memory.close()
 
@@ -220,7 +224,7 @@ def test_schema26_upgrade_backfills_once_with_backup(tmp_path):
     did=doc(old);old.close();db.close()
     for _ in range(2):
         db=Database(workspace);lib=Library(db);memory=ResearchMemory(lib)
-        assert db.version==28
+        assert db.version==29
         assert len(memory.rows("SELECT id FROM research_activity WHERE event_key LIKE 'snapshot-document:%' AND document_id=?",(did,)))==1
         assert list((workspace.root/'backups').glob('*.sqlite3'))
         memory.close();lib.close();db.close()

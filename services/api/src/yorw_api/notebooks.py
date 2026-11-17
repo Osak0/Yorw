@@ -5,6 +5,7 @@ from fastapi import APIRouter,HTTPException
 from pydantic import BaseModel,ConfigDict,Field
 from .library import now
 from .garden import Garden
+from .relations import Relations
 
 class Create(BaseModel):
     model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
@@ -183,7 +184,7 @@ class Notebooks:
                     documents.append(doc)
                     for note in Notes(self.db).list(doc['id']):notes.append({k:v for k,v in note.items() if k not in ('body_md','sources')}|{'kind':'document','title':(note['body_md'].splitlines() or ['阅读笔记'])[0].lstrip('# ')[:120] or '阅读笔记','excerpt':note['body_md'][:240],'owner_title':doc['title'] or doc['original_name'],'shared':doc['id'] not in owned_docs})
             notes.sort(key=lambda n:n['updated_at'],reverse=True)
-            return {'topic':self.topic(identity),'owned_notes':[self.summary(row['id']) for row in self.rows('SELECT id FROM topic_notebooks WHERE topic_id=? AND deleted_at IS NULL',(identity,))],'notes':notes,'documents':documents,'topics':[t for t in scope['topics'] if t['parent_id']==identity],'scope':scope}
+            return {'topic':self.topic(identity),'owned_notes':[self.summary(row['id']) for row in self.rows('SELECT id FROM topic_notebooks WHERE topic_id=? AND deleted_at IS NULL',(identity,))],'notes':notes,'documents':documents,'topics':[t for t in scope['topics'] if t['parent_id']==identity],'scope':scope,'relations':Relations(self.library).topics(identity)['items']}
 
 def router(library):
     service=Notebooks(library);routes=APIRouter()

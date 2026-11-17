@@ -84,6 +84,8 @@ def create_app(token: str, database: Database) -> FastAPI:
     app.include_router(router(database))
     app.include_router(research_router(research))
     app.include_router(memory_router(memory))
+    from .collaboration import Collaboration, router as collaboration_router
+    app.include_router(collaboration_router(Collaboration(library)))
     # Register the literal /v1/documents/search route before the document-detail
     # route so FastAPI does not treat "search" as a document UUID.
     from .resources import router as resources_router

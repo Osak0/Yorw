@@ -1,3 +1,5 @@
+import {runCollaborationSmoke,resumeCollaborationSmoke} from './collaboration-smoke'
+import {Collaboration} from './collaboration'
 import {runNotebooksSmoke,resumeNotebooksSmoke} from './notebooks-smoke'
 import {runResearchSmoke} from './research-smoke'
 import {Research,ResearchMemory} from './research'
@@ -172,6 +174,8 @@ else app.whenReady().then(async () => {
   const memoryTimer=setInterval(()=>void memory.scan(),5000)
   memoryTimer.unref()
   app.once('will-quit',()=>clearInterval(memoryTimer))
+  const collaboration=new Collaboration(backend)
+  for(const method of ['list','get','preview','decide','candidates','topics'] as const)ipcMain.handle(`collaboration:${method}`,providerAction(input=>collaboration[method](input)))
   const research=new Research(backend,providers)
   ipcMain.handle('research:list',providerAction(()=>research.list()))
   ipcMain.handle('research:get',providerAction(input=>research.get(input)))
@@ -200,6 +204,12 @@ else app.whenReady().then(async () => {
   if (devUrl) await window.loadURL(devUrl)
   else await window.loadFile(join(__dirname, '../renderer/index.html'))
   await backend.start()
+  if(readerSmoke && (process.argv.includes('--collaboration-smoke')||process.argv.includes('--collaboration-resume-smoke'))){
+    const resume=process.argv.includes('--collaboration-resume-smoke')
+    try{if(resume)await resumeCollaborationSmoke(window,backend,smokeReport!);else await runCollaborationSmoke(window,backend,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,resume?'collaboration-resume-error.json':'collaboration-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));if(!window.isDestroyed())await writeFile(join(smokeReport!,'collaboration-error.png'),(await window.webContents.capturePage()).toPNG());await backend.stop();app.exit(1)}
+    return
+  }
   if(readerSmoke && process.argv.includes('--notebooks-resume-smoke')){
     try{await resumeNotebooksSmoke(window,backend,smokeReport!);await backend.stop();app.exit(0)}
     catch(error){await writeFile(join(smokeReport!,'notebooks-resume-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}

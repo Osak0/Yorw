@@ -8,7 +8,7 @@ from test_search_service import running
 def test_notebook_http_and_restart_preserve_scope_head_and_immutable_revisions(frozen,tmp_path):
     owner,other,note=[str(uuid4()) for _ in range(3)];workspace=tmp_path/'workspace'
     with running(frozen,workspace) as (request,upload):
-        assert request('/v1/health')['schema_version']==28
+        assert request('/v1/health')['schema_version']==29
         for identity in (owner,other):request('/v1/topics','POST',{'id':identity,'title':'Owned fixture '+identity[:4],'parent_id':None})
         created=request('/v1/topics/'+owner+'/notebooks','POST',{'id':note,'title':'Fixture note'})
         saved=request('/v1/topics/'+note+'/revisions','POST',{'base_revision_id':created['base_revision_id'],'body_md':'Owned continuity evidence'})

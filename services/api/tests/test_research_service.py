@@ -29,7 +29,7 @@ def test_research_http_tool_cycle_persistence_and_no_automatic_restart(frozen,tm
     try:
         workspace=tmp_path/'workspace';pid=str(uuid4())
         with running(frozen,workspace) as (request,upload):
-            assert request('/v1/health')['schema_version']==28
+            assert request('/v1/health')['schema_version']==29
             did=upload(pdf_bytes())
             request('/v1/providers/profiles/'+pid,'PUT',{'name':'Fixture','provider':'compatible','base_url':f'http://127.0.0.1:{server.server_port}','model':'fixture','version':0})
             check=request('/v1/providers/profiles/'+pid+'/checks/tools','POST',{},key='fixture')

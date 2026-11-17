@@ -146,7 +146,7 @@ function GardenContent({activeTopicId,activePage,onOpenTopic,onOpenTool,onCollap
 }){
  const book=gardenBook(),state=useSyncExternalStore(book.subscribe,book.getSnapshot)
  const [query,setQuery]=useState(''),[creating,setCreating]=useState(false),[createNotice,setCreateNotice]=useState(''),[manageNotice,setManageNotice]=useState(''),[managing,setManaging]=useState(false)
- useEffect(()=>{void book.refresh()},[book])
+ useEffect(()=>{void book.refresh();const refresh=()=>void book.refresh();window.addEventListener('formal-materials-changed',refresh);return()=>window.removeEventListener('formal-materials-changed',refresh)},[book])
  useEffect(()=>{onTitles(state.topics)},[onTitles,state.topics])
  useEffect(()=>{if(activePage&&activePage!=='topic-create'&&activeTopicId&&state.selected!==activeTopicId)void book.select(activeTopicId)},[activePage,activeTopicId,state.selected,book])
  useEffect(()=>{if(activePage==='topic-create'&&!state.create)book.startCreate(null)},[activePage,state.create,book])
