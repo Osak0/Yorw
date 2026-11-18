@@ -91,8 +91,11 @@ def _stream_turn(config, key, messages, tools, validators, stop, deadline, max_t
     except (TimeoutError, socket.timeout):
         check(stop, deadline)
         raise ProbeError('TIMEOUT') from None
-    except urllib.error.URLError:
+    except urllib.error.URLError as error:
         check(stop, deadline)
+        # urllib wraps connect timeouts in URLError; preserve timeout semantics.
+        if isinstance(error.reason, (TimeoutError, socket.timeout)):
+            raise ProbeError('TIMEOUT') from None
         raise ProbeError('NETWORK_ERROR') from None
     except OSError:
         check(stop, deadline)

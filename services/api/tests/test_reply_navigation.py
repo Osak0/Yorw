@@ -347,3 +347,29 @@ def test_repeated_broken_json_is_retried_before_the_task_can_finish(library):
         assert [call['status'] for call in task['tool_calls']] == ['error', 'error', 'ok']
     finally:
         service.close()
+
+
+def test_long_discovery_reserves_proposal_and_final_reply(library):
+    pid = profile(library)
+    rounds = []
+    def turn(config, key, messages, schemas, validators, stop, deadline, *args, **kwargs):
+        ordinal = len(rounds)
+        rounds.append(ordinal)
+        if ordinal < 8:
+            # Distinct valid paging requests reproduce serial discovery consuming rounds.
+            return step([(str(ordinal), 'browse_garden', {'page': ordinal + 1})], validators)
+        if ordinal == 8:
+            assert [s['function']['name'] for s in schemas] == ['propose_changes']
+            assert '停止资料浏览' in messages[0]['content']
+            return step([('proposal', 'propose_changes', {'operations': [
+                {'key': 'topic', 'action': 'create_topic', 'title': '隔离测试研究', 'reason': '明确创建请求'}]})], validators)
+        assert not schemas
+        return {'role': 'assistant', 'content': '方案已生成，等待用户采纳。'}, [], None
+    service = Research(library, turn)
+    try:
+        start = service.start(ask(pid, '创建研究专题'), 'fixture')
+        task = finish(service, start['session_id'])['items'][-1]
+        assert task['status'] == 'completed'
+        assert any(c['name'] == 'propose_changes' and c['status'] == 'ok' for c in task['tool_calls'])
+    finally:
+        service.close()

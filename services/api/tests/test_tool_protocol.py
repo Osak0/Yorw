@@ -87,3 +87,17 @@ def test_terminal_business_fault_stops_the_turn():
 def test_malformed_stream_fields_are_safe_errors(delta):
     with pytest.raises(ProbeError):
         ToolTurn().feed(delta)
+
+
+@pytest.mark.parametrize('reason,expected', [(TimeoutError('connect timed out'),'TIMEOUT'), (OSError('connection refused'),'NETWORK_ERROR')])
+def test_transport_preserves_wrapped_connect_timeout(monkeypatch,reason,expected):
+    import time, urllib.error
+    from threading import Event
+    from yorw_api import model_transport
+    class Opener:
+        def open(self,*args,**kwargs):
+            raise urllib.error.URLError(reason)
+    monkeypatch.setattr(model_transport.urllib.request,'build_opener',lambda *args:Opener())
+    with pytest.raises(ProbeError) as error:
+        model_transport._stream_turn({'base_url':'https://example.com','model':'fixture'},'fake',[],[],{},Event(),time.monotonic()+30)
+    assert error.value.code==expected

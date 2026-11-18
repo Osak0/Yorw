@@ -577,7 +577,12 @@ class Research:
                 total_limit=max(120000,limit*5)
                 if estimate>limit or inputs+estimate>total_limit or allowance<=0:raise ProbeError('TOKEN_BUDGET_EXCEEDED')
                 body_before_turn=self.rows('SELECT body_md FROM research_tasks WHERE id=?',(tid,))[0]['body_md']
-                message,calls,usage=self.turn_fn(config,key,messages,schemas,validators,stop,deadline,allowance,on_text=text_delta)
+                # Reserve the final two rounds for a proposal and its final explanation.
+                # Do not raise limits or let serial discovery consume the whole task.
+                active_schemas=schemas if ordinal<8 else ([item for item in schemas if item['function']['name']=='propose_changes'] if ordinal==8 else [])
+                guidance={'role':'system','content':f'本任务剩余 {10-ordinal} 轮、{24-count} 次工具。独立读取尽量同轮发起；只用返回的真实 ID，不猜测专题 ID。创建请求在材料足够时立即生成方案，不必全文逐页读尽。'+('现在停止资料浏览；依据已核对资料生成用户请求的方案，不足的部分说明缺失。' if ordinal==8 else '最后一轮请总结真实结果及未完成部分，不再调用工具。' if ordinal==9 else '')}
+                turn_messages=[{**messages[0], 'content':messages[0]['content']+'\n'+guidance['content']},*messages[1:]]
+                message,calls,usage=self.turn_fn(config,key,turn_messages,active_schemas,validators,stop,deadline,allowance,on_text=text_delta)
                 current()
                 # Real usage is the budget unit when the provider reports it; the byte
                 # estimate is only a fallback and a conservative upper bound.
