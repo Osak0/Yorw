@@ -3,7 +3,7 @@ import type { WorkspaceLayoutTab } from '../shared/status'
 export type WorkspaceModule = 'Storage' | 'Garden' | 'House'
 export type StorageTool = 'notes' | 'search' | 'chat' | 'resource' | 'metadata' | 'enrichment'
 export type GardenTool = 'ai' | 'history' | 'materials' | 'topic-note' | 'notebooks' | 'note-scope' | 'linked-topics'
-export type WorkspaceTabKind = 'assistant' | 'settings' | 'document' | 'topic' | 'topic-create' | 'topic-manage' | StorageTool | GardenTool
+export type WorkspaceTabKind = 'assistant' | 'proposal' | 'settings' | 'document' | 'topic' | 'topic-create' | 'topic-manage' | StorageTool | GardenTool
 export const CREATE_TOPIC_TAB_ID = 'new'
 const STORAGE_KINDS: WorkspaceTabKind[] = ['document', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment']
 
@@ -56,7 +56,7 @@ export function moduleForTab(tab: WorkspaceTab): WorkspaceModule {
 }
 
 export function tabKindLabel(tab: WorkspaceTab): string {
-  return { 'topic-note':'笔记',notebooks:'全部笔记','note-scope':'笔记范围','linked-topics':'关联专题',assistant:'研究助理', settings:'设置', document: '文献', topic: '专题', 'topic-create': '新建专题', 'topic-manage': '专题管理', notes: '笔记', search: '检索', chat: '问答', resource: '编辑元数据', metadata: '编辑元数据', enrichment: 'AI 辅助文献整理', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
+  return { 'topic-note':'笔记',notebooks:'全部笔记','note-scope':'笔记范围','linked-topics':'关联专题',assistant:'研究助理', proposal:'修改方案', settings:'设置', document: '文献', topic: '专题', 'topic-create': '新建专题', 'topic-manage': '专题管理', notes: '笔记', search: '检索', chat: '问答', resource: '编辑元数据', metadata: '编辑元数据', enrichment: 'AI 辅助文献整理', ai: 'AI 优化', history: '修订历史', materials: '关联材料' }[tab.kind]
 }
 
 /** Restores saved pages against the current workspace and reports pages that no longer exist. */
@@ -66,6 +66,7 @@ export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, 
     if(item.kind==='assistant'){tabs.push(makeTab('assistant',item.id,'研究助理'));continue}
     if(item.kind==='settings'){tabs.push(makeTab('settings',item.id,({parsers:'文献解析与预览',chat:'聊天模型',models:'研究助理模型',retrieval:'检索',data:'数据与导出'} as Record<string,string>)[item.id]));continue}
     if(item.kind==='topic-create'){tabs.push(topicCreateTab());continue}
+    if(item.kind==='proposal'){tabs.push(makeTab('proposal',item.id,item.title||'修改方案'));continue}
     const garden = !STORAGE_KINDS.includes(item.kind)
     const title = (garden ? topics : documents).get(item.id)
     if (title !== undefined) {
@@ -74,7 +75,7 @@ export function restoreTabs(items: WorkspaceLayoutTab[], documents: Map<string, 
       if (!tabs.some(existing => existing.key === tab.key)) tabs.push(tab)
     }
   }
-  return { tabs, skipped: items.filter(item => item.kind !== 'assistant' && item.kind !== 'settings' && item.kind !== 'topic-create' && !(STORAGE_KINDS.includes(item.kind) ? documents : topics).has(item.id)).length }
+  return { tabs, skipped: items.filter(item => item.kind !== 'assistant' && item.kind !== 'proposal' && item.kind !== 'settings' && item.kind !== 'topic-create' && !(STORAGE_KINDS.includes(item.kind) ? documents : topics).has(item.id)).length }
 }
 
 /** Closing a background tab keeps the active page; closing the active tab picks its neighbour. */

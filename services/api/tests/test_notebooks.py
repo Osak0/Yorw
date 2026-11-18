@@ -168,7 +168,7 @@ def test_schema27_upgrade_preserves_ids_drafts_and_empty_topic_distinction(tmp_p
     before=db.connection.execute('SELECT * FROM revisions ORDER BY id').fetchall();db.close()
     for _ in range(2):
         db=Database(workspace);lib=Library(db);service=Notebooks(lib)
-        assert db.version==29 and list((workspace.root/'backups').glob('*.sqlite3'))
+        assert db.version==31 and list((workspace.root/'backups').glob('*.sqlite3'))
         assert {n['id'] for n in service.catalog()['items']}=={body,draft}
         assert service.get(draft)['body_md']==''
         assert db.connection.execute('SELECT * FROM revisions ORDER BY id').fetchall()==before

@@ -37,8 +37,8 @@ export async function runNotebooksSmoke(window:BrowserWindow,backend:Backend,pro
    const click=(text,root=document)=>{const button=[...root.querySelectorAll('button')].find(b=>b.textContent===text);if(!button)throw Error('BUTTON_'+text);button.click()}
    const set=(el,value)=>{Object.getOwnPropertyDescriptor(el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}))}
    window.__notebookSmoke={wait,click,set,ids}
-   click('Garden');await wait(()=>document.querySelector('#research-home-input'),'HOME');click('刷新');await wait(()=>document.querySelector('[data-topic-id="'+ids.owner+'"]'),'TREE')
-   document.querySelector('[data-topic-id="'+ids.owner+'"]').click();await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===3,'OVERVIEW')
+   click('Garden');await wait(()=>document.querySelector('#research-home-input'),'HOME');document.querySelector('.garden-home-toolbar .workspace-more summary').click();click('刷新目录');await wait(()=>document.querySelector('[data-topic-id="'+ids.owner+'"]'),'TREE')
+   document.querySelector('[data-topic-id="'+ids.owner+'"]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===3,'OVERVIEW')
    const root=document.querySelector('[aria-label="专题概览"]');if(root.querySelectorAll(':scope>section').length!==3)throw Error('THREE_MODULES')
    if(root.querySelector('.cm-editor'))throw Error('INLINE_FULL_EDITOR')
    if(root.querySelector('section ul').children.length!==5)throw Error('FIRST_FIVE')
@@ -56,7 +56,7 @@ export async function runNotebooksSmoke(window:BrowserWindow,backend:Backend,pro
    document.querySelector('input[aria-label="Scope foreign"]').click();await new Promise(r=>setTimeout(r,100));click('保存笔记范围');await wait(async()=>{const r=await window.yorw.garden.noteScope(ids.owner);return r.value.selected.includes(ids.foreign)},'SCOPE_RESTORED')
    click('返回专题概览');await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===3,'BACK_OVERVIEW')
    const overview=(await window.yorw.garden.overview(ids.owner)).value;if(!overview.notes.some(n=>n.id===ids.outside))throw Error('SCOPE_NOT_SHARED')
-   click('查看全部笔记');await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===1&&[...document.querySelectorAll('.topic-overview-link')].some(b=>b.textContent==='Owned note 0'),'ALL_NOTES')
+   click('管理笔记');await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===1&&[...document.querySelectorAll('.topic-overview-link')].some(b=>b.textContent==='Owned note 0'),'ALL_NOTES')
    click('Owned note 0');await wait(()=>document.querySelector('.topic-body-view .cm-content'),'DETAIL')
    document.querySelector('.topic-body-view .cm-content').focus()
    return {threeModules:true,firstFive:true,sharedCollapsed:true,scopeSaved:true,scopeCloseGuard:true,independentDetail:true}
@@ -66,7 +66,7 @@ export async function runNotebooksSmoke(window:BrowserWindow,backend:Backend,pro
    const {wait,click,ids}=window.__notebookSmoke
    await wait(()=>document.querySelector('.workspace-tab[aria-selected="true"]')?.closest('.workspace-tab-item').querySelector('.workspace-tab-dirty'),'DIRTY')
    document.querySelector('.workspace-tab[aria-selected="true"]').closest('.workspace-tab-item').querySelector('.workspace-tab-close').click();await wait(()=>document.querySelector('.close-dialog'),'DRAFT_GUARD');click('取消')
-   click('保存',document.querySelector('.topic-toolbar'));await wait(async()=>{const r=await window.yorw.garden.get(ids.first);return r.value.revision.body_md.includes('Manual fixture change.')},'SAVE_BODY')
+   click('保存',document.querySelector('.topic-body-view'));await wait(async()=>{const r=await window.yorw.garden.get(ids.first);return r.value.revision.body_md.includes('Manual fixture change.')},'SAVE_BODY')
    click('AI 优化',document.querySelector('.topic-toolbar'));await wait(()=>document.querySelector('[aria-label="Wiki 生成要求"]'),'AI_FORM')
    const input=document.querySelector('[aria-label="Wiki 生成要求"]');window.__notebookSmoke.set(input,'Organize owned plan');await new Promise(r=>setTimeout(r,100));click('生成草稿')
    await wait(()=>document.querySelector('.wiki-review'),'AI_REVIEW')
@@ -80,7 +80,7 @@ export async function runNotebooksSmoke(window:BrowserWindow,backend:Backend,pro
   await window.webContents.executeJavaScript(`(async()=>{const {click,wait,ids}=window.__notebookSmoke;click('返回所属专题');await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===3,'FINAL_OVERVIEW')})()`)
   const readingProof=await window.webContents.executeJavaScript(`(async()=>{
    const {click,wait,ids}=window.__notebookSmoke
-   click('查看全部笔记');await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===1&&[...document.querySelectorAll('.topic-overview-link')].some(b=>b.textContent==='Owned reading note candidate.'),'READING_IN_OVERVIEW')
+   click('管理笔记');await wait(()=>document.querySelector('[aria-label="专题概览"]')?.querySelectorAll(':scope>section').length===1&&[...document.querySelectorAll('.topic-overview-link')].some(b=>b.textContent==='Owned reading note candidate.'),'READING_IN_OVERVIEW')
    click('Owned reading note candidate.');await wait(()=>document.querySelector('.notes-panel .cm-content'),'READING_DETAIL')
    if(!document.querySelector('.notes-panel .cm-content').textContent.includes('Owned reading note'))throw Error('READING_SHARED_ID')
    click('AI 优化笔记');await wait(()=>document.querySelector('[aria-label="Wiki 生成要求"]'),'READING_AI')

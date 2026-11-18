@@ -95,6 +95,15 @@ test('research assistant tab survives restore independently of a topic',()=>{
 })
 
 
+test('proposal tabs survive restore by proposal id without workspace lookup',()=>{
+ const restored=restoreTabs([{kind:'proposal',id:'32345678-1234-4234-8234-123456789abc',title:'修改方案：新建专题'}],new Map(),new Map())
+ expect(restored.skipped).toBe(0)
+ expect(restored.tabs[0]).toMatchObject({kind:'proposal',id:'32345678-1234-4234-8234-123456789abc',title:'修改方案：新建专题'})
+ expect(moduleForTab(restored.tabs[0])).toBe('Garden')
+ expect(tabKindLabel(restored.tabs[0])).toBe('修改方案')
+})
+
+
 test('independent notebook and scope tabs restore by their stable entity ids',()=>{
  const head='22345678-1234-1234-1234-123456789abc'
  const items=[{kind:'topic-note' as const,id:head},{kind:'note-scope' as const,id},{kind:'notebooks' as const,id}]

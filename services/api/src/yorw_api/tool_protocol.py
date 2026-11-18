@@ -1,11 +1,24 @@
 """Bounded assembly of OpenAI-compatible streamed tool requests.
 
-No tool executes until its complete arguments have been parsed and validated.
-Provider-specific assistant fields are retained for the next model turn.
+Protocol damage (truncated arguments, missing/duplicate call IDs, unknown tools)
+stops the turn. A complete, well-formed call whose business arguments are invalid
+is returned with its own ToolFault so the caller can answer that tool_call_id and
+let the model correct itself. No tool executes until its arguments are validated.
 """
 import copy
 import json
+from dataclasses import dataclass
 from .providers import ProbeError
+from .tool_errors import ToolFault
+
+
+@dataclass
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict
+    value: object | None
+    fault: ToolFault | None = None
 
 
 class ToolTurn:
@@ -74,12 +87,32 @@ class ToolTurn:
             ids.add(call["id"])
             try:
                 arguments = json.loads(call["function"]["arguments"])
-                if not isinstance(arguments, dict):
-                    raise ValueError()
-                value = validators[name](arguments)
             except (ValueError, TypeError, KeyError):
-                raise ProbeError("INVALID_TOOL_ARGUMENTS") from None
-            parsed.append((call["id"], name, value))
+                # A complete stream with broken JSON is recoverable: hand the model
+                # a correctable argument fault so it can resend the call, instead of
+                # failing the whole task. Truncated streams still stop above.
+                parsed.append(ToolCall(call["id"], name, call["function"]["arguments"], None,
+                                       ToolFault("INVALID_TOOL_ARGUMENTS", field="arguments",
+                                                 expected="a complete JSON object for this tool",
+                                                 message="参数不是完整 JSON；请重新发起该调用，只包含工具声明的字段。")))
+                continue
+            if not isinstance(arguments, dict):
+                parsed.append(ToolCall(call["id"], name, {}, None,
+                                       ToolFault("INVALID_ARGUMENT", field="arguments",
+                                                 expected="a JSON object")))
+                continue
+            try:
+                value = validators[name](arguments)
+                fault = None
+            except ToolFault as error:
+                if not error.correctable:
+                    raise ProbeError(error.code) from None
+                value, fault = None, error
+            except (ValueError, TypeError, KeyError):
+                value = None
+                fault = ToolFault("INVALID_ARGUMENT", field="arguments",
+                                  expected="arguments accepted by the tool")
+            parsed.append(ToolCall(call["id"], name, arguments, value, fault))
         if calls:
             self.message["tool_calls"] = calls
         return copy.deepcopy(self.message), parsed

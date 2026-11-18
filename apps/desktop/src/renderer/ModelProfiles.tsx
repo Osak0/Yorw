@@ -1,3 +1,4 @@
+import {useSuccessExpiry} from './WorkspaceUI'
 import React,{useEffect,useState} from 'react'
 import type {ModelProfile,ModelDefaults,ProfileInput,ProfileCheck} from '../shared/status'
 import {houseForms} from './House'
@@ -9,6 +10,7 @@ function checked(raw:string|null){try{const value=raw?JSON.parse(raw):null;retur
 export function ModelProfiles(){
  const [items,setItems]=useState<ModelProfile[]>([]),[defaults,setDefaults]=useState<ModelDefaults|null>(null),[form,setForm]=useState<ProfileInput>(empty),[baseline,setBaseline]=useState<ProfileInput|null>(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[job,setJob]=useState<ProfileCheck|null>(null)
  const dirty=baseline?JSON.stringify(form)!==JSON.stringify(baseline):!!(form.name||form.model||form.key||form.clear_key||form.provider!=='deepseek'||form.base_url!==presets.deepseek)
+ useSuccessExpiry(notice,()=>setNotice(''),notice==='默认选择已保存')
  async function load(){const r=await window.yorw.modelProfiles.list();if(r.ok){setItems(r.value.items);setDefaults(r.value.defaults)}else setNotice(labels[r.code]??'加载失败，请刷新')}
  useEffect(()=>{void load().catch(()=>setNotice('加载失败，请刷新'))},[])
  useEffect(()=>{if(job?.status!=='running')return;let active=true;const timer=setInterval(()=>{void window.yorw.modelProfiles.check(job.id).then(r=>{if(!active)return;if(r.ok){setJob(r.value);if(r.value.status!=='running'){setNotice(labels[r.value.result?.code??'']??'检测结束');void load()}}else{setJob(null);setNotice('检测记录不可用，服务可能已重启，请重新检测')}}).catch(()=>{if(active){setJob(null);setNotice('检测连接中断，请刷新')}})},500);return()=>{active=false;clearInterval(timer)}},[job?.id,job?.status])

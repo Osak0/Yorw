@@ -217,8 +217,9 @@ def test_research_tool_proposes_only_then_explicitly_adopts(library):
         tools=[m for m in messages if m['role']=='tool']
         if not tools:
             name='propose_changes'
-            value=validators[name]({'operations':json.dumps([op('note','create_note',owner=owner,title='Research idea',body_md='Candidate hypothesis only.').model_dump()])})
-            return {'role':'assistant','content':'','tool_calls':[{'id':'owned-proposal','type':'function','function':{'name':name,'arguments':json.dumps(value)}}]},[('owned-proposal',name,value)],None
+            raw={'operations':[op('note','create_note',owner=owner,title='Research idea',body_md='Candidate hypothesis only.').model_dump()]}
+            value=validators[name](raw)
+            return {'role':'assistant','content':'','tool_calls':[{'id':'owned-proposal','type':'function','function':{'name':name,'arguments':json.dumps(raw)}}]},[('owned-proposal',name,value)],None
         assert json.loads(tools[-1]['content'])['status']=='pending'
         return {'role':'assistant','content':'已生成预览，请选择采纳。'},[],None
     research=Research(library,model)
@@ -248,7 +249,7 @@ def test_28_upgrade_backup_repeat_and_immutable_history(tmp_path):
     before=db.connection.execute('SELECT * FROM revisions').fetchall();lib.close();db.close()
     for _ in range(2):
         db=Database(workspace)
-        assert db.version==29
+        assert db.version==31
         assert db.connection.execute('SELECT * FROM revisions').fetchall()==before
         assert list((workspace.root/'backups').glob('*.sqlite3'))
         assert db.connection.execute('SELECT COUNT(*) FROM collaboration_proposals').fetchone()[0]==0
@@ -332,3 +333,57 @@ def test_candidates_search_late_body_and_preserve_support_location(library):
     assert result['items'][0]['id']==owner
     assert 'LateBodyMarker' in result['items'][0]['excerpt']
     assert result['items'][0]['support'][0]['note_id']==note['id']
+
+
+def test_detail_exposes_paths_decisions_and_note_navigation(library):
+    service=Collaboration(library);document=doc(library);owner=topic(library);note=create(Notebooks(library),owner,'详情笔记')
+    item=preview(service,document,[op('append','append_note',target=note['id'],body_md='追加内容')])
+    accepted=service.decide(item['id'],decision(item,['append']),'accept')
+    detail=service.get(item['id'],detail=True)
+    operation=detail['operations'][0]
+    assert operation['target_kind']=='topic_note' and operation['target_path']
+    assert detail['decisions'] and detail['decisions'][-1]['action']=='accept'
+    assert detail['decisions'][-1]['status']=='accepted'
+    record=detail['decision']['records'][0]
+    assert record['navigation']['tab']=='topic-note' and record['navigation']['id']==note['id']
+
+
+def test_conflict_objects_name_the_changed_note(library):
+    service=Collaboration(library);document=doc(library);owner=topic(library);note=create(Notebooks(library),owner)
+    item=preview(service,document,[op('append','append_note',target=note['id'],body_md='Candidate')])
+    write(library,note,'User changed this note')
+    detail=service.get(item['id'],detail=True)
+    assert detail['stale'] is True
+    assert any(entry['id']==note['id'] and entry['reason']=='object_changed' for entry in detail['conflict_objects'])
+
+
+def test_append_source_offset_preserves_existing_note_citation_numbers(library):
+    service=Collaboration(library);document=doc(library);owner=topic(library);note=create(Notebooks(library),owner)
+    tools=ResearchTools(library,{'mode':'workspace'})
+    source=tools.execute('read_local',{'handle':tools.execute('search_local',{'query':'fixture'})['items'][0]['handle']})
+    first=service.preview(Preview(request_id=uuid4(),document_id=document,operations=[op('append','append_note',target=note['id'],body_md='First evidence [S1].')]),sources=[source])
+    service.decide(first['id'],decision(first,['append']),'accept')
+    second=service.preview(Preview(request_id=uuid4(),document_id=document,operations=[op('append2','append_note',target=note['id'],body_md='Second evidence [S1].')]),sources=[source])
+    operation=service.get(second['id'],detail=True)['operations'][0]
+    assert operation['source_offset']==1 and operation['source_citations']==['S2']
+
+
+def test_detail_relation_records_have_both_topic_navigation_targets(library):
+    service=Collaboration(library);a=topic(library,'A');b=topic(library,'B')
+    item=service.preview(Preview(request_id=uuid4(),topic_id=a,operations=[op('rel','link',first_kind='topic',first=a,second_kind='topic',second=b)]))
+    service.decide(item['id'],decision(item,['rel']),'accept')
+    record=service.get(item['id'],detail=True)['decision']['records'][0]
+    assert record['first_navigation']['tab']=='topic' and record['first_navigation']['id']==a
+    assert record['second_navigation']['tab']=='topic' and record['second_navigation']['id']==b
+
+
+def test_detail_reading_note_navigation_returns_to_document_notes(library):
+    service=Collaboration(library);document=doc(library);note_id=str(uuid4())
+    with library.db.write() as conn:
+        conn.execute('INSERT INTO notes(id,document_id,body_md,created_at,updated_at) VALUES(?,?,?,?,?)',(note_id,document,'Reading note','time','time'))
+    item=preview(service,document,[op('append','append_note',target=note_id,body_md='Candidate')])
+    service.decide(item['id'],decision(item,['append']),'accept')
+    detail=service.get(item['id'],detail=True)
+    assert detail['operations'][0]['target_kind']=='reading_note'
+    record=detail['decision']['records'][0]
+    assert record['navigation']['tab']=='notes' and record['navigation']['id']==document

@@ -224,7 +224,7 @@ def test_schema26_upgrade_backfills_once_with_backup(tmp_path):
     did=doc(old);old.close();db.close()
     for _ in range(2):
         db=Database(workspace);lib=Library(db);memory=ResearchMemory(lib)
-        assert db.version==29
+        assert db.version==31
         assert len(memory.rows("SELECT id FROM research_activity WHERE event_key LIKE 'snapshot-document:%' AND document_id=?",(did,)))==1
         assert list((workspace.root/'backups').glob('*.sqlite3'))
         memory.close();lib.close();db.close()

@@ -64,6 +64,24 @@ test('tool tabs are valid Storage pages and persist as the active page', async (
   })
 })
 
+test('proposal tabs persist as Garden pages by proposal id', async () => {
+  await withDirectory(async directory => {
+    const store = new Layout(directory)
+    const proposalId = '33333333-3333-4333-8333-333333333333'
+    const proposalLayout: WorkspaceLayout = {
+      version: 1,
+      module: 'Garden',
+      tabs: [{ kind: 'proposal', id: proposalId, title: '修改方案：新建专题' }],
+      activeKey: `proposal:${proposalId}`,
+      storageKey: null,
+      gardenKey: `proposal:${proposalId}`
+    }
+    await store.save(proposalLayout)
+    await expect(store.load()).resolves.toEqual({ layout: proposalLayout })
+  })
+})
+
+
 test('Garden AI and history tabs persist as Garden pages', async () => {
   await withDirectory(async directory => {
     const store = new Layout(directory)

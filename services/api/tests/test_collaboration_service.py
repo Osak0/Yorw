@@ -8,7 +8,7 @@ from test_search_service import running
 def test_collaboration_http_restart_idempotence_and_undo(frozen,tmp_path):
     workspace=tmp_path/'workspace';owner=str(uuid4());proposal=None
     with running(frozen,workspace) as (request,_):
-        assert request('/v1/health')['schema_version']==29
+        assert request('/v1/health')['schema_version']==31
         request('/v1/topics','POST',{'id':owner,'title':'Fixture research','parent_id':None})
         proposal=request('/v1/collaboration/preview','POST',{'request_id':str(uuid4()),'topic_id':owner,'operations':[
             {'key':'topic','action':'create_topic','title':'Related experiment','reason':'Unverified research organization'},

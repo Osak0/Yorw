@@ -12,8 +12,15 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from .garden import Garden
 from .library import now
+from .providers import ProbeError
 from .relations import Relations
 from .research_tools import ResearchTools, digest
+
+
+class FolderDependency(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['folder_members'] = 'folder_members'
+    folder_id: UUID
 
 
 class Operation(BaseModel):
@@ -29,6 +36,7 @@ class Operation(BaseModel):
     second_kind: Literal['document', 'topic'] = 'topic'
     second: str = Field(default='', max_length=80)
     reason: str = Field(min_length=1, max_length=500)
+    recommended: bool = False
     first_version: int | None = Field(default=None,ge=1,strict=True)
     second_version: int | None = Field(default=None,ge=1,strict=True)
     target_version: int | None = Field(default=None,ge=1,strict=True)
@@ -42,6 +50,7 @@ class Preview(BaseModel):
     topic_id: UUID | None = None
     enrichment_id: int | None = Field(default=None,ge=1)
     operations: list[Operation] = Field(min_length=1, max_length=20)
+    dependencies: list[FolderDependency] = Field(default_factory=list, max_length=20)
 
 
 class Decision(BaseModel):
@@ -75,18 +84,28 @@ class Collaboration:
             return {k:(self.rows('SELECT content_version FROM research_memory_state WHERE scope_key=?',(k,)) or [{'content_version':1}])[0]['content_version'] for k in keys}
         if origin.get('task_id'):
             tid = origin['task_id']
-            rows = self.rows('SELECT t.*,s.scope_json,s.version AS session_version,s.deleted_at FROM research_tasks t JOIN research_sessions s ON s.id=t.session_id WHERE t.id=?', (tid,))
-            if not rows or rows[0]['deleted_at'] or rows[0]['status'] not in ('running', 'completed'):
+            rows = self.rows('SELECT t.*,s.scope_json AS session_scope_json,s.version AS session_version,s.deleted_at FROM research_tasks t JOIN research_sessions s ON s.id=t.session_id WHERE t.id=?', (tid,))
+            if not rows or rows[0]['deleted_at']:
                 raise HTTPException(409, detail='PROPOSAL_STALE')
             row = rows[0]
+            status, error = row['status'], row.get('error_code')
+            ended_ok = status in ('running', 'completed', 'interrupted')
+            if status == 'failed':
+                ended_ok = error not in ('CONTEXT_CHANGED', 'MEMORY_CHANGED', 'SOURCE_UNAVAILABLE')
+            if status == 'cancelled':
+                ended_ok = error not in ('CONTEXT_CHANGED', 'MEMORY_CHANGED', 'SESSION_DELETED')
+            if not ended_ok:
+                raise HTTPException(409, detail='PROPOSAL_STALE')
+            scope = json.loads(row['session_scope_json'])
             from .research_memory import ResearchMemory
             memory = ResearchMemory(self.library)
             if not memory.history_allowed(tid, row['session_id']): raise HTTPException(409, detail='PROPOSAL_STALE')
             from .providers import ProbeError
-            try: tools = ResearchTools(self.library, json.loads(row['scope_json']))
+            try: tools = ResearchTools(self.library, scope)
             except ProbeError: raise HTTPException(409, detail='PROPOSAL_STALE') from None
             keys = ['global'] + [t['id'] for t in tools.initial['topics']]
-            return {'session_version': row['session_version'], 'scope': tools.initial,
+            return {'mode': scope.get('mode', 'workspace'),
+                    'session_version': row['session_version'], 'scope': tools.initial,
                     'memory': memory_versions(keys)}
         if origin.get('topic_id'):
             return {'topic': self.entity('topic', origin['topic_id']),'memory':memory_versions(['global',origin['topic_id']])}
@@ -97,6 +116,44 @@ class Collaboration:
             if not rows:raise HTTPException(409,detail='SOURCE_UNAVAILABLE')
             context['enrichment']=digest(rows[0])
         return context
+
+    def origin_scope(self, origin):
+        if origin.get('task_id'):
+            return json.loads(self.rows('SELECT scope_json FROM research_sessions WHERE id=(SELECT session_id FROM research_tasks WHERE id=?)', (origin['task_id'],))[0]['scope_json'])
+        if origin.get('topic_id'):
+            return {'mode': 'topic', 'topic_id': origin['topic_id']}
+        return {'mode': 'workspace', 'topic_id': None}
+
+    def folder_snapshots(self, dependencies, origin):
+        """Record actual folder names, paths and direct members. Additions matter only
+        when the proposal declared that it depends on all current members."""
+        if not dependencies: return []
+        tools = ResearchTools(self.library, self.origin_scope(origin))
+        result = []
+        for dependency in dependencies:
+            try: result.append(tools.catalog.folder_dependency(str(dependency.folder_id)))
+            except ProbeError:
+                detail = 'OUT_OF_SCOPE' if self.origin_scope(origin)['mode'] == 'topic' else 'FOLDER_NOT_FOUND'
+                raise HTTPException(409, detail=detail) from None
+        return result
+
+    @staticmethod
+    def scope_signature(context):
+        """Scope identity for stale checks: unrelated document growth is not a scope change.
+
+        Topic scope still includes documents and notes because linking new materials
+        changes what the session may read. Workspace scope covers every document, so
+        only topics and notebook heads are compared.
+        """
+        scope = context.get('scope')
+        if not scope: return context
+        mode = context.get('mode')
+        keys = ['topics', 'notebooks'] + (['documents', 'notes'] if mode == 'topic' else [])
+        signature = {'mode': mode}
+        for key in keys:
+            signature[key] = sorted(row['id'] for row in scope.get(key, []))
+        return {**{key: value for key, value in context.items() if key not in ('scope', 'mode')},
+                'scope': signature, 'mode': mode}
 
     def valid_sources(self, sources, origin):
         if not sources: return
@@ -114,10 +171,12 @@ class Collaboration:
             if not value.document_id:raise HTTPException(422,detail='INVALID_INPUT')
             origin['enrichment_id']=value.enrichment_id
         with self.db.write() as conn:
-            existing = self.rows('SELECT id,origin_json,operations_json FROM collaboration_proposals WHERE request_id=?', (str(value.request_id),))
+            existing = self.rows('SELECT id,origin_json,operations_json,guards_json FROM collaboration_proposals WHERE request_id=?', (str(value.request_id),))
             specs = [o.model_dump() for o in value.operations]
+            requested = [str(d.folder_id) for d in value.dependencies]
             if existing:
-                if json.loads(existing[0]['origin_json']) != origin or [self.spec(o) for o in json.loads(existing[0]['operations_json'])] != specs:
+                stored = json.loads(existing[0]['guards_json']).get('requested_folders', [])
+                if json.loads(existing[0]['origin_json']) != origin or [self.spec(o) for o in json.loads(existing[0]['operations_json'])] != specs or stored != requested:
                     raise HTTPException(409, detail='IDEMPOTENCY_CONFLICT')
                 return self.get(existing[0]['id'])
             context = self.context(origin)
@@ -131,6 +190,7 @@ class Collaboration:
                         text=source.pop('text')[:1800]
                         sources.append({**source,'text':text,'start':0,'hash':digest(text),'citation':'S'+str(len(sources)+1)})
             self.valid_sources(sources, origin)
+            folders = self.folder_snapshots(value.dependencies, origin)
             question = self.rows('SELECT question FROM research_tasks WHERE id=?', (origin['task_id'],))[0]['question'] if value.task_id else ''
             can_rewrite = rewrite_allowed or bool(re.search(r'重写|替换|rewrite|replace', question, re.I))
             known = {}; operations = []; guards = {}; mutated = set()
@@ -194,18 +254,19 @@ class Collaboration:
                 op.update(depends_on=list(dict.fromkeys(d for d in deps if d)), before_body=before,
                           after_body=after, owner_title=owner_title,
                           source_citations=[f'S{index+offset}' for index in range(1,len(sources)+1)],
+                          source_offset=offset,
                           diff='\n'.join(difflib.unified_diff(before.splitlines(), after.splitlines(), fromfile='当前', tofile='建议',lineterm='')),
                           object_id=str(uuid4()) if op['action'].startswith('create_') else op['target'])
                 known[op['key']] = op; operations.append(op)
             identity = str(uuid4()); stamp = now()
             conn.execute('INSERT INTO collaboration_proposals(id,request_id,origin_json,operations_json,sources_json,guards_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
-                         (identity, str(value.request_id), json.dumps(origin), json.dumps(operations, ensure_ascii=False), json.dumps(sources, ensure_ascii=False), json.dumps({'context': context, 'objects': list(guards.values())}), stamp, stamp))
+                         (identity, str(value.request_id), json.dumps(origin), json.dumps(operations, ensure_ascii=False), json.dumps(sources, ensure_ascii=False), json.dumps({'context': context, 'objects': list(guards.values()), 'folders': folders, 'requested_folders': requested}), stamp, stamp))
             return self.get(identity)
 
     @staticmethod
     def spec(op): return {k: op[k] for k in Operation.model_fields}
 
-    def get(self, identity):
+    def get(self, identity, *, detail=False):
         rows = self.rows('SELECT * FROM collaboration_proposals WHERE id=?', (identity,))
         if not rows: raise HTTPException(404, detail='PROPOSAL_NOT_FOUND')
         item = rows[0]
@@ -213,8 +274,144 @@ class Collaboration:
             item[key] = json.loads(item.pop(key + '_json')) if item[key + '_json'] else None
         try: self.check(item); item['stale'] = False; item['conflict'] = None
         except HTTPException as error: item['stale'] = True; item['conflict'] = error.detail
+        guards = item['guards'] or {}
+        if detail and item['stale']:
+            try: item['conflict_objects'] = self.conflict_objects(item, guards)
+            except Exception: item['conflict_objects'] = []
         item.pop('guards')
+        item['dependencies'] = [{'folder_id': folder['folder_id'], 'name': folder['name'],
+                                 'path': folder['path'], 'version': folder['version'],
+                                 'member_count': len(folder['members'])}
+                                for folder in guards.get('folders', [])]
+        if detail:
+            item['decisions'] = self.decision_history(identity)
+            self.enrich_detail(item)
         return item
+
+    def object_title(self, kind, identity):
+        if kind == 'document':
+            rows = self.rows('SELECT title,original_name FROM documents WHERE id=? AND deleted_at IS NULL', (identity,))
+            return (rows[0]['title'] or rows[0]['original_name']) if rows else identity
+        if kind == 'topic':
+            rows = self.rows('SELECT title FROM topics WHERE id=? AND deleted_at IS NULL', (identity,))
+            return rows[0]['title'] if rows else identity
+        meta = self.note_meta(identity)
+        return meta.get('target_title') or meta.get('target_path') or identity
+
+    def conflict_objects(self, item, guards):
+        objects = []
+        def add(kind, identity, title, reason):
+            marker = (kind, identity)
+            if not any((entry.get('kind'), entry.get('id')) == marker for entry in objects):
+                objects.append({'kind': kind, 'id': identity, 'title': title or identity, 'reason': reason})
+        try: context = self.context(item['origin'])
+        except HTTPException: context = {}
+        if self.scope_signature(context) != self.scope_signature(guards.get('context') or {}):
+            add('context', None, '研究范围或研究背景', 'context_changed')
+        try: tools = ResearchTools(self.library, self.origin_scope(item['origin']))
+        except Exception: tools = None
+        if tools:
+            for source in item.get('sources') or []:
+                if not tools.available(source):
+                    add(source.get('kind'), source.get('object_id'), source.get('title'), 'source_unavailable')
+        for guard in guards.get('objects', []):
+            try: current = self.guard(guard['kind'], guard['id'])
+            except HTTPException: current = None
+            if current != guard:
+                add(guard['kind'], guard['id'], self.object_title(guard['kind'], guard['id']), 'object_changed')
+        if tools:
+            for folder in guards.get('folders', []):
+                try: current = tools.catalog.folder_dependency(folder['folder_id'])
+                except ProbeError: add('folder', folder['folder_id'], folder.get('path'), 'folder_unavailable'); continue
+                if (current['name'] != folder['name'] or current['path'] != folder['path'] or
+                        {member['id'] for member in current['members']} != {member['id'] for member in folder['members']}):
+                    add('folder', folder['folder_id'], folder.get('path'), 'folder_changed')
+        for operation in item.get('operations') or []:
+            if 'before_relation' not in operation: continue
+            try: state = self.relations.state(operation['first_kind'], operation['first'], operation['second_kind'], operation['second'])
+            except HTTPException: state = None
+            if state != operation['before_relation']:
+                add('relation', None, f"{operation.get('first_title') or operation.get('first')} 与 {operation.get('second_title') or operation.get('second')}", 'relation_changed')
+        return objects[:20]
+
+    def decision_history(self, identity):
+        rows = self.rows('SELECT request_id,action,payload_json,result_json,created_at FROM collaboration_decisions WHERE proposal_id=? ORDER BY created_at,request_id', (identity,))
+        history = []
+        for row in rows:
+            payload = json.loads(row['payload_json']); result = json.loads(row['result_json'])
+            history.append({'request_id': row['request_id'], 'action': row['action'],
+                            'selected': payload.get('selected', []), 'status': result.get('status'),
+                            'created_at': row['created_at']})
+        return history
+
+    def path_maps(self):
+        folders = {row['id']: row for row in self.rows('SELECT id,parent_id,name FROM library_folders')}
+        topics = {row['id']: row for row in self.rows('SELECT id,parent_id,title FROM topics WHERE deleted_at IS NULL AND notebook_only=0')}
+        def folder_path(identity):
+            parts, seen, cursor = [], set(), identity
+            while cursor and cursor in folders and cursor not in seen:
+                seen.add(cursor); parts.append(folders[cursor]['name'])
+                cursor = folders[cursor]['parent_id']
+            return '/'.join(reversed(parts))
+        def topic_path(identity):
+            parts, seen, cursor = [], set(), identity
+            while cursor and cursor in topics and cursor not in seen:
+                seen.add(cursor); parts.append(topics[cursor]['title'])
+                cursor = topics[cursor]['parent_id']
+            return ' / '.join(reversed(parts))
+        return folder_path, topic_path
+
+    def note_meta(self, identity):
+        rows = self.rows('SELECT n.id,n.title,o.id AS topic_id,o.title AS owner_title FROM topic_notebooks n JOIN topics o ON o.id=n.topic_id JOIN topics h ON h.id=n.id WHERE n.id=? AND n.deleted_at IS NULL AND h.deleted_at IS NULL AND o.deleted_at IS NULL', (identity,))
+        _, topic_path = self.path_maps()
+        if rows:
+            row = rows[0]; title = row['title'] or row['owner_title']
+            return {'target_kind': 'topic_note', 'target_path': topic_path(row['topic_id']),
+                    'target_title': title, 'target_topic_id': row['topic_id']}
+        rows = self.rows('SELECT n.id,d.id AS document_id,d.title,d.original_name FROM notes n JOIN documents d ON d.id=n.document_id WHERE n.id=? AND d.deleted_at IS NULL', (identity,))
+        if rows:
+            row = rows[0]
+            return {'target_kind': 'reading_note', 'target_path': row['title'] or row['original_name'],
+                    'target_title': '阅读笔记', 'target_document_id': row['document_id']}
+        return {}
+
+    def enrich_detail(self, item):
+        folder_path, topic_path = self.path_maps()
+        for operation in item['operations']:
+            for side in ('first', 'second'):
+                kind, ref = operation.get(side + '_kind'), operation.get(side)
+                if not ref or str(ref).startswith('$'): continue
+                if kind == 'document':
+                    rows = self.rows('SELECT title,original_name,folder_id FROM documents WHERE id=? AND deleted_at IS NULL', (ref,))
+                    if rows:
+                        folder = folder_path(rows[0]['folder_id']) if rows[0]['folder_id'] else ''
+                        operation[side + '_path'] = (folder + '/' if folder else '') + rows[0]['original_name']
+                elif kind == 'topic':
+                    operation[side + '_path'] = topic_path(ref)
+            if operation.get('owner') and not str(operation['owner']).startswith('$'):
+                operation['owner_path'] = topic_path(operation['owner'])
+            if operation.get('target'):
+                operation.update(self.note_meta(operation['target']))
+            if operation.get('object_id') and operation['action'] in ('create_topic', 'create_note'):
+                operation['pending_object_id'] = operation['object_id']
+        decision = item.get('decision')
+        if decision:
+            for record in decision.get('records', []):
+                if record.get('kind') == 'topic':
+                    record['navigation'] = {'module': 'Garden', 'tab': 'topic', 'id': record.get('id')}
+                elif record.get('kind') == 'note':
+                    meta = self.note_meta(record.get('id'))
+                    if meta.get('target_kind') == 'topic_note':
+                        record['navigation'] = {'module': 'Garden', 'tab': 'topic-note', 'id': record.get('id')}
+                    elif meta.get('target_kind') == 'reading_note':
+                        record['navigation'] = {'module': 'Storage', 'tab': 'notes', 'id': meta.get('target_document_id'), 'note_id': record.get('id')}
+                elif record.get('kind') == 'relation':
+                    for side in ('first', 'second'):
+                        kind, identity = record.get(side + '_kind'), record.get(side)
+                        if kind == 'topic':
+                            record[side + '_navigation'] = {'module': 'Garden', 'tab': 'topic', 'id': identity}
+                        elif kind == 'document':
+                            record[side + '_navigation'] = {'module': 'Storage', 'tab': 'document', 'id': identity}
 
     def raw(self, identity):
         item = self.get(identity)
@@ -223,8 +420,16 @@ class Collaboration:
 
     def check(self, item):
         if item['status'] != 'pending': return
-        if self.context(item['origin']) != item['guards']['context']: raise HTTPException(409, detail='PROPOSAL_STALE')
+        if self.scope_signature(self.context(item['origin'])) != self.scope_signature(item['guards']['context']):
+            raise HTTPException(409, detail='PROPOSAL_STALE')
         self.valid_sources(item['sources'], item['origin'])
+        for dependency in item['guards'].get('folders', []):
+            tools = ResearchTools(self.library, self.origin_scope(item['origin']))
+            try: current = tools.catalog.folder_dependency(dependency['folder_id'])
+            except ProbeError: raise HTTPException(409, detail='PROPOSAL_STALE') from None
+            if (current['name'] != dependency['name'] or current['path'] != dependency['path'] or
+                    {member['id'] for member in current['members']} != {member['id'] for member in dependency['members']}):
+                raise HTTPException(409, detail='PROPOSAL_STALE')
         for guard in item['guards']['objects']:
             if self.guard(guard['kind'], guard['id']) != guard: raise HTTPException(409, detail='PROPOSAL_STALE')
         for op in item['operations']:
@@ -392,7 +597,8 @@ class Collaboration:
                 raise HTTPException(409,detail='RESEARCH_AGAIN_REQUIRED')
         for op in item['operations']:
             for field in ('first_version','second_version','target_version'):op[field]=None
-        value = Preview(request_id=request_id, **item['origin'], operations=[Operation(**self.spec(op)) for op in item['operations']])
+        value = Preview(request_id=request_id, **item['origin'], operations=[Operation(**self.spec(op)) for op in item['operations']],
+                        dependencies=[FolderDependency(folder_id=dependency['folder_id']) for dependency in item.get('dependencies', [])])
         return self.preview(value, sources=item['sources'])
 
 
@@ -405,7 +611,7 @@ def router(service):
     @routes.post('/v1/collaboration/preview')
     def preview(value: Preview): return service.preview(value)
     @routes.get('/v1/collaboration/proposals/{identity}')
-    def view(identity: UUID): return service.get(str(identity))
+    def view(identity: UUID): return service.get(str(identity), detail=True)
     @routes.post('/v1/collaboration/proposals/{identity}/{action}')
     def decide(identity: UUID, action: Literal['accept', 'reject', 'undo', 'repair'], value: Decision):
         return service.repair(str(identity), value.request_id) if action == 'repair' else service.decide(str(identity), value, action)

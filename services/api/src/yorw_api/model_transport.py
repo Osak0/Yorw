@@ -186,10 +186,17 @@ def tool_probe(config, key, stop=None, timeout=180, turn_fn=stream_turn, check_c
                 raise ProbeError('TOOL_PROOF_MISSING')
             return {'ok':True,'code':'TOOLS_CONNECTED','turns':ordinal+1,'tool_calls':count,
                     'input_estimate':input_count,'output_estimate':output_count,'usage_mode':'conservative_upper_bound'}
-        for identity, name, args in calls:
+        for call in calls:
             check(stop, deadline)
             if check_current:
                 check_current()
+            if isinstance(call, tuple):
+                identity,name,args = call
+                fault = None
+            else:
+                identity,name,args,fault = call.id,call.name,call.value,call.fault
+            if fault:
+                raise ProbeError(fault.code)
             count += 1
             signature = (name,json.dumps(args,sort_keys=True))
             if count > 16:

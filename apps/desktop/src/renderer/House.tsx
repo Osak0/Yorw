@@ -1,3 +1,4 @@
+import {ContextHelp,useSuccessExpiry} from './WorkspaceUI'
 import {ModelProfiles} from './ModelProfiles'
 import {SettingsIcon} from './SettingsIcon'
 import {EnrichmentSettingsPanel} from './EnrichmentPanel'
@@ -49,13 +50,21 @@ function ProviderForm({ kind, saved, onSaved }: { kind: ProviderKind; saved?: Pr
     finally { setBusy(false) }
     return false
   }
-  return <section className="provider"><h2>{kind === 'chat' ? '聊天模型 · DeepSeek / 兼容 API' : '检索模型 · 智谱 / 兼容 API'}</h2>
-    <p>{kind === 'chat' ? '预设 DeepSeek 官方 API，可修改地址和模型名。' : '预设智谱 embedding-3，使用独立密钥。'}</p>
-    <fieldset disabled={busy}>{kind === 'embedding' && <button onClick={() => { setUrl('https://open.bigmodel.cn/api/paas/v4'); setModel('embedding-3'); setKey(''); setClearKey(false); setNotice('已填入智谱预设，请核对并输入该服务的密钥后保存。') }}>使用智谱预设</button>}<label>API Base URL<input value={url} onChange={e => { setUrl(e.target.value); setNotice('') }} placeholder="https://api.example.com/v1" /></label>
-    <label>模型名<input value={model} onChange={e => { setModel(e.target.value); setNotice('') }} /></label>
-    <label>API Key <span>{saved?.key_error ? '（已有密钥不可用，请重新输入或清除）' : saved?.has_key ? '（已安全保存；留空保留）' : '（未保存）'}</span><input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} disabled={clearKey} placeholder="输入新密钥以替换，保存后不回显" /></label>
-    <label className="check"><input type="checkbox" checked={clearKey} onChange={e => { setClearKey(e.target.checked); setKey('') }} />清除已保存密钥</label>
-    <div className="actions"><button className="primary" onClick={() => void run(false)} disabled={!url.trim() || !model.trim()}>保存配置</button><button onClick={() => void run(true)} disabled={!saved || dirty}>测试已保存配置</button></div></fieldset>
+  const hasKey = !!saved?.has_key
+  const keyState = clearKey ? '保存后清除' : saved?.key_error ? '不可用' : hasKey ? '已保存' : '未保存'
+  return <section className="provider" aria-label={kind === 'chat' ? '聊天模型配置' : '检索模型配置'}>
+    <h2>{kind === 'chat' ? '配置聊天模型 API' : '配置检索模型 API'}</h2>
+    <p className="provider-note">{kind === 'chat' ? '支持 DeepSeek、Kimi、GLM、Qwen 和兼容 Chat Completions 的服务。' : '支持智谱 embedding-3 和兼容 Embeddings 的服务。'}</p>
+    <fieldset disabled={busy}>{kind === 'embedding' && <button type="button" className="provider-preset" onClick={() => { setUrl('https://open.bigmodel.cn/api/paas/v4'); setModel('embedding-3'); setKey(''); setClearKey(false); setNotice('已填入智谱预设，请核对并输入该服务的密钥后保存。') }}>使用智谱预设</button>}
+      <div className="provider-fields">
+        <label>API Base URL<input value={url} onChange={e => { setUrl(e.target.value); setNotice('') }} placeholder="https://api.example.com/v1" /></label>
+        <label>模型名<input value={model} onChange={e => { setModel(e.target.value); setNotice('') }} /></label>
+      </div>
+      <div className="provider-key-row">
+        <label>API Key <span>{keyState}</span><input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} disabled={clearKey} placeholder="输入 API Key" /></label>
+        {hasKey && <button type="button" className="provider-key-clear" aria-pressed={clearKey} onClick={() => { setClearKey(!clearKey); setKey(''); setNotice('') }}>{clearKey ? '取消清除' : '清除已保存密钥'}</button>}
+      </div>
+      <div className="actions provider-actions"><button className="primary" onClick={() => void run(false)} disabled={!url.trim() || !model.trim()}>保存配置</button><button onClick={() => void run(true)} disabled={!saved || dirty}>测试已保存配置</button></div></fieldset>
     <p role="status" className={error ? 'failed' : ''}>{notice}</p>
   </section>
 }
@@ -65,7 +74,8 @@ function AiSettings({active}:{active:boolean}){ const [saved,setSaved]=useState<
   try{const result=await window.yorw.ai.savePreferences({...saved,semantic_enabled:enabled,metadata_enabled:metadata});if(result.ok){setSaved(result.value);setNotice('已保存。')}else setNotice(messages[result.code]??'设置未保存，请重试。')}
   catch{setNotice('设置未保存，请重试。')}finally{setBusy(false)}
  }
- return <section className="provider"><h2>检索</h2><label className="check"><input aria-label="语义检索" type="checkbox" checked={saved?.semantic_enabled??true} disabled={!saved||busy} onChange={event=>void change(event.target.checked)}/>语义检索</label><p>结合问题含义查找相关内容。关闭后使用本地文字匹配。</p><label className="check"><input aria-label="元数据辅助检索" type="checkbox" checked={saved?.metadata_enabled??false} disabled={!saved||busy} onChange={event=>void change(saved?.semantic_enabled??false,event.target.checked)}/>元数据辅助检索（试用）</label><p>使用标题、人工资料和未过期 AI 整理辅助查找，仍返回原文证据。固定夹具已通过，真实模型质量尚待评估，默认关闭。</p><p role="status">{notice}</p></section>
+ useSuccessExpiry(notice,()=>setNotice(''),notice==='已保存。')
+ return <section className="provider"><h2>检索设置</h2><label className="check"><input aria-label="语义检索" type="checkbox" checked={saved?.semantic_enabled??true} disabled={!saved||busy} onChange={event=>void change(event.target.checked)}/>语义检索</label><p>结合问题含义查找相关内容。关闭后使用本地文字匹配。</p><label className="check"><input aria-label="元数据辅助检索" type="checkbox" checked={saved?.metadata_enabled??false} disabled={!saved||busy} onChange={event=>void change(saved?.semantic_enabled??false,event.target.checked)}/>元数据辅助检索（试用）</label><ContextHelp label="元数据检索说明"><p>使用标题、人工资料和有效的 AI 整理辅助查找，回答仍引用原文。默认关闭。</p></ContextHelp><p role="status">{notice}</p></section>
 }
 const parserStateLabel: Record<ParserCapability['state'], string> = {
   builtin: '内置可用', external: '外部可用', component_missing: '组件缺失', unsupported: '不支持'
@@ -126,7 +136,7 @@ function ParserPanel({ active }: { active: boolean }) {
     finally { setBusy(false) }
   }
   return <section className="provider"><h2>文献解析</h2>
-    <p>PDF、DOCX、Markdown、TXT 的基础导入、阅读与文字检索无需外部解析组件。导入始终使用内置解析；Docling 只用于手动选择的增强解析/OCR，LibreOffice 只用于旧 DOC 处理与可选版式预览。Yorw 不随包附带或自动安装它们。</p>
+    <ContextHelp label="内置解析与可选组件"><p>PDF、DOCX、Markdown、TXT 的基础导入、阅读与文字检索无需外部组件。Docling 用于主动选择的增强解析／OCR，LibreOffice 用于旧 DOC 与可选版式预览；需自行安装并授权。</p></ContextHelp>
     {form && <fieldset disabled={busy}>
       <label>Docling 程序<input readOnly value={form.docling_executable}/><button onClick={()=>void choose('docling')}>选择并授权 Docling</button><button onClick={()=>{update('docling_executable','');update('docling_prefix',[])}}>清除</button></label>
       <label>LibreOffice 程序<input readOnly value={form.libreoffice_executable}/><button onClick={()=>void choose('libreoffice')}>选择并授权 LibreOffice</button><button onClick={()=>update('libreoffice_executable','')}>清除</button></label>

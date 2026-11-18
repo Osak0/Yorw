@@ -1,3 +1,5 @@
+import {runLiveResearchSmoke} from './live-research-smoke'
+import type {Backend} from './backend'
 import {BrowserWindow,safeStorage} from 'electron'
 import {createServer} from 'node:http'
 import {readFile,writeFile} from 'node:fs/promises'
@@ -5,7 +7,7 @@ import {join} from 'node:path'
 import {randomUUID} from 'node:crypto'
 import type {Providers} from './providers'
 
-export async function runModelProfilesSmoke(window:BrowserWindow,providers:Providers,reportDir:string){
+export async function runModelProfilesSmoke(window:BrowserWindow,providers:Providers,reportDir:string,backend:Backend){
  let requests=0
  const server=createServer(async(req,res)=>{
   const chunks:Buffer[]=[];for await(const chunk of req)chunks.push(Buffer.from(chunk));const payload=JSON.parse(Buffer.concat(chunks).toString());requests++
@@ -47,7 +49,7 @@ export async function runModelProfilesSmoke(window:BrowserWindow,providers:Provi
   if(liveConfig&&liveKey){
    const config=JSON.parse(await readFile(liveConfig,'utf8'))
    let key=(await safeStorage.decryptStringAsync(await readFile(liveKey))).result
-   try{const profile=await providers.profileSave({id:randomUUID(),name:'真实模型阶段一验证',provider:'deepseek',base_url:config.base_url,model:config.model,version:0,key});key='';const realChat=await run(profile.id,'chat');const realTools=await run(profile.id,'tools');report.live={model:config.model,base_url:config.base_url,chat:realChat,tools:realTools};if(realChat.status!=='completed'||realTools.status!=='completed')throw new Error('LIVE_CHECK_FAILED')}
+   try{const profile=await providers.profileSave({id:randomUUID(),name:'真实模型阶段一验证',provider:'deepseek',base_url:config.base_url,model:config.model,version:0,key});key='';const realChat=await run(profile.id,'chat');const realTools=await run(profile.id,'tools');report.live={model:config.model,base_url:config.base_url,chat:realChat,tools:realTools};if(realChat.status!=='completed'||realTools.status!=='completed')throw new Error('LIVE_CHECK_FAILED');if(process.argv.includes('--live-business'))await runLiveResearchSmoke(window,backend,profile.id,reportDir)}
    finally{key='';await writeFile(join(reportDir,'model-profiles-smoke.json'),JSON.stringify(report,null,2))}
   }
   await writeFile(join(reportDir,'model-profiles-smoke.json'),JSON.stringify(report,null,2))

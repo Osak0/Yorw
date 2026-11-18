@@ -226,7 +226,7 @@ else app.whenReady().then(async () => {
     return
   }
   if(readerSmoke && process.argv.includes('--model-profiles-smoke')){
-    try{await runModelProfilesSmoke(window,providers,smokeReport!);await backend.stop();app.exit(0)}
+    try{await runModelProfilesSmoke(window,providers,smokeReport!,backend);await backend.stop();app.exit(0)}
     catch(error){await writeFile(join(smokeReport!,'model-profiles-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
     return
   }

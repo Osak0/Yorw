@@ -99,7 +99,7 @@ CLAUDE.md 导入 AGENTS.md 作为统一开发约束，不重复维护架构和�
 
 ## 候选制品与发布流程
 
-当前分支 feature/ai-cowork-in-garden 尚未合并 main，继续开发 v0.4.0；当前进度、review 与提交状态见 [PLAN](../PLAN.md)；schema 29／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
+当前分支 feature/ai-cowork-in-garden 尚未合并 main，继续开发 v0.4.0；当前进度、review 与提交状态见 [PLAN](../PLAN.md)；schema 31／应用 0.3.0；打包配置包含当前使用指南及 v0.3.0 发布说明。历史本地候选为 `release/v0.3.0-candidate-20261031`，记录见 [工作区历史](history/v0.3.0-workspace.md)。本轮未核验远端 Release。修改随包帮助后需重新打包并验证，不能按相同版本号混选旧包。
 
 1. 完成功能与文档 review，保留已验证源码树与依赖锁指纹。
 2. 按上文重建前后端，运行类型、桌面与冻结后端回归；选择新的输出目录构建 NSIS 安装器和完整分发目录。
@@ -145,7 +145,7 @@ apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yor
 
 阶段一已完成真实 DeepSeek deepseek-flash 的聊天与三轮工具闭环；Kimi／GLM／Qwen 仍需账号实测。若使用已有密文做独立隔离 profile 验证，需授权使用该密钥并同时提供其加密上下文；完成后清除隔离密钥副本和复制的 Local State，报告只保留脱敏诊断。
 
-阶段二专项：构建后 `--yorw-smoke --reader-smoke --research-smoke --report-dir=<新绝对目录>`，目录预放自编写 fixture.pdf。输出 research-smoke.json 与 research-1024/1280/1440.png；本地 SSE 验证工具检测、Garden 空输入不创建会话、发送／检索读取／引用高亮、手动恢复、关闭重开不重发。test_research.py 覆盖范围、幂等、归档删除、互斥、中文来源及事务读取；test_research_service.py 覆盖源码／冻结 HTTP 与重启无自动调用。当前 schema 29，完整 pytest 前先重建冻结后端；不得自动用真实用户论文／密钥替代隔离夹具。
+阶段二专项：构建后 `--yorw-smoke --reader-smoke --research-smoke --report-dir=<新绝对目录>`，目录预放自编写 fixture.pdf。输出 research-smoke.json 与 research-1024/1280/1440.png；本地 SSE 验证工具检测、Garden 空输入不创建会话、发送／检索读取／引用高亮、回答完成后出现的目录卡片定位 Storage 目录、文献卡片打开阅读器、手动恢复、关闭重开不重发。test_research.py 覆盖范围、幂等、归档删除、互斥、中文来源及事务读取；test_research_service.py 覆盖源码／冻结 HTTP 与重启无自动调用；test_reply_navigation.py 覆盖每次请求的结构概览、目录／专题范围过滤、卡片只取回答正文提到的对象且按出现顺序、运行中不显示卡片、文件名／路径／阅读笔记解析、伪造 ID 忽略、旧能力自述与实时结构、重复成功调用回放摘要、第三次重复终止、read_document 的 handle 与引用、证据结果压缩后保留引用编号、四篇文献加笔记预览在 10 轮与预算内完成、长目录任务的旧工具输出压缩及 token 预算。当前 schema 31，完整 pytest 前先重建冻结后端；不得自动用真实用户论文／密钥替代隔离夹具。
 
 阶段三专项：`test_research_memory.py` 验证事务账本、来源／范围依赖、遗忘与重新引入、用户指引版本、预算、日限额／冷却、后台与前台并发及 26→27 备份升级；`test_research_memory_service.py` 使用本地 SSE 对源码／冻结服务验证模型摘要、遗忘、Markdown 导出与暂停重启。完整测试前重新 build:backend；PowerShell 执行策略受限时仅用上文进程级 Bypass。
 
@@ -175,3 +175,76 @@ services/api/.venv/Scripts/python.exe -m pytest services/api/tests/test_research
 窗口复核分别使用全新的绝对 report-dir，复用本页已维护的 `--research-smoke`、`--notebooks-smoke`／`--notebooks-resume-smoke`、`--collaboration-smoke`／`--collaboration-resume-smoke`，以及文献管理、元数据、历史布局专项。只有配对的 resume 在同一目录重启，其余专项不得共用 profile。研究与文献管理专项需放置 `make-mvp-fixtures.py` 新生成的 fixture.pdf；笔记／协作专项自行生成资料。报告与截图保留本轮证据，1024／1280／1440 布局分别检查。
 
 源码／冻结 HTTP 闭环、原生窗口与真实厂商检测分别记录。真实检测沿用 `--model-profiles-smoke` 的受控入口和明确的凭据授权；没有账号、额度或授权时记“本轮未实测”，不伪造通过。真实普通聊天与工具检测只能证明该端点／模型的小样本能力，不能据此断言研究质量或其他厂商均可用。用户后续全面测试、安装器、独立干净 Windows 与发布验收分开记录。
+
+### 整改 R1 验证入口
+
+R1 为后端统一读取合同、Storage 目录与目录依赖，不新增窗口烟测；跨阶段界面联动按 R3／R6 验收。涉及后端改动时先重建冻结后端，再运行完整回归：
+
+```powershell
+pnpm build:backend
+services/api/.venv/Scripts/python.exe -m pytest services/api/tests -q --basetemp=.cache/<新测试目录>
+```
+
+专项文件 `test_research_catalog.py` 共 24 项，覆盖：工具 schema、校验器与执行器同源及 `result_type` 注入；自编写“新生杯”目录四份文件；同名目录／文件按完整路径消歧；超过 50 项分页与 `has_more`／`last_page`；未解析、`partial`、`unsupported` 与 `failed` 的正文状态；空目录与专题范围为空；目录与专题为不同对象；专题会话的祖先路径、范围外父专题隐藏与范围隔离；文献／专题详情及隐藏关联／笔记过滤；专题材料阅读笔记；当前会话方案列表、实时 stale、采纳／撤回状态与目录依赖；指定材料、成员变化、改名和仅路径变化；搜索分页与超限页大小拒绝；以及脚本模型经研究循环列出四份文件并生成带目录依赖的预览。全部使用临时工作区和直接构造的自编写记录，不读取用户数据库。
+
+R1 完成时的本地成绩为完整后端 **397 passed**、桌面 **93 passed**，类型检查、前端构建和冻结后端重建通过；这些成绩只对应 R1 实现，不代表 R2–R6 已解决。
+
+
+### 整改 R2 验证入口
+
+R2 追加迁移 030（schema 30），涉及后端改动时先重建冻结后端，再运行完整回归。专项：
+
+```powershell
+pnpm build:backend
+services/api/.venv/Scripts/python.exe -m pytest services/api/tests/test_research_feedback.py services/api/tests/test_tool_protocol.py -q --basetemp=.cache/<新测试目录>
+```
+
+`test_research_feedback.py` 共 16 项，使用脚本模型覆盖：可修正参数错误→反馈→修正→方案预览；第三次可修正错误、重复无效调用、多工具混合成功／失败、终止错误不纠错；类型化 operations、旧字符串兼容和方案依赖纠错；工具生成方案后模型失败仍保留且可采纳；后续追问注入已采纳方案、全部采纳记录与正式对象；超长方案状态裁剪仍保留真实方案；长过程后最终回答保留；失败任务半截输出不进入历史；失败与完成时可见输出保留；迁移 030 的工具记录表可读。`test_tool_protocol.py` 验证协议损坏与业务错误的分离。完整后端为 **416 passed**（356.03 秒）、桌面 **93 passed**，类型检查、前端构建与冻结后端重建通过；未新增窗口烟测，R3／R6 再验收界面联动。
+
+
+### 整改 R3 验证入口
+
+R3 沿用 schema 30，无新增迁移。先运行 `pnpm typecheck`、`pnpm test`、`pnpm build`，涉及后端时重建冻结后端并运行完整 pytest。方案详情后端断言在 `test_collaboration.py`，覆盖操作路径、目标笔记／阅读笔记类型、历史决定、采纳记录导航、结构化冲突对象和追加来源偏移；前端标签恢复在 `workspace-tabs.test.ts`，紧凑卡片、推荐默认选择和选择联动在 `collaboration.test.tsx`，proposal 布局往返在 `layout.test.ts`。
+
+窗口回归使用新的绝对 report-dir，目录预放自编写 `fixture.pdf`：
+
+```powershell
+apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yorw-smoke --reader-smoke --collaboration-smoke --report-dir=<新目录>
+apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yorw-smoke --reader-smoke --collaboration-resume-smoke --report-dir=<同一目录>
+```
+
+`collaboration-smoke.json` 验证卡片摘要、详情标签选择与依赖、部分采纳、冲突撤回、方案标签和成果导航，并保存 1024／1280／1440 截图；`collaboration-resume.json` 验证任务、决定、方案标签与决定历史重启恢复且不自动续发任务。R3 未新增独立窗口脚本；旧 `collaboration-error.json` 若来自早期失败运行保留为证据，以最终同目录的 `collaboration-smoke.json`／`collaboration-resume.json` 和截图为准。完整成绩为后端 **421 passed**、桌面 **96 passed**，类型检查、构建和冻结后端重建通过。
+
+### 迁移 031 与研究体验修复验收
+
+031 增加会话分区（schema 31）。先执行 `pnpm build:backend`，再运行完整 pytest、`pnpm typecheck`、`pnpm test`、`pnpm build`。`test_research.py` 覆盖重命名／分区持久化、版本冲突和运行中改名不中断任务；`test_tool_protocol.py` 覆盖完整流破损参数可修正、截断流仍终止；`test_reply_navigation.py` 覆盖重复破损参数可重试、四篇文献笔记预览和卡片规则；前端 `research-session-list.test.tsx` 覆盖分区聚合与菜单入口。
+
+窗口回归使用新的绝对 report-dir，研究与界面专项预放自编写 `fixture.pdf`：
+
+```powershell
+apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yorw-smoke --reader-smoke --research-smoke --report-dir=<新目录>
+apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yorw-smoke --reader-smoke --notebooks-smoke --report-dir=<另一新目录>
+apps/desktop/node_modules/.bin/electron.cmd apps/desktop/out/main/index.js --yorw-smoke --reader-smoke --ui-smoke --report-dir=<另一新目录>
+```
+
+`research-smoke.json` 额外验证会话重命名、新建分区和分组显示；`notebooks-smoke.json` 验证笔记页标题行、工具栏对齐、保存与多宽度截图；`ui-smoke.json` 验证研究页 1024／1280／1440 与 125%。分组与菜单断言使用真实 DOM 时序，不以静态渲染代替。
+
+### R4 输入验收
+
+`pnpm test` 包含 research-composer 静态渲染回归；原生交互另在 Garden 首页及会话输入中检查长中文／URL／多段粘贴、三行至八行增高、展开收起光标、Enter／Shift+Enter／中文输入法选词、忙碌及发送失败草稿保留。窗口覆盖 1024／1280／1440 与 125% 缩放；静态渲染通过不替代这些操作。
+
+### R5 界面精简验收
+
+`--yorw-smoke --reader-smoke --ui-smoke` 在新的绝对 `--report-dir` 运行，先用 make-mvp-fixtures.py 生成自编写夹具。ui-smoke.json 增加次级操作 Escape、唯一新会话、专题入口映射、零共享隐藏及文字树断言；研究页保存 1024／1280／1440 和 125% 截图，House 另检查 125%／150%。`--collaboration-smoke` 复核合并入口后的真实方案路径，使用本地 SSE 夹具，报告 externalRequests=0。首页现在为 textarea，测试驱动按元素类型选择原生 value setter；专题刷新先打开“更多操作”。
+
+### R6 目录到成果闭环
+
+新增 `test_rectification_journey_service.py` 在源码和冻结 HTTP 上串联两份 DOCX、两份 PDF 的目录浏览、分页、可纠正参数、类型化方案、部分／幂等采纳、当前回执追问、冲突撤回及重启。命令：
+
+```powershell
+services/api/.venv/Scripts/python.exe -m pytest services/api/tests/test_rectification_journey_service.py -q --basetemp=.cache/<新闭环目录>
+```
+
+完整验收先执行 `pnpm build:backend`，再运行完整后端测试、桌面测试、类型与前端构建。原生 `--ui-smoke`、`--collaboration-smoke`／`--collaboration-resume-smoke`、`--notebooks-smoke`／`--notebooks-resume-smoke`、`--research-smoke`、`--document-management-smoke`、`--history-layout-smoke`、`--metadata-review-smoke` 各用新隔离目录与自编写材料。
+
+真实业务实测使用明确授权后的 `--model-profiles-smoke --live-business --live-config=<配置 JSON> --live-key-file=<密文文件>`，附带常规隔离参数；目录需含自编写 fixture.pdf 与 fixture.docx。主进程在隔离加密上下文中解密，renderer 不接收密钥；仅显式传入 live 参数才请求外部服务。live-research-business.json 记录目录到方案、部分采纳及后续追问，model-profiles-smoke.json 独立记录连接能力检测。结束后检查绝对路径仅位于隔离报告目录，清除凭据副本、该目录 secrets 与复制的 Local State；原配置、凭据不改动。业务实测不是全面质量评估，未触发的纠错不记为实测通过。

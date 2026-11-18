@@ -3,6 +3,7 @@ import {renderToStaticMarkup} from 'react-dom/server'
 import {expect,test,vi} from 'vitest'
 import {Collaboration} from '../src/main/collaboration'
 import {ProposalCard,selectProposalOperation} from '../src/renderer/Collaboration'
+import {defaultProposalSelection} from '../src/renderer/proposal-model'
 import type {Backend} from '../src/main/backend'
 import type {CollaborationProposal} from '../src/shared/status'
 
@@ -24,12 +25,18 @@ test('collaboration IPC permits only fixed routes, encoded query and bounded ide
  await api.decide({id,action:'accept',request_id:id,version:1,selected:['note']})
  expect(request).toHaveBeenLastCalledWith(`/v1/collaboration/proposals/${id}/accept`,'POST',{request_id:id,version:1,selected:['note']})
 })
-test('stale previews disable adoption, preserve dependency and diff inspection',()=>{
+test('answer cards stay compact and point to the proposal tab',()=>{
  const proposal={id,version:1,status:'pending',stale:true,conflict:'PROPOSAL_STALE',sources:[],decision:null,operations:[{key:'note',action:'create_note',title:'Candidate idea',reason:'User organization',owner:'$topic',owner_title:'',target:'',first:'',first_kind:'document',second:'',second_kind:'topic',body_md:'Hypothesis',after_body:'Hypothesis',before_body:'',diff:'+Hypothesis',object_id:id,depends_on:['topic']}]} as CollaborationProposal
  const markup=renderToStaticMarkup(<ProposalCard initial={proposal} onChanged={()=>{}}/>)
- expect(markup).toContain('此方案不能采纳')
- expect(markup).toContain('查看正文与差异')
- expect(markup).toContain('依赖：')
- expect(markup).toMatch(/disabled=""[^>]*>采纳所选/)
- expect(markup).toContain('按当前资料重新预览')
+ expect(markup).toContain('新增笔记：Candidate idea')
+ expect(markup).toContain('需要重新预览')
+ expect(markup).toContain('1 项操作')
+ expect(markup).toContain('查看方案')
+ expect(markup).not.toContain('查看正文与差异')
+})
+
+
+test('extra recommendations start unselected while requested operations keep prerequisites',()=>{
+ const operations=[{key:'topic',depends_on:[],recommended:false},{key:'note',depends_on:['topic'],recommended:false},{key:'extra',depends_on:[],recommended:true}] as CollaborationProposal['operations']
+ expect(defaultProposalSelection(operations)).toEqual(['topic','note'])
 })

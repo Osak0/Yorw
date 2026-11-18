@@ -8,6 +8,7 @@ from test_library import library,pdf_bytes,wait
 from yorw_api.research import Research,Ask,SessionEdit
 from yorw_api.research_tools import ResearchTools
 from yorw_api.providers import ProbeError
+from yorw_api.tool_errors import ToolFault
 from yorw_api.garden import Garden,CreateTopic,SaveBody
 
 
@@ -68,7 +69,7 @@ def test_scope_tools_search_read_and_outside_handle_rejected(library):
     assert found
     source=tools.execute('read_local',{'handle':found[0]['handle']})
     assert source['citation']=='S1' and source['document_id']==did
-    with pytest.raises(ValueError):tools.validate('read_local',{'handle':did})
+    with pytest.raises(ToolFault):tools.validate('read_local',{'handle':did})
     with library.db.write() as conn:conn.execute('DELETE FROM document_topics WHERE document_id=?',(did,))
     with pytest.raises(ProbeError):tools.execute('read_local',{'handle':found[0]['handle']})
 
@@ -159,7 +160,7 @@ def test_schema25_upgrade_recovers_running_research_without_model_call(tmp_path)
     workspace=Workspace(tmp_path/'old');old=Database(workspace,migrations);old.close()
     db=Database(workspace);lib=Library(db)
     try:
-        assert db.version==29
+        assert db.version==31
         assert list((workspace.root/'backups').glob('*.sqlite3'))
         service=Research(lib,lambda *a,**k:pytest.fail('migration must not call model'))
         assert service.listing()['items']==[]
@@ -215,3 +216,38 @@ def test_evidence_read_waits_for_other_threads_transaction(library):
     try:assert not finished.wait(.05)
     finally:released.set();first.join(3);second.join(3)
     assert result==[True]
+
+
+def test_session_rename_and_partition_persist(library):
+    doc(library);pid=profile(library);service=Research(library,Model())
+    try:
+        started=service.start(ask(pid,'Name me'),'fixture');view=finish(service,started['session_id'])
+        sid=started['session_id']
+        edited=service.edit(sid,SessionEdit(version=view['session']['version'],title='  金融研究  ',partition='  比赛  '))
+        assert edited['title']=='金融研究' and edited['partition']=='比赛'
+        listed=service.listing()['items']
+        assert listed[0]['title']=='金融研究' and listed[0]['partition']=='比赛'
+        with pytest.raises(HTTPException) as error:service.edit(sid,SessionEdit(version=view['session']['version'],title='过期'))
+        assert error.value.status_code==409
+        cleared=service.edit(sid,SessionEdit(version=edited['version'],partition=''))
+        assert cleared['partition']==''
+    finally:service.close()
+
+
+def test_rename_does_not_interrupt_a_running_task(library):
+    doc(library);pid=profile(library);gate,entered=Event(),Event()
+    def slow(*args,**kwargs):
+        entered.set();gate.wait(3)
+        return {'role':'assistant','content':'done'},[],None
+    service=Research(library,slow)
+    try:
+        started=service.start(ask(pid,'Rename while running'),'fixture')
+        assert entered.wait(3)
+        current=service.view(started['session_id'])['session']
+        renamed=service.edit(started['session_id'],SessionEdit(version=current['version'],title='运行中改名',partition='进行中'))
+        assert renamed['title']=='运行中改名'
+        gate.set()
+        task=finish(service,started['session_id'])['items'][-1]
+        assert task['status']=='completed'
+    finally:
+        gate.set();service.close()

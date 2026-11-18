@@ -1,3 +1,4 @@
+import {MoreActions} from './WorkspaceUI'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { DocumentSummary, Topic, TopicMaterials } from '../shared/status'
 import './resources.css'
@@ -23,7 +24,7 @@ export function TopicMaterialsSections({ materials, query, results, notice, busy
 }) {
   const direct = new Set(materials.direct.map(item => item.document.id))
   return <div className="topic-materials-view" aria-label="关联材料">
-    <header className="resource-header"><div><h2>{materials.topic.title}</h2><p className="resource-file">专题材料</p></div><button disabled={busy} onClick={onRefresh}>刷新材料</button></header>
+    <header className="resource-header"><div><h2>{materials.topic.title}</h2><p className="resource-file">专题材料</p></div><MoreActions><button disabled={busy} onClick={onRefresh}>重新载入材料</button></MoreActions></header>
     {notice && <p role="status" className="resource-notice">{notice}</p>}
     <section className="resource-section" aria-label="添加文献">
       <h3>添加文献</h3>

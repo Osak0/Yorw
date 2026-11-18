@@ -27,7 +27,7 @@ export function filterDocuments(documents: DocumentRecord[], query: string): Doc
   ].some(value => value.toLocaleLowerCase().includes(needle)))
 }
 
-export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapsed, onToggleStorageDirectory, onOpenDocument, onOpenTool, onCollapseTool, onCloseMetadata, onNavigate, onShowNotes, onOpenTopic, pendingJump, onJumpApplied, onShowLibrary, onTitles }: {
+export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapsed, onToggleStorageDirectory, onOpenDocument, onOpenTool, onCollapseTool, onCloseMetadata, onNavigate, onShowNotes, onOpenTopic, pendingJump, onJumpApplied, pendingFolder, onFolderApplied, onShowLibrary, onTitles }: {
   activeDocumentId: string | null
   activeTool: 'document' | StorageTool | null
   storageDirectoryCollapsed: boolean
@@ -41,6 +41,8 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
   onOpenTopic(topic: Topic): void
   pendingJump: (ReaderTarget & { documentId: string; sequence: number }) | null
   onJumpApplied(sequence: number): void
+  pendingFolder: { id: string; sequence: number } | null
+  onFolderApplied(): void
   onShowLibrary(): void
   onTitles(documents: DocumentRecord[]): void
 }) {
@@ -48,6 +50,7 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
   const [folders,setFolders]=useState<Folder[]>([])
   const [selectedFolder,setSelectedFolder]=useState(()=>{try{const id=localStorage.getItem('yorw-selected-folder');return !id||['all','none'].includes(id)?'root':id}catch{return 'root'}})
   const [folderRevision,setFolderRevision]=useState(0)
+  useEffect(()=>{if(!pendingFolder)return;const target=pendingFolder;void window.yorw.documents.library({action:'list'}).then(result=>{if(result.ok&&result.value.items.some((folder:Folder)=>folder.id===target.id)){setSelectedFolder(target.id);setFolders(result.value.items);setQuery('')}else setMessage('目录已删除或不可用。')}).finally(()=>onFolderApplied())},[pendingFolder])
   useEffect(()=>{void window.yorw.documents.library({action:'list'}).then(r=>{if(r.ok){setFolders(r.value.items);if(selectedFolder!=='root'&&!r.value.items.some((f:Folder)=>f.id===selectedFolder))setSelectedFolder('root')}})},[folderRevision])
   useEffect(()=>{try{localStorage.setItem('yorw-selected-folder',selectedFolder)}catch{}},[selectedFolder])
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
@@ -160,7 +163,7 @@ export function Storage({ activeDocumentId, activeTool, storageDirectoryCollapse
           const parseStatus = document.parse_status
           const parsing = ['pending', 'running'].includes(document.extraction_status) || ['pending', 'running'].includes(parseStatus ?? '') || document.task?.status === 'running'
           const processor = reparseChoice[document.id] ?? 'builtin'
-          return <section key={document.id} className="document-row"><h2>{document.title || document.original_name}</h2><p className="file-name">{document.original_name} · {(document.format ?? 'pdf').toUpperCase()}</p><p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.format && document.format !== 'pdf' ? '结构化内容' : document.page_count === null ? '页数待解析' : `${document.page_count} 页`}</p><p><strong>{labels[document.extraction_status] ?? document.extraction_status}</strong>{document.task?.status === 'running' && document.task.progress !== null ? ` · ${Math.round(document.task.progress * 100)}%` : ''}</p>
+          return <section key={document.id} className="document-row"><h2>{document.title || document.original_name}</h2><p className="file-name">{document.title&&document.title!==document.original_name?`${document.original_name} · `:''}{(document.format ?? 'pdf').toUpperCase()}</p><p>{document.authors.length ? document.authors.join('、') : '作者未知'} · {document.year ?? '年份未知'} · {document.format && document.format !== 'pdf' ? '结构化内容' : document.page_count === null ? '页数待解析' : `${document.page_count} 页`}</p><p><strong>{labels[document.extraction_status] ?? document.extraction_status}</strong>{document.task?.status === 'running' && document.task.progress !== null ? ` · ${Math.round(document.task.progress * 100)}%` : ''}</p>
             {parseStatus && parseStatus !== document.extraction_status && <p className="file-name">{parseStatus === 'running' ? '正在重新解析' : `上次解析：${parseLabels[parseStatus] ?? parseStatus}`}{parseStatus !== 'running' && document.parse_warning ? ` · ${explain(document.parse_warning)}` : ''}{parseStatus !== 'running' && ['ready', 'partial'].includes(document.extraction_status) ? '（继续使用上一可用版本）' : ''}</p>}
             {document.warning && <p className="warning">{explain(document.warning)}</p>}
             {document.parse_warnings?.length ? <p className="file-name">解析提示：{document.parse_warnings.slice(0, 2).map(item => explain(item.code)).join('；')}</p> : null}
