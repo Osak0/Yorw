@@ -248,3 +248,15 @@ services/api/.venv/Scripts/python.exe -m pytest services/api/tests/test_rectific
 完整验收先执行 `pnpm build:backend`，再运行完整后端测试、桌面测试、类型与前端构建。原生 `--ui-smoke`、`--collaboration-smoke`／`--collaboration-resume-smoke`、`--notebooks-smoke`／`--notebooks-resume-smoke`、`--research-smoke`、`--document-management-smoke`、`--history-layout-smoke`、`--metadata-review-smoke` 各用新隔离目录与自编写材料。
 
 真实业务实测使用明确授权后的 `--model-profiles-smoke --live-business --live-config=<配置 JSON> --live-key-file=<密文文件>`，附带常规隔离参数；目录需含自编写 fixture.pdf 与 fixture.docx。主进程在隔离加密上下文中解密，renderer 不接收密钥；仅显式传入 live 参数才请求外部服务。live-research-business.json 记录目录到方案、部分采纳及后续追问，model-profiles-smoke.json 独立记录连接能力检测。结束后检查绝对路径仅位于隔离报告目录，清除凭据副本、该目录 secrets 与复制的 Local State；原配置、凭据不改动。业务实测不是全面质量评估，未触发的纠错不记为实测通过。
+
+## v0.4.0 发布与文档对齐
+
+发布状态唯一入口为 [PLAN](../PLAN.md)，发布文案为 [v0.4.0](releases/v0.4.0.md)。每轮候选使用新目录，不能混用旧版本后端或旧帮助文件。
+
+1. 先对齐根和桌面 package.json、后端 pyproject.toml 与 uv.lock 的本项目版本；保持第三方锁定依赖，schema 仍为 31。
+2. 按本页命令完成类型、桌面测试、冻结后端、完整后端测试及前端构建，再执行 electron-builder，将本版发布说明与使用指南装入 help。
+3. 最终源码提交后重建制品。记录提交、工作树差异和锁文件 SHA256；确认工作树无业务源码差异。候选验证记录中的 base_commit 不是最终发布身份。
+4. 对同批安装器和完整分发目录核对版本、后端和帮助文件，运行隔离窗口及配对重启；安装／卸载验证单列，受限 PATH 不能标作干净 Windows。
+5. 用 `Get-FileHash -Algorithm SHA256` 为安装器生成标准 `SHA256SUMS.txt`。远端发布后核对标签提交、上传资产大小和哈希，再填写 PLAN 的发布回执并同步 README 与发布说明。需要时只追加文档回执提交，不移动已发布标签。
+
+本轮候选位置、检查结果和未完成事项见 [发布准备记录](history/v0.4.0-release-preparation.md)。仓库整理不会自动执行提交、合并、标签或远端发布。

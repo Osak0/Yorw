@@ -1,6 +1,6 @@
 # 当前架构与数据约定
 
-本文描述当前 feature/ai-cowork-in-garden 工作树；应用／后端仍为 0.3.0、schema 31（031 增加会话分区）。此前四阶段及后续阅读／问答增量已 review 通过，研究助理阶段一至六与整改 R1、R2 已 review 通过，整改 R3 已在工作树实现并等待 review；review 与后续授权统一见 PLAN，继续在该分支开发。提交及验证状态见 [PLAN](../PLAN.md)，现役实施范围见 [计划](../PLAN_v0_4_0.md)，命令见 [开发指南](development.md)，合同演进及旧测试见 [开发历史](history/v0.4.0.md)。
+本文描述 v0.4.0 现役架构：应用／后端 0.4.0、schema 31（031 增加会话分区）。功能开发已完成；当前分支、验证与发布状态见 [PLAN](../PLAN.md)，命令见 [开发指南](development.md)，原始范围及合同演进见 [历史计划](history/v0.4.0-assistant-plan.md) 与 [开发历史](history/v0.4.0.md)。
 
 ## 模块与通信
 
@@ -280,7 +280,7 @@ topic_note_scope 保存针对来源专题的显式选择／排除。最近显式
 
 ### 整改 R2：Agent loop 与可纠正反馈
 
-R2 在 schema 29 基础上追加 `030_research_tool_calls.sql`，R2 交付时为 schema 30；应用／后端仍 0.3.0。协议解析与业务校验分离：`ToolTurn` 对截断流、缺失／重复调用 ID、未知工具等协议损坏抛出 `ProbeError` 并终止；流完整但参数 JSON 不合法，或参数不是对象时，返回该调用的可修正 `INVALID_TOOL_ARGUMENTS／INVALID_ARGUMENT`，模型可在同一用户请求内重新发起；完整调用的参数再由注册表校验器验证，`ToolFault` 的 `code／field／expected／correctable` 作为该 `tool_call_id` 的工具结果返回。
+R2 在 schema 29 基础上追加 `030_research_tool_calls.sql`，R2 交付时为 schema 30；该阶段交付时应用／后端为 0.3.0。协议解析与业务校验分离：`ToolTurn` 对截断流、缺失／重复调用 ID、未知工具等协议损坏抛出 `ProbeError` 并终止；流完整但参数 JSON 不合法，或参数不是对象时，返回该调用的可修正 `INVALID_TOOL_ARGUMENTS／INVALID_ARGUMENT`，模型可在同一用户请求内重新发起；完整调用的参数再由注册表校验器验证，`ToolFault` 的 `code／field／expected／correctable` 作为该 `tool_call_id` 的工具结果返回。
 
 纠错最多两次：第一、第二次可修正错误返回工具结果并计入纠错数，第三次返回 `CORRECTION_LIMIT_EXCEEDED`。重复一次**已成功**的相同调用直接回放上次结果的摘要并提示不要重复，不计纠错；同一调用第三次重复视为循环并终止。重复一次**已失败**的相同调用没有新信息，直接终止。所有尝试都计入 10 轮、24 次工具、180 秒和 token 预算。多个工具按顺序执行，成功结果独立保留；某一调用失败不丢弃同轮已成功结果。停止、范围变化、记忆纠正／忘记、来源失效、配置冲突仍为终止条件，不进入纠错。
 
