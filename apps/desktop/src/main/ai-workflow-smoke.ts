@@ -30,7 +30,7 @@ export async function runAiWorkflowSmoke(window:BrowserWindow,backend:Backend,pr
   if(req.url?.endsWith('/embeddings')){
    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({data:body.input.map((_text:string,index:number)=>({index,embedding:[1,0]}))}));return
   }
-  const system=body.messages[0].content,data=JSON.parse(body.messages[1].content)
+  const system=body.messages[0].content,data=JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
   let text:string
   if(system.includes('筛选器')){const parsed=JSON.parse(data.question);text=JSON.stringify({items:parsed.candidates.map((item:any)=>({id:item.id,sentence:0}))})}
   else if(system.includes('改写'))text=JSON.stringify({query:'English evidence'})

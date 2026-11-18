@@ -5,9 +5,9 @@ import type { WorkspaceLayout, WorkspaceLayoutModule, WorkspaceLayoutSidebarMode
 
 const MODULES = new Set<WorkspaceLayoutModule>(['Storage', 'Garden', 'House'])
 const SIDEBAR_MODES = new Set<WorkspaceLayoutSidebarMode>(['notes', 'search', 'chat'])
-const TAB_KINDS = new Set(['settings', 'document', 'topic', 'topic-create', 'topic-manage', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment', 'ai', 'history', 'materials'])
+const TAB_KINDS = new Set(['topic-note','notebooks','note-scope','linked-topics','assistant','proposal','settings', 'document', 'topic', 'topic-create', 'topic-manage', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment', 'ai', 'history', 'materials'])
 const STORAGE_TAB_KINDS = new Set(['document', 'notes', 'search', 'chat', 'resource', 'metadata', 'enrichment'])
-const GARDEN_TAB_KINDS = new Set(['topic', 'topic-create', 'topic-manage', 'ai', 'history', 'materials'])
+const GARDEN_TAB_KINDS = new Set(['topic-note','notebooks','note-scope','linked-topics','assistant','proposal','topic', 'topic-create', 'topic-manage', 'ai', 'history', 'materials'])
 const GARDEN_VIEWS = new Set(['tree', 'paths'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_TABS = 50
@@ -28,7 +28,7 @@ function validate(value: unknown): WorkspaceLayout | null {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null
     const tab = item as Record<string, unknown>
     if (typeof tab.kind !== 'string' || !TAB_KINDS.has(tab.kind)) return null
-    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','retrieval','data'].includes(tab.id) : tab.kind === 'topic-create' ? tab.id !== 'new' : !UUID.test(tab.id))) return null
+    if (typeof tab.id !== 'string' || (tab.kind === 'settings' ? !['parsers','chat','models','retrieval','data'].includes(tab.id) : tab.kind === 'topic-create' ? tab.id !== 'new' : !UUID.test(tab.id))) return null
     if (tab.title !== undefined && (typeof tab.title !== 'string' || tab.title.length > MAX_TITLE)) return null
     const kind = tab.kind as WorkspaceLayoutTab['kind']
     const key = tabKey({ kind, id: tab.id })

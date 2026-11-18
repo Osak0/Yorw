@@ -30,3 +30,33 @@ test('save uses ciphertext, does not return key, preserves key, and clears it ex
     await expect(providers.save({ ...cleared, key: 'new-secret' })).rejects.toThrow('SECURE_STORAGE_UNAVAILABLE')
   } finally { vi.mocked(safeStorage.isAsyncEncryptionAvailable).mockResolvedValue(true); await rm(directory, { recursive: true, force: true }) }
 })
+
+
+test('profiles isolate keys, copy legacy ciphertext before old settings change, and validate addresses',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'yorw-profiles-'))
+ const id='00000000-0000-4000-8000-000000000001'
+ let chat:any={kind:'chat',base_url:'https://api.deepseek.com',model:'old',version:1}
+ let profile:any={id,name:'Legacy',provider:'compatible',base_url:chat.base_url,model:'old',version:1,legacy_version:1,chat_check:null,tools_check:null}
+ const backend={request:vi.fn(async(path,method,body)=>{
+  if(path==='/v1/providers/profiles')return {items:[profile],defaults:{research_id:id,memory_id:null,version:1}}
+  if(path===`/v1/providers/profiles/${id}`&&method==='PUT'){profile={...body,id,version:body.version+1,legacy_version:null};return profile}
+  if(path==='/v1/providers/chat'&&method==='PUT'){chat={...body,kind:'chat',version:body.version+1};return chat}
+  if(path.includes('/checks/'))return {id:'job'}
+  return {items:[chat]}
+ })} as unknown as Backend
+ try{
+  const {writeFile}=await import('node:fs/promises')
+  await writeFile(join(directory,'chat-1.enc'),await safeStorage.encryptStringAsync('legacy-secret'))
+  const providers=new Providers(backend,directory)
+  expect((await providers.profileList()).items[0].has_key).toBe(true)
+  await providers.save({...chat,key:'changed-secret'})
+  const saved=await providers.profileSave({...profile,key:''})
+  expect(saved.has_key).toBe(true)
+  await providers.profileTest({id,kind:'tools'})
+  expect(vi.mocked(backend.request).mock.calls.at(-1)?.[3]).toBe('legacy-secret')
+  expect(JSON.stringify(saved)).not.toContain('secret')
+  expect((await readFile(join(directory,`profile-${id}-2.enc`))).toString()).not.toContain('legacy-secret')
+  await expect(providers.profileSave({...profile,base_url:'https://different.example'})).rejects.toThrow('KEY_REENTRY_REQUIRED')
+  expect(()=>providers.profileCheck('../private')).toThrow('INVALID_CONFIG')
+ }finally{await rm(directory,{recursive:true,force:true})}
+})

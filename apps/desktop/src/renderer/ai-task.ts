@@ -3,7 +3,7 @@ import type {AiInput,AiScope,AiTask} from '../shared/status'
 import {generationError} from './generation-status'
 
 export function aiError(code:string):string{
- return ({CONFIG_MISSING:'请先在 House 配置聊天模型。',KEY_MISSING:'请先在 House 保存聊天模型密钥。',NO_EVIDENCE:'没有找到足够的相关材料，请补充资料或调整要求。',TEXT_NOT_READY:'文献文字尚未准备好，请稍后再试。',REVISION_CONFLICT:'正文已有更新，草稿已保留，请载入最新版本后再生成。',MATERIAL_CHANGED:'来源内容已有变化，请重试。',CONFIG_CHANGED:'设置已变化，请重新发送。',TASK_RUNNING:'正在处理当前任务，请稍候或取消。',CHAT_RUNNING:'当前回答仍在生成。',SUGGESTION_RUNNING:'当前草稿仍在生成。',NO_SCOPED_MATERIALS:'当前专题范围没有可用材料；请关联文献或笔记，或切换到全工作区。',BACKEND_NOT_READY:'本地服务不可用，请重新打开知栖。'} as Record<string,string>)[code]??generationError(code)
+ return ({CONFIG_MISSING:'请先在 House 配置聊天模型。',KEY_MISSING:'请先在 House 保存聊天模型密钥。',NO_EVIDENCE:'没有找到足够的相关材料，请补充资料或调整要求。',TEXT_NOT_READY:'文献文字尚未准备好，请稍后再试。',REVISION_CONFLICT:'正文已有更新，草稿已保留，请载入最新版本后再生成。',MATERIAL_CHANGED:'来源内容已有变化，请重试。',CONFIG_CHANGED:'设置已变化，请重新发送。',TASK_RUNNING:'正在处理当前任务，请稍候或取消。',CHAT_RUNNING:'当前回答仍在生成。',SUGGESTION_RUNNING:'当前草稿仍在生成。',NO_SCOPED_MATERIALS:'当前专题范围没有可用材料；请关联文献或笔记，或在专题的笔记范围中选择其他专题。',BACKEND_NOT_READY:'本地服务不可用，请重新打开知栖。'} as Record<string,string>)[code]??generationError(code)
 }
 export const phaseLabel=(phase:string)=>({PREPARING:'正在准备相关内容…',UNDERSTANDING:'正在理解问题…',SEARCHING:'正在查找原文…',FILTERING:'正在筛选相关内容…',GENERATING:'正在生成…'} as Record<string,string>)[phase]??'正在处理…'
 export function useAiTask(kind:AiInput['kind'],target:string){

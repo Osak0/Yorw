@@ -10,6 +10,8 @@ export interface SidebarPreference {
 export interface DocumentSession {
   page: number | null
   zoom: number | 'fit'
+  pdfDisplayMode?:'single'|'continuous'
+  pdfNavigation?:'thumbnails'|'outline'|null
   sidebarMode: SidebarMode
   sidebarOpen: boolean | null
   sidebarWidth: number

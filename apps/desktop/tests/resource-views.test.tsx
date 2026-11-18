@@ -49,6 +49,6 @@ test('resource activity and editable metadata relations have independent respons
 test('topic materials separate direct links from descendant aggregation and show notes once', () => {
   const html = renderToStaticMarkup(<TopicMaterialsSections materials={materials} query="" onQuery={() => {}} onAdd={() => {}}
     onRemove={() => {}} onRefresh={() => {}} onSearch={() => {}} results={[]} notice="" busy={false} />)
-  for (const text of ['直接关联', '子专题汇集', 'Child topic', '关联笔记正文', 'Other paper', '解除关联']) expect(html).toContain(text)
+  for (const text of ['直接关联', '范围内汇集', 'Child topic', '关联笔记正文', 'Other paper', '解除关联']) expect(html).toContain(text)
   expect(html).not.toContain('复制')
 })

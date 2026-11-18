@@ -1,3 +1,4 @@
+import {MoreActions,ContextHelp} from './WorkspaceUI'
 import React,{useEffect,useState} from 'react'
 import type {ExportCatalog} from '../shared/status'
 
@@ -11,7 +12,7 @@ export function WorkspacePanel({active=true}:{active?:boolean}){
  async function save(task:string){const result=await window.yorw.workspace.save(task);setNotice(result.ok?(result.value.cancelled?'已取消保存，可再次保存这份快照。':'内容 ZIP 已保存。请解压核查正文与来源清单。'):explain(result.code))}
  async function create(){setBusy(true);try{const result=await window.yorw.workspace.create({note_ids:notes,topic_ids:topics});if(!result.ok){setNotice(explain(result.code));return}setSnapshot(result.value);await save(result.value.task_id)}catch{setNotice('导出或保存失败，未确认写入成功；可重试保存已有快照。')}finally{setBusy(false)}}
  const toggle=(values:string[],id:string,checked:boolean)=>checked?[...values,id]:values.filter(v=>v!==id)
- return <section className="provider workspace-panel"><h2>本地数据与内容导出</h2><button disabled={busy} onClick={()=>void load()}>刷新数据与导出列表</button>{info&&<><p>当前工作区（{info.schema_version} 版数据结构）</p><code className="workspace-location">{info.data_location}</code><small>工作区 ID：{info.workspace_id}。本步显示数据位置，暂不提供目录迁移。</small></>}
+ return <section className="provider workspace-panel"><h2>本地数据与内容导出</h2><MoreActions><button disabled={busy} onClick={()=>void load()}>重新载入导出列表</button></MoreActions>{info&&<><p>数据位置</p><code className="workspace-location">{info.data_location}</code><ContextHelp label="工作区详情"><small>工作区 ID：{info.workspace_id}；数据结构版本：{info.schema_version}。</small></ContextHelp></>}
   <p>导出已保存的笔记和 Wiki 当前修订，附带来源快照及导出时可用性。Markdown 正文保持原样；不包含未保存草稿。</p>
   <p><strong>内容导出不是完整备份。</strong>不包含 PDF、密钥、模型配置、聊天历史、未采纳建议或完整修订历史；不提供恢复导入。</p>
   {catalog&&<fieldset disabled={busy}><div className="actions"><button onClick={()=>{setNotes(catalog.notes.map(n=>n.id));setTopics(catalog.topics.map(t=>t.id))}}>全选已保存内容</button><button onClick={()=>{setNotes([]);setTopics([])}}>清空选择</button></div>

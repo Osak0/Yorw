@@ -10,7 +10,7 @@ export async function runBuiltinReadingSmoke(window:BrowserWindow,backend:Backen
  window.webContents.setBackgroundThrottling(false)
  const server=createServer((request,response)=>{let raw='';request.on('data',data=>raw+=data);request.on('end',()=>{
   try{
-   const body=JSON.parse(raw),system=body.messages[0].content,data=JSON.parse(body.messages[1].content)
+   const body=JSON.parse(raw),system=body.messages[0].content,data=JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
    let text='Self-written fixture evidence [S1].'
    if(system.includes('筛选器')){const query=JSON.parse(data.question);text=JSON.stringify({items:query.candidates.map((item:{id:string})=>({id:item.id,sentence:0}))})}
    else if(system.includes('改写'))text=JSON.stringify({query:'self-written fixture'})

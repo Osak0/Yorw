@@ -35,9 +35,9 @@ def running(frozen,workspace):
                 request('/v1/health');break
             except (OSError,urllib.error.URLError):time.sleep(.05)
         else:pytest.fail('Startup timed out')
-        def upload(content):
+        def upload(content, filename="fixture.pdf", media_type="application/pdf"):
             boundary='yorw-search-fixture'
-            raw=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="fixture.pdf"\r\nContent-Type: application/pdf\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
+            raw=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: {media_type}\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
             req=urllib.request.Request(base+'/v1/documents/import',data=raw,headers={'Authorization':'Bearer '+'t'*64,'Content-Type':'multipart/form-data; boundary='+boundary})
             with urllib.request.urlopen(req,timeout=5) as response:identity=json.load(response)['document']['id']
             for _ in range(100):

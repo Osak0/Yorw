@@ -1,3 +1,4 @@
+import {DocumentCollaboration} from './Collaboration'
 import {hasMetadataDraft} from './MetadataEditor'
 import React,{useEffect,useState} from 'react'
 import type {EnrichmentDecision,EnrichmentSettings,EnrichmentView,ReaderTarget,DocumentBlock} from '../shared/status'
@@ -31,7 +32,24 @@ export function EnrichmentPanel({id,onNavigate,onChanged}:{id:string;onNavigate(
  const content=item?{...item.result,...item.raw_result}:null
  function decision(action:EnrichmentDecision['action'],value=''){if(item)void act(()=>window.yorw.enrichment.decide({id,enrichment_id:item.id,action,value}),action==='restore'?'已恢复完整结果。':'已保存选择。')}
  function evidence(blockId:string){const block=blocks.find(b=>b.id===blockId);if(block)onNavigate({page:block.physical_page??undefined,block_id:block.id,section_path:block.section_path,evidence:block.text})}
- const suggestions=content?[['title','标题',content.metadata?.title],['authors','作者',content.metadata?.authors],['year','年份',content.metadata?.year],['tags','关键词／标签',content.tags],['summary_md','总结',content.overview],['related','相关文献',content.links?.related],['topics','所属专题',content.links?.topics]] as const:[]
+ const suggestions=content?[['title','标题',content.metadata?.title],['authors','作者',content.metadata?.authors],['year','年份',content.metadata?.year],['tags','关键词／标签',content.tags],['summary_md','总结',content.overview]] as const:[]
+ const bulkOperations=(mode:'append'|'replace')=>Object.fromEntries(suggestions.flatMap(([field,,value])=>{
+  const available=value!==undefined&&value!==null&&value!==''&&(!Array.isArray(value)||value.length>0)
+  const current=view?.metadata[field as keyof EnrichmentView['metadata']]
+  if(!available||(mode==='append'&&(field==='title'||field==='year')&&current!==null&&current!==undefined&&current!==''))return []
+  return [[field,mode==='append'&&(field==='title'||field==='year')?'fill':mode]]
+ }))
+ function applyAll(mode:'append'|'replace'){
+  if(!item||!view)return
+  if(hasMetadataDraft(id)){setNotice('请先保存或放弃未保存的元数据草稿，再采纳建议。');return}
+  const operations=bulkOperations(mode)
+  if(!Object.keys(operations).length)return
+  if(mode==='replace'&&!window.confirm('全部替换以下元数据？\n'+suggestions.filter(([field])=>field in operations).map(([field,label,value])=>{
+   const current=view.metadata[field as keyof EnrichmentView['metadata']]
+   return `${label}：${display(current)} → ${display(value)}`
+  }).join('\n')+'\n空建议保持原值；专题与资料关联在下方方案中单独预览采纳。'))return
+  void act(()=>window.yorw.enrichment.apply({id,enrichment_id:item.id,version:view.document_version,operations,relation_snapshot:view.relation_snapshot}),mode==='append'?'已全部添加可用建议。':'已全部替换可用建议。')
+ }
  return <section className="resource-section enrichment-panel" aria-label="AI 文献整理" data-enrichment-id={item?.id}><h3>AI 辅助文献整理</h3>
  <p className="resource-hint">将原文和当前元数据发送到聊天模型，可能产生费用。生成记录可保留；核对后采纳到统一元数据，不能替代原文证据。</p>
  <div className="actions"><button disabled={busy||running} onClick={()=>void act(()=>window.yorw.enrichment.generate(id),'已创建整理任务。',true)}>{item?'重新生成':'生成 / 重试'}</button>{running&&<button disabled={busy} onClick={()=>void act(()=>window.yorw.enrichment.cancel(id),'已停止任务；已有结果保留。')}>停止整理</button>}</div>
@@ -40,20 +58,20 @@ export function EnrichmentPanel({id,onNavigate,onChanged}:{id:string;onNavigate(
  {item&&content&&<><p className="resource-hint">{item.provider?.model||'历史模型未记录'} · {item.coverage.length} 个内容块 · {item.prompt_version}{item.stale?' · 旧原文版本（仅供查阅）':''}</p>
  {item.hidden?<div><p>本条结果已隐藏，生成记录仍完整保留。</p><button disabled={busy} onClick={()=>decision('restore')}>恢复显示完整结果</button></div>:<>
  {!suggestions.some(([, ,value])=>Array.isArray(value)?value.length>0:typeof value==='string'?!!value.trim():value!==null&&value!==undefined)&&<p role="status">本条记录未产生可用元数据，请重新生成；历史记录保留。</p>}
- <section className="enrichment-suggestions" aria-label="元数据建议"><h4>元数据建议</h4>{suggestions.map(([field,label,value])=>{
+ <section className="enrichment-suggestions" aria-label="元数据建议"><div className="enrichment-suggestions-heading"><h4>元数据建议</h4><div className="enrichment-field-actions">{(['append','replace'] as const).map(mode=><button key={mode} disabled={busy||selecting||item.stale||!Object.keys(bulkOperations(mode)).length} onClick={()=>applyAll(mode)}>{mode==='append'?'全部添加':'全部替换'}</button>)}</div></div>{suggestions.map(([field,label,value])=>{
  const available=value!==undefined&&value!==null&&value!==''&&(!Array.isArray(value)||value.length>0)
- const current=field==='related'||field==='topics'?view!.relations?.[field]:view!.metadata[field as keyof EnrichmentView['metadata']]
+ const current=view!.metadata[field as keyof EnrichmentView['metadata']]
  return <div className="enrichment-field" key={field}><h5>{label}</h5>
  <p>当前：{display(current)}</p><p className="enrichment-proposed">建议：{available?display(value):'缺少信息'}</p>
  <div className="enrichment-field-actions">{(['append','replace'] as const).map(mode=><button key={mode} aria-label={`${mode==='append'?'添加':'替换'}${label}`} title={mode==='append'&&(field==='title'||field==='year')?'仅在当前字段为空时添加':'采纳该字段建议'} disabled={!available||busy||selecting||item.stale||(mode==='append'&&(field==='title'||field==='year')&&current!==null&&current!==undefined&&current!=='')} onClick={()=>{
  if(hasMetadataDraft(id)){setNotice('请先保存或放弃未保存的元数据草稿，再采纳建议。');return}
  const operation=mode==='append'&&(field==='title'||field==='year')?'fill':mode
- if(mode==='replace'&&!window.confirm(`替换${label}？当前：${display(current)}；建议：${display(value)}${field==='related'||field==='topics'?'。这会解除当前该类关联。':''}`))return
+ if(mode==='replace'&&!window.confirm(`替换${label}？当前：${display(current)}；建议：${display(value)}`))return
  void act(()=>window.yorw.enrichment.apply({id,enrichment_id:item.id,version:view!.document_version,operations:{[field]:operation},relation_snapshot:view!.relation_snapshot}),`已${mode==='append'?'添加':'替换'}${label}。`)
  }}>{mode==='append'?'添加':'替换'}</button>)}</div>
  </div>})}
  </section>
  <details><summary>查看原文依据</summary>{item.stale?<p>旧原文版本，仅保留生成记录；请重新生成后核查当前依据。</p>:item.result.evidence_ids.map(blockId=>{const b=blocks.find(b=>b.id===blockId);return b?<div key={blockId}><p>{b.text}</p><button onClick={()=>evidence(blockId)}>查看依据</button></div>:<p key={blockId}>原文块不可用</p>})}</details>
  <button disabled={busy} onClick={()=>decision('hide')}>隐藏本条结果</button></>}
- </>}<p role="status">{notice}</p></section>
+ </>}<DocumentCollaboration key={id} documentId={id} onChanged={onChanged} sourceVersion={view?.document_version??1} suggestedLinks={item&&!item.stale&&!item.hidden?content?.links:undefined} enrichmentId={item&&!item.stale&&!item.hidden?item.id:undefined} suggestedTopics={item&&!item.stale&&!item.hidden?content?.links?.new_topics:[]}/><p role="status">{notice}</p></section>
 }

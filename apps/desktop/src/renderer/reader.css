@@ -4,3 +4,25 @@
 
 /* Reserve scrollbar space even while the canvas is being resized. */
 .pdf-viewport{scrollbar-gutter:stable;min-width:0}
+
+/* Continuous document: retain page geometry and release offscreen canvases. */
+.pdf-pages{position:relative;min-width:100%;width:max-content;overflow-anchor:none}
+.pdf-pages .pdf-page{margin:0 auto 12px;overflow-anchor:none}
+.pdf-pages .pdf-page:last-child{margin-bottom:0}
+.pdf-page-status{position:absolute;inset:12px auto auto 12px;color:#8a5700;background:#fff4dc;padding:8px}
+.reader-feedback-compact{min-height:0;position:absolute;z-index:2;right:18px;bottom:8px;max-width:calc(100% - 36px);background:#ffffffed;border-radius:4px;padding:2px 6px;pointer-events:none;font-size:11px}
+.reader-feedback-compact:empty{display:none}.reader-feedback-compact button{pointer-events:auto}
+.reader{position:relative}.pdf-viewport{padding:10px 12px}
+@media(max-width:1100px){.pdf-viewport{padding:8px}}
+
+.pdf-workspace{display:flex;flex:1;min-height:0;min-width:0;gap:0}
+.reader-navigation-actions{display:flex;gap:4px;margin-left:auto}.reader-controls{gap:5px}.reader-toolbar{gap:5px}.reader-controls select{font-size:12px;padding:5px}
+.reader-toolbar [aria-pressed=true]{background:#eaf0ff;border-color:#3158c9;color:#3158c9}
+.pdf-navigation{width:164px;flex:0 0 164px;min-height:0;border:1px solid #dce2ea;background:#f8fafc;display:flex;flex-direction:column}
+.pdf-navigation-heading{display:flex;align-items:center;justify-content:space-between;padding:7px;font-size:13px}.pdf-navigation-heading button{padding:3px 6px;font-size:12px}
+.pdf-navigation-body{overflow:auto;min-height:0;flex:1;padding:6px}.pdf-navigation-body p{font-size:12px;line-height:1.7;padding:6px}
+.pdf-thumbnail{display:block;width:100%;margin:0 0 10px;padding:6px;border:1px solid #dce2ea;background:#fff;border-radius:4px;color:#526174;font-size:12px}.pdf-thumbnail canvas{display:block;width:120px;max-width:100%;height:auto;margin:0 auto}.pdf-thumbnail span{display:block;margin-top:5px}.pdf-thumbnail[aria-current=page]{border-color:#3158c9;background:#eaf0ff;color:#3158c9}
+.pdf-outline,.pdf-outline ul{list-style:none;margin:0;padding:0}.pdf-outline ul{padding-left:10px}.pdf-outline button{width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;font-size:12px;padding:7px 4px;border:0;background:transparent;color:#334155}.pdf-outline button:hover{background:#eaf0ff}
+.reader-focused{position:fixed!important;inset:0;z-index:1000;background:#f4f6f9;padding:0;height:100vh}.reader-focused .reader-toolbar{border-top:0}
+.reading-workspace .reader-toolbar{padding:5px 7px;gap:5px}.reading-workspace .reader-toolbar button{min-height:28px;padding:3px 6px}
+@media(max-width:1100px){.reader-controls{width:auto}.reader-navigation-actions{margin-left:0}.pdf-navigation{width:150px;flex-basis:150px}}

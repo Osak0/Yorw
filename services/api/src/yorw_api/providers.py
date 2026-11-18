@@ -102,4 +102,6 @@ def router(database: Database) -> APIRouter:
             return probe(kind, config, x_provider_key)
         except ProbeError as error:
             return {"ok": False, "code": error.code}
+    from .model_profiles import router as profiles_router
+    routes.include_router(profiles_router(database))
     return routes

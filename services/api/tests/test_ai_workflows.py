@@ -357,8 +357,8 @@ def test_chat_automatically_finds_evidence_and_resolves_followup(workflow, monke
     doc, _, _ = setup(workflow.suggestions)
     local(workflow)
     asked, rewritten = [], []
-    def response(cfg, key, question, sources):
-        asked.append((question, sources))
+    def response(cfg, key, question, sources, **options):
+        asked.append((question, sources, options))
         yield 'Computed tomography [S1].'
     monkeypatch.setattr('yorw_api.chat.stream', response)
     def rewrite(cfg, key, instruction, body, **options):
@@ -377,7 +377,8 @@ def test_chat_automatically_finds_evidence_and_resolves_followup(workflow, monke
         if message['status'] != 'running': break
         time.sleep(.01)
     assert rewritten[0]['history'][0]['question'] == first.text
-    assert json.loads(asked[-1][0])['recent_dialogue_for_context_only'][0]['question'] == first.text
+    assert asked[-1][0] == '它使用什么？'
+    assert first.text in asked[-1][2]['history_context']
     assert all(source['document_id'] == doc for source in asked[-1][1])
     assert workflow.start(first, chat_key='secret', chat_version=1)['id'] == task['id']
 
@@ -485,7 +486,7 @@ def test_schema9_upgrade_and_preferences_preserve_research_assets(tmp_path):
     old.close()
     upgraded = Database(workspace)
     try:
-        assert upgraded.version == 23
+        assert upgraded.version == 31
         assert Garden(upgraded).get(topic['topic']['id']) == saved
         assert upgraded.connection.execute('SELECT semantic_enabled,version FROM ai_preferences').fetchone() == (1, 1)
         assert len(list((workspace.root/'backups').glob('*.sqlite3'))) == 1
@@ -572,7 +573,7 @@ def test_multiformat_blocks_support_search_chat_and_mixed_draft(workflow, monkey
     assert hit['block_id'] and hit['physical_page'] is None and hit['section_path'] == ['Methods']
 
     asked = []
-    def chat_response(cfg, key, question, sources):
+    def chat_response(cfg, key, question, sources, **options):
         asked.append(sources)
         yield 'Markdown answer [S1].'
     monkeypatch.setattr('yorw_api.chat.stream', chat_response)

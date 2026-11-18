@@ -37,6 +37,8 @@ export class Notebook {
     if (!result.ok) throw new Error('NOTE_LOAD_FAILED')
     const record = result.value.items.find(item => item.id === id)
     if (!record) throw new Error('NOTE_NOT_FOUND')
+    const existing=this.snapshot.notes.find(item=>item.id===id)
+    if(existing&&!dirty(existing)&&!existing.saving)this.patch(id,{body:record.body_md,savedBody:record.body_md,sources:record.sources,version:record.version,conflict:false,message:'已载入最新已保存笔记'})
     if (!this.snapshot.notes.some(item => item.id === id)) this.publish({notes:[...this.snapshot.notes,{id,body:record.body_md,savedBody:record.body_md,sources:record.sources,version:record.version,saving:false,conflict:false,message:'已保存'}]})
     this.select(id)
   }

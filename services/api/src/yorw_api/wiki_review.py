@@ -85,10 +85,23 @@ class WikiReview:
                 body = current['body_md'] + ('\n\n' if current['body_md'] else '') + body
             if len(body) > 200000:
                 raise HTTPException(422, detail='INVALID_INPUT')
+            reading=conn.execute('SELECT note_id,base_note_version FROM reading_note_heads WHERE head_id=?',(topic,)).fetchone()
+            if reading:
+                note=conn.execute('SELECT version FROM notes WHERE id=?',(reading[0],)).fetchone()
+                if not note or note[0]!=reading[1]:raise HTTPException(409,detail='NOTE_CONFLICT')
+                conn.execute('UPDATE notes SET body_md=?,sources_json=?,version=version+1,updated_at=? WHERE id=?',(body,raw,now(),reading[0]))
+                conn.execute('UPDATE reading_note_heads SET base_note_version=base_note_version+1 WHERE head_id=?',(topic,))
             revision = self._insert(conn, topic, current, body, raw, 'ai_accepted')
             return self._record(conn, action, topic, identity, revision, value)
 
     def _insert(self, conn, topic, current, body, sources_json, origin, restored=None):
+        if restored:
+            reading=conn.execute('SELECT note_id,base_note_version FROM reading_note_heads WHERE head_id=?',(topic,)).fetchone()
+            if reading:
+                note=conn.execute('SELECT version FROM notes WHERE id=?',(reading[0],)).fetchone()
+                if not note or note[0]!=reading[1]:raise HTTPException(409,detail='NOTE_CONFLICT')
+                conn.execute('UPDATE notes SET body_md=?,sources_json=?,version=version+1,updated_at=? WHERE id=?',(body,sources_json,now(),reading[0]))
+                conn.execute('UPDATE reading_note_heads SET base_note_version=base_note_version+1 WHERE head_id=?',(topic,))
         revision, timestamp = str(uuid4()), now()
         conn.execute('INSERT INTO revisions(id,topic_id,ordinal,body_md,sources_json,origin,base_revision_id,restored_from_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)', (revision,topic,current['ordinal']+1,body,sources_json,origin,current['id'],restored,timestamp))
         conn.execute('UPDATE topics SET current_revision_id=?,version=version+1,updated_at=? WHERE id=?', (revision,timestamp,topic))

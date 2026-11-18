@@ -33,7 +33,7 @@ def settle(chat,item):
 
 def test_stream_persistence_note_citations_and_scope(chat,monkeypatch):
     doc,value=setup(chat)
-    def response(config,key,question,sources):
+    def response(config,key,question,sources,**options):
         assert key=='secret' and len(sources)==2
         yield 'Computed tomography '
         yield '[S1].'
@@ -59,7 +59,7 @@ def test_stream_persistence_note_citations_and_scope(chat,monkeypatch):
 def test_partial_and_inflight_guards(chat,monkeypatch,ending):
     doc,value=setup(chat)
     arrived,release=Event(),Event()
-    def response(*args):
+    def response(*args,**options):
         yield 'partial [S1]'
         arrived.set();release.wait(3)
         if ending=='disconnect':raise ProbeError('STREAM_INTERRUPTED')

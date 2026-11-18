@@ -46,13 +46,8 @@ class DocumentResources:
         if len(text) > 200:
             raise HTTPException(422, detail='INVALID_INPUT')
         with self.db.lock:
-            rows = self.library.rows(
-                "SELECT * FROM documents WHERE deleted_at IS NULL AND id!=? AND ("
-                "?='' OR instr(lower(coalesce(title,'')),?)>0 OR instr(lower(original_name),?)>0 "
-                "OR instr(lower(authors_json),?)>0 OR CAST(year AS TEXT)=? "
-                "OR EXISTS(SELECT 1 FROM document_tags t WHERE t.document_id=documents.id AND instr(t.tag_key,?)>0)) "
-                "ORDER BY created_at DESC,id DESC LIMIT ?",
-                (document_id, text, text, text, text, text, text, MAX_CANDIDATES))
+            from .relations import Relations
+            rows = Relations(self.library).choices(document_id,text)
             mine = {item['tag_key']: item['tag'] for item in self._tags(document_id)}
             items = []
             for row in rows:
@@ -107,27 +102,20 @@ class DocumentResources:
         if len(text) > MAX_RELATION_DESCRIPTION:
             raise HTTPException(422, detail='INVALID_INPUT')
         low, high = self._pair(document_id, related_id)
+        from .relations import Relations
         with self.db.write() as conn:
-            existing = self.library.rows(
-                'SELECT * FROM document_relations WHERE low_id=? AND high_id=?', (low, high))
-            if existing:
-                if existing[0]['description'] != text:
-                    conn.execute('UPDATE document_relations SET description=?,updated_at=? WHERE low_id=? AND high_id=?',
-                                 (text, now(), low, high))
-            else:
-                timestamp = now()
-                conn.execute('INSERT INTO document_relations(low_id,high_id,description,created_at,updated_at) VALUES(?,?,?,?,?)',
-                             (low, high, text, timestamp, timestamp))
+            Relations(self.library).link_with(conn,'document',document_id,'document',related_id,text)
         return {'relation': self._relation_view(document_id, related_id)}
 
     def remove_relation(self, document_id: str, related_id: str) -> dict:
         low, high = self._pair(document_id, related_id)
         with self.db.write() as conn:
-            cursor = conn.execute('DELETE FROM document_relations WHERE low_id=? AND high_id=?', (low, high))
-        return {'removed': cursor.rowcount > 0}
+            from .relations import Relations
+            removed=Relations(self.library).remove_with(conn,'document',document_id,'document',related_id)
+        return {'removed': removed}
 
     def _topic_paths(self) -> dict[str, list[str]]:
-        topics = self.library.rows('SELECT id,parent_id,title FROM topics WHERE deleted_at IS NULL')
+        topics = self.library.rows('SELECT id,parent_id,title FROM topics WHERE deleted_at IS NULL AND notebook_only=0')
         by_id = {item['id']: item for item in topics}
         paths = {}
         for identity in by_id:
@@ -151,10 +139,10 @@ class DocumentResources:
     def add_document_topic_with(self, conn, document_id: str, topic_id: str) -> dict:
         """Shared relation invariant for callers already holding a transaction."""
         self.library.document(document_id)
-        if not self.library.rows('SELECT id FROM topics WHERE id=? AND deleted_at IS NULL', (topic_id,)):
-            raise HTTPException(404, detail='TOPIC_NOT_FOUND')
-        conn.execute('INSERT OR IGNORE INTO document_topics(document_id,topic_id,created_at) VALUES(?,?,?)',
-                     (document_id, topic_id, now()))
+        if not self.library.rows('SELECT id FROM topics WHERE id=? AND deleted_at IS NULL AND notebook_only=0',(topic_id,)):
+            raise HTTPException(404,detail='TOPIC_NOT_FOUND')
+        from .relations import Relations
+        Relations(self.library).link_with(conn,'document',document_id,'topic',topic_id)
         return {'linked': True}
 
     def add_document_topic(self, document_id: str, topic_id: str) -> dict:
@@ -163,7 +151,8 @@ class DocumentResources:
 
     def remove_document_topic(self, document_id: str, topic_id: str) -> dict:
         with self.db.write() as conn:
-            conn.execute('DELETE FROM document_topics WHERE document_id=? AND topic_id=?', (document_id, topic_id))
+            from .relations import Relations
+            Relations(self.library).remove_with(conn,'document',document_id,'topic',topic_id)
         return {'linked': False}
 
     def _documents(self, identities: list[str]) -> dict[str, dict]:
@@ -175,15 +164,12 @@ class DocumentResources:
         return result
 
     def topic_materials(self, topic_id: str) -> dict:
-        topic = self.library.rows('SELECT * FROM topics WHERE id=? AND deleted_at IS NULL', (topic_id,))
+        topic = self.library.rows('SELECT * FROM topics WHERE id=? AND deleted_at IS NULL AND notebook_only=0', (topic_id,))
         if not topic:
             raise HTTPException(404, detail='TOPIC_NOT_FOUND')
         with self.db.lock:
-            descendants = [row['id'] for row in self.library.rows(
-                'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
-                ' SELECT id FROM descendants', (topic_id,))]
+            from .notebooks import selected_topics
+            descendants=selected_topics(self.db,topic_id)
             direct_rows = self.library.rows(
                 'SELECT d.*,dt.created_at AS linked_at FROM document_topics dt JOIN documents d ON d.id=dt.document_id '
                 'WHERE dt.topic_id=? ORDER BY dt.rowid,d.created_at,d.id', (topic_id,))

@@ -102,7 +102,7 @@ def test_step9_database_upgrade_preserves_existing_research_assets(tmp_path):
     old.close()
     updated=Database(workspace)
     try:
-        assert updated.version==23
+        assert updated.version==31
         assert updated.connection.execute('SELECT body_md FROM notes').fetchone()[0]=='Retained note 中文'
         assert updated.connection.execute('SELECT body_md FROM messages').fetchone()[0]=='Retained answer'
         assert updated.connection.execute('SELECT count(*) FROM topics').fetchone()[0]==0
@@ -118,12 +118,12 @@ def test_remove_promotes_children_preserves_history_and_rejects_stale_version(ga
     with pytest.raises(HTTPException) as conflict:garden.remove(identity,RemoveTopic(version=1))
     assert conflict.value.detail=='TOPIC_CONFLICT'
     assert garden.get(child['topic']['id'])['topic']['parent_id']==identity
-    result=garden.remove(identity,RemoveTopic(version=saved['topic']['version']))
+    result=garden.remove(identity,RemoveTopic(version=saved['topic']['version'],notebook_action='delete'))
     assert identity not in [t['id'] for t in result['items']]
     promoted=garden.get(child['topic']['id'])['topic']
     assert promoted['parent_id']==parent['topic']['id'] and promoted['version']==2
     assert garden.get(leaf['topic']['id'])['topic']['parent_id']==child['topic']['id']
-    for action in (lambda:garden.get(identity),lambda:garden.save(identity,SaveBody(body_md='late',base_revision_id=saved['revision']['id'])),lambda:garden.remove(identity,RemoveTopic(version=2)),lambda:create(garden,'Late child',identity)):
+    for action in (lambda:garden.get(identity),lambda:garden.save(identity,SaveBody(body_md='late',base_revision_id=saved['revision']['id'])),lambda:garden.remove(identity,RemoveTopic(version=2,notebook_action='delete')),lambda:create(garden,'Late child',identity)):
         with pytest.raises(HTTPException) as missing:action()
         assert missing.value.detail=='TOPIC_NOT_FOUND'
     assert garden.db.connection.execute('SELECT body_md FROM revisions WHERE id=?',(saved['revision']['id'],)).fetchone()[0]=='Saved evidence'
@@ -151,7 +151,7 @@ def test_removed_topic_is_unlinked_not_exported_or_retrieved_and_stays_removed(l
     assert any(r[1]==identity for r in records)
     source={'kind':'wiki','source_object_id':identity,'source_version':saved['revision']['id'],'evidence':[]}
     assert source_status(library.db,[source])[0]['available']
-    garden.remove(identity,RemoveTopic(version=2))
+    garden.remove(identity,RemoveTopic(version=2,notebook_action='delete'))
     assert resources.document_topics(doc)==[]
     assert not any(r[1]==identity for r in retrieval._catalog())
     assert not source_status(library.db,[source])[0]['available']
@@ -178,7 +178,7 @@ def test_schema22_upgrade_preserves_topic_history_and_starts_visible(tmp_path):
     item=create(PreRemovalGarden(old));old.close()
     upgraded=Database(workspace)
     try:
-        assert upgraded.version==23
+        assert upgraded.version==31
         assert Garden(upgraded).get(item['topic']['id'])==item
         assert upgraded.connection.execute('SELECT deleted_at FROM topics').fetchone()[0] is None
         assert len(list((workspace.root/'backups').glob('*.sqlite3')))==1

@@ -1,3 +1,4 @@
+from .foreground import assert_idle
 """Explicit material snapshots -> independent Wiki suggestions; never writes revisions."""
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
@@ -65,54 +66,36 @@ class Suggestions:
             return {'mode': 'workspace'}
         if mode != 'topic':
             raise HTTPException(422, detail='INVALID_INPUT')
+        reading=self.library.rows('SELECT h.note_id,h.base_note_version,n.version,n.document_id,d.extraction_version FROM reading_note_heads h JOIN notes n ON n.id=h.note_id JOIN documents d ON d.id=n.document_id WHERE h.head_id=? AND d.deleted_at IS NULL',(topic_id,))
+        if reading:
+            row=reading[0]
+            payload={'mode':'topic','topic_id':topic_id,'reading_note_id':row['note_id'],'note_version':row['version'],'document_ids':[row['document_id']],'note_ids':[],'wiki_topic_ids':[]}
+            payload['fingerprint']=sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
+            return payload
+        from .notebooks import selected_topics,origin,notebook_heads
         with self.db.lock:
-            descendants = sorted({row['id'] for row in self.library.rows(
-                'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
-                ' SELECT id FROM descendants', (topic_id,))})
-            documents = [row['id'] for row in self.library.rows(
-                'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
-                ' SELECT DISTINCT dt.document_id AS id FROM document_topics dt '
-                'JOIN descendants ds ON ds.id=dt.topic_id '
-                'JOIN documents d ON d.id=dt.document_id '
-                'WHERE d.deleted_at IS NULL ORDER BY dt.document_id', (topic_id,))]
-            notes = [row['id'] for row in self.library.rows(
-                'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
-                ' SELECT DISTINCT n.id FROM notes n '
-                'JOIN documents d ON d.id=n.document_id '
-                'JOIN document_topics dt ON dt.document_id=n.document_id '
-                'JOIN descendants ds ON ds.id=dt.topic_id '
-                'WHERE d.deleted_at IS NULL ORDER BY n.id', (topic_id,))]
-        payload = {'mode': 'topic', 'topic_id': topic_id, 'document_ids': documents,
-                   'note_ids': notes, 'wiki_topic_ids': [identity for identity in descendants if identity != topic_id]}
-        payload['fingerprint'] = sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+            owner=origin(self.db,topic_id)
+            descendants=selected_topics(self.db,owner)
+            marks=','.join('?' for _ in descendants)
+            documents=[r['id'] for r in self.library.rows('SELECT DISTINCT d.id FROM documents d JOIN document_topics dt ON dt.document_id=d.id WHERE d.deleted_at IS NULL AND dt.topic_id IN ('+marks+') ORDER BY d.id',tuple(descendants))] if descendants else []
+            notes=[r['id'] for r in self.library.rows('SELECT n.id FROM notes n JOIN documents d ON d.id=n.document_id WHERE d.deleted_at IS NULL AND n.document_id IN ('+','.join('?' for _ in documents)+') ORDER BY n.id',tuple(documents))] if documents else []
+            heads=[i for i in notebook_heads(self.db,descendants) if i!=topic_id]
+        payload={'mode':'topic','topic_id':topic_id,'document_ids':documents,'note_ids':notes,'wiki_topic_ids':heads}
+        payload['fingerprint']=sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
         return payload
 
-    def usable_scope(self, topic_id):
-        """Whether the topic subtree has material that retrieval can actually use."""
+    def usable_scope(self,topic_id):
+        scope=self.scope(topic_id)
         with self.db.lock:
-            rows = self.library.rows(
-                'WITH RECURSIVE descendants(id) AS ('
-                ' SELECT id FROM topics WHERE id=? AND deleted_at IS NULL UNION'
-                ' SELECT t.id FROM topics t JOIN descendants d ON t.parent_id=d.id WHERE t.deleted_at IS NULL)'
-                ' SELECT ('
-                " EXISTS(SELECT 1 FROM documents d JOIN document_topics dt ON dt.document_id=d.id "
-                ' JOIN descendants ds ON ds.id=dt.topic_id '
-                " WHERE d.deleted_at IS NULL AND d.extraction_status IN ('ready','partial'))"
-                ' OR EXISTS(SELECT 1 FROM notes n JOIN documents d ON d.id=n.document_id '
-                ' JOIN document_topics dt ON dt.document_id=n.document_id '
-                ' JOIN descendants ds ON ds.id=dt.topic_id '
-                " WHERE d.deleted_at IS NULL AND trim(n.body_md)<>'')"
-                ' OR EXISTS(SELECT 1 FROM topics t JOIN revisions r ON r.id=t.current_revision_id '
-                ' JOIN descendants ds ON ds.id=t.id '
-                " WHERE t.id<>? AND trim(r.body_md)<>'')"
-                ') AS usable', (topic_id, topic_id))
-            return bool(rows and rows[0]['usable'])
+            if self.library.rows('SELECT head_id FROM reading_note_heads WHERE head_id=?',(topic_id,)) and self.garden.get(topic_id)['revision']['body_md'].strip():return True
+            if self.library.rows('SELECT id FROM topic_notebooks WHERE id=? AND deleted_at IS NULL',(topic_id,)) and self.garden.get(topic_id)['revision']['body_md'].strip():return True
+            for identity in scope['document_ids']:
+                if self.library.rows("SELECT id FROM documents WHERE id=? AND extraction_status IN ('ready','partial')",(identity,)):return True
+            for identity in scope['note_ids']:
+                if self.library.rows("SELECT id FROM notes WHERE id=? AND trim(body_md)<>''",(identity,)):return True
+            for identity in scope['wiki_topic_ids']:
+                if self.library.rows("SELECT t.id FROM topics t JOIN revisions r ON r.id=t.current_revision_id WHERE t.id=? AND trim(r.body_md)<>''",(identity,)):return True
+        return False
 
     def scope_changed(self, item, current_fingerprint=None):
         scope = item.get('scope') or {}
@@ -226,6 +209,7 @@ class Suggestions:
             if existing:
                 if existing[0]['topic_id']!=topic_id or json.loads(existing[0]['request_json'])!=payload:raise HTTPException(409,detail='REQUEST_CONFLICT')
                 return self.get(existing[0]['id'])
+            assert_idle(conn)
             if not key:raise HTTPException(409,detail='KEY_MISSING')
             config=self.chat.config()
             if not config:raise HTTPException(409,detail='CONFIG_MISSING')
@@ -241,6 +225,7 @@ class Suggestions:
     def generate_auto(self, topic_id, instruction, base_revision_id, sources, request_id, config, key, *, scope=None, dispatch=True):
         """Receive server-selected, version-checked sources from the workflow."""
         sources = [{**{k: v for k, v in source.items() if k != 'available'},
+                    **({'notebook_snapshot':True} if source.get('notebook_snapshot') else {}),
                     'evidence': [{k: v for k, v in ref.items() if k != 'available'} for ref in source['evidence']]}
                    for source in sources]
         payload = {'instruction': instruction, 'base_revision_id': base_revision_id, 'sources': sources,
@@ -273,6 +258,8 @@ class Suggestions:
     def _check(self,identity,config):
         item=self.get(identity)
         if item['status']!='running':raise ProbeError('CANCELLED')
+        if item.get('scope_changed'):raise ProbeError('SCOPE_CHANGED')
+        if item.get('stale'):raise ProbeError('REVISION_CONFLICT')
         if self.chat.config()!=config:raise ProbeError('CONFIG_CHANGED')
         if not all(s['available'] for s in item['sources']):raise ProbeError('MATERIAL_CHANGED')
         return item

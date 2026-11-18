@@ -1,0 +1,25 @@
+:root{--work-canvas:#f4f6fa;--work-paper:#fff;--work-ink:#24354c;--work-muted:#61748a;--work-rule:#dbe2ed;--work-accent:#3156c8}
+.workspace-more{position:relative;display:inline-block;max-width:100%}.workspace-more>summary,.workspace-help>summary{cursor:pointer;list-style:none;color:var(--work-accent);padding:7px 10px;border-radius:5px;font-size:14px}.workspace-more>summary::-webkit-details-marker,.workspace-help>summary::-webkit-details-marker{display:none}.workspace-more>summary::after,.workspace-help>summary::after{content:'展开';margin-left:10px;font-size:12px;color:var(--work-muted)}.workspace-more[open]>summary::after,.workspace-help[open]>summary::after{content:'收起'}.workspace-more-content{position:absolute;z-index:40;right:0;min-width:160px;max-width:min(340px,80vw);background:var(--work-paper);border:1px solid var(--work-rule);border-radius:6px;padding:8px;box-shadow:0 5px 18px #24354c14;display:flex;flex-direction:column;gap:6px}.workspace-more-content button{text-align:left;white-space:normal}.workspace-help{margin:8px 0;color:var(--work-muted);font-size:14px}.workspace-help>div{padding:4px 10px;max-width:75ch;line-height:1.6}.workspace-help p{margin:6px 0}
+.research-toolbar>strong{flex:1;max-width:none}.research-toolbar .workspace-more{margin-left:auto}.research-notice:empty,.topic-overview>p:empty{display:none}.research-turn>details{margin:8px 0}.research-turn>details>small{display:block;padding:8px}.topic-overview>header,.topic-overview section>header{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.topic-overview section>header h3{margin-right:auto}.topic-overview section{padding:22px 0}.topic-overview-list:empty{display:none}.topic-overview{max-width:1100px}.topic-overview h2{font-size:24px}.topic-overview h3{font-size:18px}.directory-folder>span:first-child{font-size:11px;flex-shrink:0;min-width:28px}.research-composer .composer-toolbar{align-items:center}.garden-home-toolbar>.workspace-more{margin-left:0}.provider{box-shadow:none}.house-settings-page>.provider>h2{font-size:18px}.workspace-location{overflow-wrap:anywhere}
+button:focus-visible,summary:focus-visible{outline:2px solid var(--work-accent);outline-offset:3px}summary{list-style:none}summary::-webkit-details-marker{display:none}summary::marker{content:''}details:not(.workspace-more):not(.workspace-help)>summary::after{content:'展开';font-size:12px;margin-left:10px;color:var(--work-muted)}details[open]:not(.workspace-more):not(.workspace-help)>summary::after{content:'收起'}
+@media(max-width:1100px){.research-toolbar{gap:6px}.workspace-more-content{max-width:70vw}.topic-overview section{padding:16px 0}}
+@media(prefers-reduced-motion:reduce){.workspace-more,.workspace-help{scroll-behavior:auto}}
+
+.garden-tree-toggle{width:42px;font-size:11px;border-radius:4px}.garden-tree-spacer{width:42px}
+
+/* Keep controls on one baseline while letting each group wrap as a unit. */
+.shared-composer .composer-toolbar{align-items:center;column-gap:10px;row-gap:8px}
+.shared-composer .composer-toolbar>label{display:inline-flex;align-items:center;gap:6px;margin:0;min-width:0}
+.shared-composer .composer-toolbar button,.shared-composer .composer-toolbar select{height:36px;min-height:36px;box-sizing:border-box;margin-top:0;margin-bottom:0;padding-top:5px;padding-bottom:5px;font-size:14px;line-height:24px}
+.shared-composer .composer-toolbar>span{align-self:center;line-height:24px}
+.research-workspace{grid-template-columns:min(var(--research-history-width,280px),max(200px,calc(100% - 386px))) 6px minmax(0,1fr)}
+.research-workspace.history-collapsed{grid-template-columns:minmax(0,1fr)}
+.research-history{border-right:0;min-width:0;overflow:hidden}.research-history-toolbar{flex-wrap:wrap;gap:8px}.research-session-list button{overflow-wrap:anywhere}
+.research-workspace>.directory-splitter{width:6px;min-width:6px;cursor:col-resize;touch-action:none;background:var(--work-rule)}
+.app-main .garden-workspace{gap:0;flex-direction:row}
+.app-main .garden-workspace>.garden-directory{width:min(var(--garden-directory-width,280px),max(200px,calc(100% - 386px)));flex:none;height:100%;max-height:none;min-width:0}
+.garden-workspace>.directory-splitter{flex:none;width:6px;cursor:col-resize;touch-action:none;background:var(--work-rule)}
+.directory-splitter:hover,.directory-splitter:focus-visible{background:#a9b9e7}
+.app-main .garden-workspace>.garden-content{padding-left:12px;min-width:0;flex:1}
+
+.shared-composer .composer-toolbar>span{order:1;flex:1 0 100%;font-size:12px}.shared-composer .composer-toolbar>label select{width:auto;max-width:190px}.shared-composer .composer-toolbar>.primary{flex:none}

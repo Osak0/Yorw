@@ -577,7 +577,7 @@ export async function runWorkspaceCitationSmoke(window: BrowserWindow, providers
         res.end(JSON.stringify({ data: body.input.map((_text: string, index: number) => ({ index, embedding: [1, 0] })) }))
         return
       }
-      const system = body.messages[0].content, data = JSON.parse(body.messages[1].content)
+      const system = body.messages[0].content, data = JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
       let text: string
       if (system.includes('筛选器')) {
         const parsed = JSON.parse(data.question)
@@ -705,8 +705,8 @@ export async function runWorkspaceLayoutSmoke(window: BrowserWindow, reportDir: 
   const searchAncestorKept = await window.webContents.executeJavaScript(`[...document.querySelectorAll('.garden-tree-name')].some(item=>item.textContent.includes('Topic Alpha'))`)
   await setSearch('')
   await ui(`await wait(()=>document.querySelectorAll('.garden-tree-name').length===4,'SEARCH_CLEARED')`)
-  await ui(`button('收起全部').click();await wait(()=>!document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'COLLAPSE_ALL');button('展开全部').click();await wait(()=>document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'EXPAND_ALL')`)
-  await ui(`document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]').click();await wait(()=>document.querySelector('.topic-body-view')&&document.querySelector('.garden-directory'),'EDITOR')`)
+  await ui(`button('收起全部').click();await wait(()=>!document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'COLLAPSE_ALL');button('展开全部').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));await wait(()=>document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]'),'EXPAND_ALL')`)
+  await ui(`document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));await wait(()=>document.querySelector('.topic-body-view')&&document.querySelector('.garden-directory'),'EDITOR')`)
   const homeEditor = await window.webContents.executeJavaScript(`({homeHadNoDirectory:true,bodyHasDirectory:!!document.querySelector('.garden-directory'),searchVisible:!!document.querySelector('.garden-directory input[aria-label="搜索专题"]'),newTopicVisible:[...document.querySelectorAll('.garden-directory button')].some(button=>button.textContent==='新建专题'),treeVisible:!!document.querySelector('.garden-directory .garden-tree'),pathView:${JSON.stringify(pathView)},searchAncestorKept:${searchAncestorKept},currentHighlighted:document.querySelector('.garden-tree-name[data-topic-id="${longTopicId}"]')?.getAttribute('aria-current')==='true',parentPath:document.querySelector('.topic-parent-path')?.textContent??''})`)
   const normalContentWidth = await window.webContents.executeJavaScript(`document.querySelector('.garden-content')?.getBoundingClientRect().width??0`)
   await ui(`button('收起目录').click();await wait(()=>!document.querySelector('.garden-directory'),'COLLAPSE')`)
@@ -794,7 +794,7 @@ export async function runWorkspaceChatSmoke(window: BrowserWindow, providers: Pr
         res.end(JSON.stringify({ data: body.input.map((_text: string, index: number) => ({ index, embedding: [1, 0] })) }))
         return
       }
-      const system = body.messages[0].content, data = JSON.parse(body.messages[1].content)
+      const system = body.messages[0].content, data = JSON.parse(body.messages.filter((message:{role:string})=>message.role==='user')[0].content)
       if (system.includes('筛选器') || system.includes('改写')) {
         const text = system.includes('筛选器')
           ? JSON.stringify({ items: JSON.parse(data.question).candidates.map((item: { id: string }) => ({ id: item.id, sentence: 0 })) })

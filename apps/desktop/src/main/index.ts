@@ -1,3 +1,12 @@
+import {runCollaborationSmoke,resumeCollaborationSmoke} from './collaboration-smoke'
+import {Collaboration} from './collaboration'
+import {runNotebooksSmoke,resumeNotebooksSmoke} from './notebooks-smoke'
+import {runResearchSmoke} from './research-smoke'
+import {Research,ResearchMemory} from './research'
+import {runModelProfilesSmoke} from './model-profiles-smoke'
+import {runReaderNavigationSmoke} from './reader-navigation-smoke'
+import {runChatMemorySmoke} from './chat-memory-smoke'
+import {runContinuousReadingSmoke} from './continuous-reading-smoke'
 import {runHistoryLayoutSmoke} from './history-layout-smoke'
 import {runDocumentManagementSmoke} from './document-management-smoke'
 import {runMetadataReviewSmoke} from './metadata-review-smoke'
@@ -99,6 +108,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('garden:reject',providerAction(input=>garden.reject(input)))
   ipcMain.handle('garden:restore',providerAction(input=>garden.restore(input)))
   ipcMain.handle('garden:remove',providerAction(input=>garden.remove(input)))
+  for(const name of ['prepareReadingNote','readingHistory','notebookCatalog','overview','noteScope','saveNoteScope','notebook','createNotebook','renameNotebook','removeNotebook','movePreview'] as const)ipcMain.handle('garden:'+name,providerAction(input=>(garden[name] as (value:any)=>Promise<unknown>).call(garden,input)))
   ipcMain.handle('garden:list',providerAction(()=>garden.list()))
   ipcMain.handle('garden:get',providerAction(input=>garden.get(input)))
   ipcMain.handle('garden:create',providerAction(input=>garden.create(input)))
@@ -130,6 +140,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('resources:addTopicDocument', providerAction(input => resources.addTopicDocument(input)))
   ipcMain.handle('resources:removeTopicDocument', providerAction(input => resources.removeTopicDocument(input)))
   const chat = new Chat(backend, providers)
+  ipcMain.handle('chat:history', providerAction(input => chat.history(input)))
   ipcMain.handle('chat:list', providerAction(input => chat.list(input)))
   ipcMain.handle('chat:ask', providerAction(input => chat.ask(input)))
   ipcMain.handle('chat:cancel', providerAction(input => chat.cancel(input)))
@@ -155,6 +166,31 @@ else app.whenReady().then(async () => {
   ipcMain.handle('tasks:get', providerAction(input => documents.task(input)))
   ipcMain.handle('tasks:cancel', providerAction(input => documents.cancel(input)))
   ipcMain.handle('tasks:retry', providerAction(input => documents.retry(input)))
+  const memory=new ResearchMemory(backend,providers)
+  ipcMain.handle('memory:view',providerAction(key=>memory.view(key)))
+  ipcMain.handle('memory:edit',providerAction(input=>memory.edit(input)))
+  ipcMain.handle('memory:preferences',providerAction(input=>memory.preferences(input)))
+  ipcMain.handle('memory:export',providerAction(key=>memory.export(key)))
+  const memoryTimer=setInterval(()=>void memory.scan(),5000)
+  memoryTimer.unref()
+  app.once('will-quit',()=>clearInterval(memoryTimer))
+  const collaboration=new Collaboration(backend)
+  for(const method of ['list','get','preview','decide','candidates','topics'] as const)ipcMain.handle(`collaboration:${method}`,providerAction(input=>collaboration[method](input)))
+  const research=new Research(backend,providers)
+  ipcMain.handle('research:list',providerAction(()=>research.list()))
+  ipcMain.handle('research:get',providerAction(input=>research.get(input)))
+  ipcMain.handle('research:ask',providerAction(input=>research.ask(input)))
+  ipcMain.handle('research:edit',providerAction(input=>research.edit(input)))
+  ipcMain.handle('research:remove',providerAction(input=>research.remove(input)))
+  ipcMain.handle('research:cancel',providerAction(input=>research.cancel(input)))
+  ipcMain.handle('research:events',providerAction(input=>research.events(input)))
+  ipcMain.handle('profiles:list', providerAction(() => providers.profileList()))
+  ipcMain.handle('profiles:save', providerAction(input => providers.profileSave(input)))
+  ipcMain.handle('profiles:defaults', providerAction(input => providers.profileDefaults(input)))
+  ipcMain.handle('profiles:remove', providerAction(input => providers.profileRemove(input)))
+  ipcMain.handle('profiles:test', providerAction(input => providers.profileTest(input)))
+  ipcMain.handle('profiles:check', providerAction(input => providers.profileCheck(input)))
+  ipcMain.handle('profiles:cancel', providerAction(input => providers.profileCancel(input)))
   ipcMain.handle('providers:list', providerAction(() => providers.list()))
   ipcMain.handle('providers:save', providerAction(input => providers.save(input)))
   ipcMain.handle('providers:test', providerAction(input => providers.test(input)))
@@ -168,6 +204,32 @@ else app.whenReady().then(async () => {
   if (devUrl) await window.loadURL(devUrl)
   else await window.loadFile(join(__dirname, '../renderer/index.html'))
   await backend.start()
+  if(readerSmoke && (process.argv.includes('--collaboration-smoke')||process.argv.includes('--collaboration-resume-smoke'))){
+    const resume=process.argv.includes('--collaboration-resume-smoke')
+    try{if(resume)await resumeCollaborationSmoke(window,backend,smokeReport!);else await runCollaborationSmoke(window,backend,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,resume?'collaboration-resume-error.json':'collaboration-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));if(!window.isDestroyed())await writeFile(join(smokeReport!,'collaboration-error.png'),(await window.webContents.capturePage()).toPNG());await backend.stop();app.exit(1)}
+    return
+  }
+  if(readerSmoke && process.argv.includes('--notebooks-resume-smoke')){
+    try{await resumeNotebooksSmoke(window,backend,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'notebooks-resume-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
+    return
+  }
+  if(readerSmoke && process.argv.includes('--notebooks-smoke')){
+    try{await runNotebooksSmoke(window,backend,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'notebooks-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));if(!window.isDestroyed())await writeFile(join(smokeReport!,'notebooks-error.png'),(await window.webContents.capturePage()).toPNG());await backend.stop();app.exit(1)}
+    return
+  }
+  if(readerSmoke && process.argv.includes('--research-smoke')){
+    try{await runResearchSmoke(window,backend,providers,smokeReport!);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'research-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
+    return
+  }
+  if(readerSmoke && process.argv.includes('--model-profiles-smoke')){
+    try{await runModelProfilesSmoke(window,providers,smokeReport!,backend);await backend.stop();app.exit(0)}
+    catch(error){await writeFile(join(smokeReport!,'model-profiles-error.json'),JSON.stringify({code:error instanceof Error?error.message:'FAILED'}));await backend.stop();app.exit(1)}
+    return
+  }
   // Restore only main-owned, unchanged component approvals; never launch a probe.
   await parsers.status().catch(() => null)
   if (process.argv.includes('--yorw-smoke')) {
@@ -192,10 +254,11 @@ else app.whenReady().then(async () => {
           const next = document.querySelector('[aria-label="下一页"]')
           if (!next.disabled) next.click()
           await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'))
-          const before = document.querySelector('.pdf-page canvas').width
+          const currentPage = () => document.querySelector('[data-page-number="'+document.querySelector('[aria-label="物理页码"]').value+'"]')
+          const before = currentPage().querySelector('canvas').width
           const select = document.querySelector('select[aria-label="缩放"]')
           select.value = '1.5'; select.dispatchEvent(new Event('change', { bubbles: true }))
-          await waitFor(() => document.querySelector('.pdf-page canvas').width !== before && document.querySelector('.reader-feedback')?.textContent.includes('已保存'))
+          await waitFor(() => currentPage()?.querySelector('canvas')?.width > 0 && currentPage().querySelector('canvas').width !== before && document.querySelector('.reader-feedback')?.textContent.includes('已保存'))
           button('返回文献库').click()
           await waitFor(() => button('打开阅读'))
           await new Promise(r => setTimeout(r, 1300))
@@ -203,13 +266,13 @@ else app.whenReady().then(async () => {
           await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'))
           await new Promise(r => setTimeout(r, 1000))
           await waitFor(() => document.querySelector('.reader-feedback')?.textContent.includes('已保存到第 2 页'))
-          const text = document.querySelector('.textLayer').textContent
+          const text = currentPage().querySelector('.textLayer').textContent
           if (text !== 'Yorw fixed English fixture evidence.') throw new Error('TEXT_LAYER_MISMATCH')
-          const canvas = document.querySelector('.pdf-page canvas')
+          const canvas = currentPage().querySelector('canvas')
           const pixels = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data
           let dark = 0; for (let i = 0; i < pixels.length; i += 4) if (pixels[i] < 150 && pixels[i+1] < 150 && pixels[i+2] < 150 && pixels[i+3] > 0) dark++
           if (!dark) throw new Error('EMPTY_CANVAS')
-          return { restoredPage: 2, darkPixels: dark, text: document.querySelector('.textLayer').textContent }
+          return { restoredPage: 2, darkPixels: dark, text: currentPage().querySelector('.textLayer').textContent }
         })()`)
       } else if(!readerSmoke) {
         await window.webContents.executeJavaScript(`document.querySelectorAll('nav button')[${process.argv.includes('--storage-smoke') ? 0 : 2}].click()` )
@@ -250,6 +313,9 @@ else app.whenReady().then(async () => {
       if(readerSmoke&&process.argv.includes('--ai-resume-smoke'))await resumeAiWorkflowSmoke(window,backend,reportDir)
       if(readerSmoke && process.argv.includes('--mvp-smoke')) faultObserved=await runAiWorkflowSmoke(window,backend,providers,reportDir,true)
       if(readerSmoke && process.argv.includes('--mvp-resume-smoke')) await resumeAiWorkflowSmoke(window,backend,reportDir)
+      if(readerSmoke && process.argv.includes('--reader-navigation-smoke'))await writeFile(join(reportDir,'reader-navigation-smoke.json'),JSON.stringify(await runReaderNavigationSmoke(window,backend,reportDir),null,2))
+      if(readerSmoke && process.argv.includes('--chat-memory-smoke'))await writeFile(join(reportDir,'chat-memory-smoke.json'),JSON.stringify(await runChatMemorySmoke(window,backend,providers,reportDir),null,2))
+      if(readerSmoke && process.argv.includes('--continuous-reading-smoke'))await writeFile(join(reportDir,'continuous-reading-smoke.json'),JSON.stringify(await runContinuousReadingSmoke(window,reportDir),null,2))
       if(readerSmoke && process.argv.includes('--metadata-review-smoke')){await writeFile(join(reportDir,'metadata-review-smoke.json'),JSON.stringify(await runMetadataReviewSmoke(window,backend,providers,reportDir),null,2))}
       if(readerSmoke && process.argv.includes('--folders-smoke')) {
         const proof=await runFoldersSmoke(window,backend,reportDir)

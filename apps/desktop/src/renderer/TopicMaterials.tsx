@@ -1,3 +1,4 @@
+import {MoreActions} from './WorkspaceUI'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { DocumentSummary, Topic, TopicMaterials } from '../shared/status'
 import './resources.css'
@@ -23,7 +24,7 @@ export function TopicMaterialsSections({ materials, query, results, notice, busy
 }) {
   const direct = new Set(materials.direct.map(item => item.document.id))
   return <div className="topic-materials-view" aria-label="关联材料">
-    <header className="resource-header"><div><h2>{materials.topic.title}</h2><p className="resource-file">专题材料</p></div><button disabled={busy} onClick={onRefresh}>刷新材料</button></header>
+    <header className="resource-header"><div><h2>{materials.topic.title}</h2><p className="resource-file">专题材料</p></div><MoreActions><button disabled={busy} onClick={onRefresh}>重新载入材料</button></MoreActions></header>
     {notice && <p role="status" className="resource-notice">{notice}</p>}
     <section className="resource-section" aria-label="添加文献">
       <h3>添加文献</h3>
@@ -43,18 +44,18 @@ export function TopicMaterialsSections({ materials, query, results, notice, busy
         <button disabled={busy} onClick={() => onRemove(item.document.id)}>解除关联</button>
       </li>)}</ul> : <p className="resource-empty">尚未直接关联文献。</p>}
     </section>
-    <section className="resource-section" aria-label="子专题汇集">
-      <h3>子专题汇集 <small>{materials.inherited.length} 篇</small></h3>
+    <section className="resource-section" aria-label="范围内汇集">
+      <h3>范围内汇集 <small>{materials.inherited.length} 篇</small></h3>
       {materials.inherited.length ? <ul className="resource-list">{materials.inherited.map(item => <li key={item.document.id}>
         <div><strong>{item.document.title || item.document.original_name}</strong>{!item.document.document_available && <em>（文献已移除）</em>}
-          <small>来自子专题：{(item.topics ?? []).map(topic => topic.title).join('、')}；请在对应专题解除关联</small></div>
-      </li>)}</ul> : <p className="resource-empty">没有从子专题汇集的文献。</p>}
+          <small>来自所选专题：{(item.topics ?? []).map(topic => topic.title).join('、')}；请在对应专题解除关联</small></div>
+      </li>)}</ul> : <p className="resource-empty">没有从范围内汇集的文献。</p>}
     </section>
     <section className="resource-section" aria-label="关联笔记">
       <h3>笔记 <small>{materials.notes.length} 条，按 ID 去重</small></h3>
       {materials.notes.length ? <ul className="resource-list">{materials.notes.map(note => <li key={note.id}>
         <div><strong>{note.document_title}</strong><p>{note.excerpt}</p>
-          <small>{note.direct ? '直接关联文献' : `子专题汇集 · ${note.topics.join('、')}`}{!note.document_available ? ' · 文献已移除' : ''} · v{note.version}</small></div>
+          <small>{note.direct ? '直接关联文献' : `范围内汇集 · ${note.topics.join('、')}`}{!note.document_available ? ' · 文献已移除' : ''} · v{note.version}</small></div>
       </li>)}</ul> : <p className="resource-empty">关联文献还没有笔记。</p>}
       <p className="resource-hint">笔记仍归所属文献所有；同一专题内按 ID 去重，正文只有一份。</p>
     </section>
